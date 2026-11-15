@@ -1,0 +1,124 @@
+// Everything you can wear or unlock: colours, ball skins, hats and trails, plus the quests that unlock them.
+// lock: nothing = free, { coins: n } = buy it, { quest: id } = finish that quest, { owner: true } = only the owner.
+const COLORS = ['#48d6ac', '#5aa9ff', '#ff7a8a', '#ffc45a', '#b48cff', '#ff9f5a', '#e8eef7', '#7be36b',
+  '#e0404a', '#2f55d8', '#ff8fd0', '#1fb5b5', '#9a6a42', '#7a3ad6', '#f2e15a', '#8a93a8', '#22262e', '#ffd24a', '#ff3fa8', '#bfeaff'];
+const COLOR_LOCK = { '#22262e': { coins: 60 }, '#ffd24a': { coins: 60 }, '#ff3fa8': { coins: 60 }, '#bfeaff': { coins: 60 } };
+
+const SKINS = {
+  plain: { n: 0, name: 'Plain' }, band: { n: 1, name: 'Band' }, stripes: { n: 2, name: 'Stripes' }, dots: { n: 3, name: 'Dots' },
+  split: { n: 4, name: 'Two halves' }, checker: { n: 5, name: 'Checker' },
+  swirl: { n: 6, name: 'Swirl', lock: { coins: 30 } }, star: { n: 7, name: 'Star', lock: { coins: 30 } }, zigzag: { n: 16, name: 'Zigzag', lock: { coins: 30 } },
+  target: { n: 13, name: 'Target', lock: { coins: 40 } }, candy: { n: 30, name: 'Candy', lock: { coins: 40 } }, flower: { n: 31, name: 'Flower', lock: { coins: 40 } },
+  heart: { n: 32, name: 'Heart', lock: { coins: 50 } }, paw: { n: 33, name: 'Paw', lock: { coins: 50 } }, bolt: { n: 34, name: 'Bolt', lock: { coins: 50 } },
+  soccer: { n: 9, name: 'Soccer ball', lock: { coins: 80 } }, basketball: { n: 10, name: 'Basketball', lock: { coins: 80 } }, tennis: { n: 11, name: 'Tennis ball', lock: { coins: 80 } },
+  marble: { n: 15, name: 'Marble', lock: { coins: 120 } }, storm: { n: 27, name: 'Storm', lock: { coins: 200 } },
+  beach: { n: 8, name: 'Beach ball', lock: { quest: 'beach' } }, watermelon: { n: 12, name: 'Watermelon', lock: { quest: 'forest' } },
+  sun: { n: 28, name: 'Little sun', lock: { quest: 'desert' } }, ice: { n: 20, name: 'Ice', lock: { quest: 'snow' } },
+  galaxy: { n: 22, name: 'Galaxy', lock: { quest: 'glow' } }, moon: { n: 24, name: 'Moon', lock: { quest: 'caves' } },
+  lava: { n: 21, name: 'Lava', lock: { quest: 'volcano' } }, circuit: { n: 26, name: 'Circuit', lock: { quest: 'station' } },
+  chrome: { n: 19, name: 'Chrome', lock: { quest: 'stationTop' } }, gold: { n: 18, name: 'Gold', lock: { quest: 'trophy' } },
+  disco: { n: 25, name: 'Disco ball', lock: { quest: 'race' } }, pixel: { n: 17, name: 'Pixels', lock: { quest: 'builder' } },
+  bubble: { n: 29, name: 'Bubble', lock: { quest: 'swim' } }, planet: { n: 23, name: 'Planet', lock: { quest: 'far' } },
+  rainbow: { n: 14, name: 'Rainbow', lock: { quest: 'biomes' } }, flow: { n: 35, name: 'Aurora', lock: { quest: 'explorer' } },
+};
+const CLEAR_SKINS = [29]; // drawn with the see-through things
+
+const HATS = {
+  none: { name: 'None' }, cap: { name: 'Cap' }, beanie: { name: 'Beanie' }, tophat: { name: 'Top hat' }, flower: { name: 'Flower' }, bow: { name: 'Bow' },
+  headphones: { name: 'Headphones', lock: { coins: 40 } }, party: { name: 'Party hat', lock: { coins: 40 } }, chef: { name: 'Chef hat', lock: { coins: 60 } },
+  cat: { name: 'Cat ears', lock: { coins: 60 } }, propeller: { name: 'Propeller cap', lock: { coins: 80 } }, halo: { name: 'Halo', lock: { coins: 100 } },
+  wizard: { name: 'Wizard hat', lock: { coins: 120 } }, unicorn: { name: 'Unicorn horn', lock: { coins: 150 } },
+  sprout: { name: 'Sprout', lock: { quest: 'forest' } }, cowboy: { name: 'Cowboy hat', lock: { quest: 'desert' } }, winter: { name: 'Winter hat', lock: { quest: 'snow' } },
+  viking: { name: 'Viking helmet', lock: { quest: 'mountain' } }, mushroom: { name: 'Mushroom cap', lock: { quest: 'swamp' } }, pirate: { name: 'Pirate hat', lock: { quest: 'chests' } },
+  miner: { name: 'Miner helmet', lock: { quest: 'cave' } }, antenna: { name: 'Antenna', lock: { quest: 'station' } }, bunny: { name: 'Bunny ears', lock: { quest: 'friends' } },
+  cone: { name: 'Traffic cone', lock: { quest: 'builder' } }, grad: { name: 'Scholar cap', lock: { quest: 'ways' } },
+  crown: { name: 'Crown', lock: { owner: true } },
+};
+
+// trail: [shape, colours, size, glow?]  (see Particles for the shapes)
+const TRAILS = {
+  none: { name: 'None' }, dust: { name: 'Dust' },
+  sparkle: { name: 'Sparkles', lock: { coins: 50 } }, hearts: { name: 'Hearts', lock: { coins: 80 } }, notes: { name: 'Confetti', lock: { coins: 100 } }, bolt: { name: 'Lightning', lock: { coins: 150 } },
+  bubbles: { name: 'Bubbles', lock: { quest: 'swim' } }, leaves: { name: 'Leaves', lock: { quest: 'forest' } }, snow: { name: 'Snowflakes', lock: { quest: 'snow' } },
+  stars: { name: 'Stars', lock: { quest: 'night' } }, fire: { name: 'Fire', lock: { quest: 'volcano' } }, rainbow: { name: 'Rainbow', lock: { quest: 'race' } },
+};
+
+// Quests: stat is counted by the game; when it reaches goal you get the coins and anything locked behind the quest.
+const QUESTS = [
+  { id: 'roll', name: 'First roll', desc: 'Roll 300 metres', stat: 'dist', goal: 300, coins: 20 },
+  { id: 'far', name: 'World traveller', desc: 'Roll 10 kilometres', stat: 'dist', goal: 10000, coins: 100 },
+  { id: 'jump', name: 'Bouncy', desc: 'Jump 50 times', stat: 'jumps', goal: 50, coins: 20 },
+  { id: 'swim', name: 'Splash!', desc: 'Swim 200 metres', stat: 'swim', goal: 200, coins: 40 },
+  { id: 'items', name: 'Collector', desc: 'Pick up 25 things', stat: 'items', goal: 25, coins: 50 },
+  { id: 'chests', name: 'Treasure hunter', desc: 'Open 5 treasure chests', stat: 'chests', goal: 5, coins: 60 },
+  { id: 'beach', name: 'Beach day', desc: 'Find a beach', stat: 'b1', goal: 1, coins: 20 },
+  { id: 'forest', name: 'Into the woods', desc: 'Find a forest', stat: 'b3', goal: 1, coins: 20 },
+  { id: 'desert', name: 'Hot sand', desc: 'Find a desert', stat: 'b4', goal: 1, coins: 30 },
+  { id: 'snow', name: 'Brrr!', desc: 'Find a snowland', stat: 'b5', goal: 1, coins: 30 },
+  { id: 'mountain', name: 'Mountaineer', desc: 'Find the mountains', stat: 'b6', goal: 1, coins: 30 },
+  { id: 'swamp', name: 'Squelch', desc: 'Find a swamp', stat: 'b7', goal: 1, coins: 30 },
+  { id: 'glow', name: 'Glow in the dark', desc: 'Find the glow fields', stat: 'b8', goal: 1, coins: 40 },
+  { id: 'biomes', name: 'Seen it all', desc: 'Find 8 different kinds of land', stat: 'biomes', goal: 8, coins: 100 },
+  { id: 'station', name: 'The giant ball', desc: 'Reach the abandoned station', stat: 'station', goal: 1, coins: 50 },
+  { id: 'stationTop', name: 'Top of the station', desc: 'Find the star at the top of the station', stat: 'star', goal: 1, coins: 80 },
+  { id: 'cave', name: 'Going down', desc: 'Explore a cave', stat: 'caves', goal: 1, coins: 30 },
+  { id: 'caves', name: 'Cave expert', desc: 'Explore 4 different caves', stat: 'caves', goal: 4, coins: 80 },
+  { id: 'volcano', name: 'Hot stuff', desc: 'Find the volcano', stat: 'volcano', goal: 1, coins: 80 },
+  { id: 'places', name: 'Explorer', desc: 'Discover 10 places', stat: 'places', goal: 10, coins: 60 },
+  { id: 'explorer', name: 'Great explorer', desc: 'Discover 40 places', stat: 'places', goal: 40, coins: 200 },
+  { id: 'kinds', name: 'Sightseer', desc: 'Discover 12 different kinds of places', stat: 'kinds', goal: 12, coins: 120 },
+  { id: 'ways', name: 'Pathfinder', desc: 'Wake up 5 waystones', stat: 'ways', goal: 5, coins: 60 },
+  { id: 'trophy', name: 'Parkour champion', desc: 'Get the trophy at the top of the parkour climb', stat: 'trophy', goal: 1, coins: 80 },
+  { id: 'race', name: 'Ring racer', desc: 'Finish the ring race', stat: 'races', goal: 1, coins: 60 },
+  { id: 'builder', name: 'Builder', desc: 'Build 30 things', stat: 'built', goal: 30, coins: 40 },
+  { id: 'wired', name: 'Inventor', desc: 'Connect 5 wires', stat: 'wired', goal: 5, coins: 60 },
+  { id: 'night', name: 'Night owl', desc: 'Stay out for a whole night', stat: 'nights', goal: 1, coins: 30 },
+  { id: 'friends', name: 'Animal friend', desc: 'Get close enough to touch 5 creatures', stat: 'touched', goal: 5, coins: 40 },
+  { id: 'hello', name: 'Say hi', desc: 'Use an emote', stat: 'emotes', goal: 1, coins: 10 },
+  { id: 'high', name: 'Sky high', desc: 'Get 120 metres above the sea', stat: 'high', goal: 120, coins: 50 },
+];
+
+// Keeps your coins, quest progress and unlocked things on this device.
+class Progress {
+  constructor(store) {
+    this.store = store;
+    const d = store.json('progress', {});
+    this.coins = d.coins | 0; this.stats = d.stats || {}; this.sets = d.sets || {}; this.done = d.done || {}; this.own = d.own || {};
+    this.dirty = false; this.onQuest = null;
+    setInterval(() => this.save(), 5000);
+  }
+  save() { if (!this.dirty) return; this.dirty = false; this.store.set('progress', JSON.stringify({ coins: this.coins, stats: this.stats, sets: this.sets, done: this.done, own: this.own })); }
+  add(stat, n = 1) { this.stats[stat] = (this.stats[stat] || 0) + n; this.dirty = true; }
+  max(stat, v) { if (v > (this.stats[stat] || 0)) { this.stats[stat] = v; this.dirty = true; } }
+  // remember something found once (a place, a chest...). true if it is new
+  mark(set, key) { const s = this.sets[set] || (this.sets[set] = {}); if (s[key]) return false; s[key] = 1; this.dirty = true; return true; }
+  has(set, key) { return !!(this.sets[set] && this.sets[set][key]); }
+  count(set) { return this.sets[set] ? Object.keys(this.sets[set]).length : 0; }
+  give(n) { this.coins += n; this.dirty = true; }
+  value(q) { return q.stat === 'biomes' || q.stat === 'places' || q.stat === 'kinds' || q.stat === 'ways' || q.stat === 'chests' ? this.count(q.stat) : (this.stats[q.stat] || 0); }
+  // returns the quests that were just finished
+  check() {
+    const out = [];
+    for (const q of QUESTS) if (!this.done[q.id] && this.value(q) >= q.goal) { this.done[q.id] = 1; this.coins += q.coins; this.dirty = true; out.push(q); }
+    return out;
+  }
+  unlocks(questId) { // what a quest unlocks, as words
+    const out = [];
+    for (const [k, v] of Object.entries(SKINS)) if (v.lock && v.lock.quest === questId) out.push(v.name + ' skin');
+    for (const [k, v] of Object.entries(HATS)) if (v.lock && v.lock.quest === questId) out.push(v.name);
+    for (const [k, v] of Object.entries(TRAILS)) if (v.lock && v.lock.quest === questId) out.push(v.name + ' trail');
+    return out;
+  }
+  lockOf(kind, id) { return kind === 'color' || kind === 'color2' ? COLOR_LOCK[id] : ((kind === 'skin' ? SKINS : kind === 'hat' ? HATS : TRAILS)[id] || {}).lock; }
+  // can this be worn? owner = has the owner pass
+  owns(kind, id, owner) {
+    const lock = this.lockOf(kind, id); if (!lock) return true;
+    if (lock.owner) return !!owner;
+    if (lock.quest) return !!this.done[lock.quest];
+    return !!(this.own[kind === 'color2' ? 'color' : kind] || {})[id];
+  }
+  buy(kind, id) {
+    const lock = this.lockOf(kind, id), k = kind === 'color2' ? 'color' : kind; if (!lock || !lock.coins || this.coins < lock.coins) return false;
+    this.coins -= lock.coins; (this.own[k] || (this.own[k] = {}))[id] = 1; this.dirty = true; this.save(); return true;
+  }
+}
