@@ -9,7 +9,7 @@ Explore a big world, build anything, and hang out with your friends, right in th
 - **Big world**: a 256×256 island with forests, meadows, beaches and lakes, a day and night cycle (lamps glow at night), and a minimap.
 - **Device detection**: it knows if you're on a phone, tablet or computer (and which kind), shows it next to your name, and gives you the right controls.
 - **Installable**: it works as an app on phones and computers, with its own icon.
-- **Admin**: the owner gets a ★ name tag and admin tools.
+- **Special items**: the crown and the name Outernautica belong only to the owner (the admin).
 
 ## Controls
 | | Computer | Phone / tablet |
@@ -33,9 +33,7 @@ There's no paid server. The first person online quietly runs the world for every
 - If nobody is online, the world is "asleep" until the next person taps Play.
 
 ## Admin
-- On the menu, tap **Admin**, paste your admin key, and tap **Save key**. Keep the key secret and never put it in this repo!
-- In the game you get a ★ name tag, unlimited build reach, Go/Mute/Kick buttons in the player list, and chat commands: `/announce text`, `/kick name`, `/mute name`, `/unmute name`, `/tp name`, `/bring name`, `/players`, `/help`.
-- The key is checked with a digital signature, so nobody can fake being the admin even though the code is public.
+The owner unlocks the crown and the name **Outernautica** once with a secret link. They stay in the owner's wardrobe forever and nobody else can pick them. Whoever owns them is the admin: a ★ name tag, unlimited build reach, Go/Mute/Kick buttons in the player list, and chat commands: `/announce text`, `/kick name`, `/mute name`, `/unmute name`, `/tp name`, `/bring name`, `/players`, `/help`. The unlock is checked with a digital signature, so nobody can fake it even though the code is public.
 
 ## Files
 - `index.html`, `style.css`: the page and the look

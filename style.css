@@ -91,3 +91,27 @@ body.touch #chatToggle{bottom:calc(208px + env(safe-area-inset-bottom))}
 #people{pointer-events:auto;max-height:40vh;overflow-y:auto}
 #chatLog .ann{color:var(--warm);font-weight:700}
 #roomLabel{font-size:14px}
+
+.ic{vertical-align:-3px;flex:none}
+button .ic+span{margin-left:4px}
+#clock{display:flex;gap:5px;align-items:center}
+#adminBtn{background:#ffc45a!important;color:#3a2600!important;display:inline-flex;align-items:center;gap:4px}
+#leaveBtn{display:inline-flex;align-items:center;gap:4px}
+#buildToggle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:13px}
+#chatToggle{display:flex;align-items:center;justify-content:center}
+#adminPanel{position:absolute;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(360px,calc(100vw - 20px));max-height:calc(100vh - 180px);overflow-y:auto;
+  background:rgba(14,20,40,.94);border:1px solid rgba(255,196,90,.4);border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:8px;pointer-events:auto;z-index:5}
+.aHead{display:flex;align-items:center;gap:6px;color:#ffc45a}.aHead b{flex:1}
+.iconBtn{background:transparent!important;color:#fff!important;padding:4px!important}
+.aGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.aBtn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px!important;font-size:12px;background:rgba(255,255,255,.08)!important;color:#fff!important;border-radius:10px}
+.aBtn.on{background:#ffc45a!important;color:#3a2600!important}
+.aBtn .ic+span{margin:0}
+.aRow{display:flex;gap:6px;align-items:center}.aRow input{padding:7px 10px;font-size:14px}.aRow .aBtn{flex-direction:row;padding:8px 10px!important}.aRow span{flex:1}
+.aTitle{display:flex;align-items:center;gap:6px;font-size:13px;opacity:.75;margin-top:4px}
+.aPlayer{background:rgba(255,255,255,.05);border-radius:10px;padding:4px;display:flex;flex-direction:column;gap:6px}
+.aName{display:flex;align-items:center;gap:6px;background:transparent!important;color:#fff!important;padding:6px!important;text-align:left;font-weight:600}
+.aName .dot{width:10px;height:10px;border-radius:50%}
+.aEmpty{font-size:13px;opacity:.6;text-align:center;padding:6px}
+
+.live{display:inline-block;width:9px;height:9px;border-radius:50%;background:#48d6ac;margin-right:6px;box-shadow:0 0 8px #48d6ac}.live.off{background:#9aa3b5;box-shadow:none}

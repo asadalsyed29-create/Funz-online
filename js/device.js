@@ -28,5 +28,5 @@ const Device = (() => {
   const useTouch = type !== 'computer' || (touch && !matchMedia('(pointer:fine)').matches);
 
   return { type, os, icon, label, touch, useTouch, standalone,
-    short: `${icon} ${label}${os !== 'Unknown' ? ' · ' + os : ''}` };
+    short: `${label}${os !== 'Unknown' ? ' · ' + os : ''}` };
 })();

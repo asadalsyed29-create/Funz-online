@@ -160,7 +160,8 @@ class Renderer {
   drawPlayer(g, p, isMe, now) {
     const bob = p.moving ? Math.sin(now / 90) * 1.5 : 0;
     if (isMe) { g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(p.x, p.y + 12, 16, 7, 0, 0, 7); g.stroke(); }
-    drawAvatar(g, p.x, p.y, p.color, p.hat, bob, p.dir || 0);
+    if (p.fly) { g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(p.x, p.y + 12, 9, 4, 0, 0, 7); g.fill(); drawAvatar(g, p.x, p.y - 16 + Math.sin(now / 300) * 2, p.color, p.hat, 0, p.dir || 0, true); }
+    else drawAvatar(g, p.x, p.y, p.color, p.hat, bob, p.dir || 0);
     if (p.emote && now - p.emoteAt < 2500) {
       const t = (now - p.emoteAt) / 2500; g.globalAlpha = 1 - t * t;
       g.font = '22px system-ui'; g.textAlign = 'center'; g.fillText(p.emote, p.x, p.y - 40 - t * 20); g.globalAlpha = 1;
@@ -168,14 +169,16 @@ class Renderer {
   }
   drawLabel(g, p, now) {
     g.textAlign = 'center'; g.font = '600 11px system-ui';
-    const tag = (p.admin ? '★ ' : '') + p.name + '  ' + (p.icon || '');
-    const w = g.measureText(tag).width + 10, ly = p.y - (p.hat ? 42 : 34);
+    const tag = (p.admin ? '★ ' : '') + p.name;
+    const lift = p.fly ? 16 : 0;
+    const w = g.measureText(tag).width + 24, ly = p.y - (p.hat ? 42 : 34) - lift;
     g.fillStyle = p.admin ? 'rgba(120,80,0,.7)' : 'rgba(0,0,0,.45)'; this.rr(g, p.x - w / 2, ly, w, 15, 6); g.fill();
-    g.fillStyle = p.admin ? '#ffd27a' : '#fff'; g.fillText(tag, p.x, ly + 11);
+    g.fillStyle = p.admin ? '#ffd27a' : '#fff'; g.fillText(tag, p.x - 7, ly + 11);
+    drawDeviceIcon(g, p.devType, p.x + w / 2 - 9, ly + 7.5, p.admin ? '#ffd27a' : 'rgba(255,255,255,.85)');
     if (p.say && now - p.sayAt < 6000) {
       g.font = '13px system-ui';
       const lines = this.wrap(g, p.say, 170), lh = 16, bw = Math.min(180, Math.max(...lines.map(l => g.measureText(l).width)) + 16), bh = lines.length * lh + 10;
-      const bx = p.x - bw / 2, by = p.y - (p.hat ? 52 : 44) - bh;
+      const bx = p.x - bw / 2, by = p.y - (p.hat ? 52 : 44) - (p.fly ? 16 : 0) - bh;
       g.fillStyle = 'rgba(255,255,255,.95)'; this.rr(g, bx, by, bw, bh, 8); g.fill();
       g.beginPath(); g.moveTo(p.x - 5, by + bh); g.lineTo(p.x + 5, by + bh); g.lineTo(p.x, by + bh + 6); g.fill();
       g.fillStyle = '#1b1b2b'; lines.forEach((l, i) => g.fillText(l, p.x, by + 18 + i * lh));
@@ -201,9 +204,9 @@ class Renderer {
 
 // Avatar: a soft round body with a direction marker and an optional hat.
 const HATS = { none: 'None', cap: 'Cap', beanie: 'Beanie', crown: 'Crown', flower: 'Flower', headphones: 'Headphones', tophat: 'Top hat' };
-function drawAvatar(g, x, y, color, hat, bob, dir) {
+function drawAvatar(g, x, y, color, hat, bob, dir, noShadow) {
   const cy = y - 2 + bob;
-  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x, y + 12, 12, 5, 0, 0, 7); g.fill();
+  if (!noShadow) { g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x, y + 12, 12, 5, 0, 0, 7); g.fill(); }
   g.fillStyle = color; g.beginPath(); g.arc(x, cy, 13, 0, 7); g.fill();
   g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.stroke();
   g.fillStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.arc(x - 4, cy - 5, 5, 0, 7); g.fill();
