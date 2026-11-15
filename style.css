@@ -149,3 +149,36 @@ body.small #chatToggle{top:calc(324px + env(safe-area-inset-top))}
 body:not(.touch) #chat{bottom:calc(76px + env(safe-area-inset-bottom))}
 
 body.touch:not(.building) #hotbar{display:none}
+
+#hotbar{max-width:calc(100vw - 20px);overflow-x:auto;scrollbar-width:none}
+#hotbar::-webkit-scrollbar{display:none}
+#hotbar button{flex:none}
+#hotbar .sw{position:static!important;display:flex;align-items:center;justify-content:center;inset:auto;background:none!important}
+#hotbar .sw svg{display:block}
+#rotate{display:none;position:fixed;inset:0;z-index:50;background:#0a1124;color:#fff;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px}
+#rotate span{opacity:.7}
+.rotIcon{width:54px;height:90px;border:4px solid #48d6ac;border-radius:12px;animation:turn 2s ease-in-out infinite}
+@keyframes turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (orientation:portrait){body.touch #rotate{display:flex}}
+body.touch #hotbar{width:auto;max-width:46vw;flex-wrap:nowrap}
+body.touch #bottom{right:10px;bottom:calc(112px + env(safe-area-inset-bottom))}
+body.touch #emotes{left:auto;right:auto;position:static;flex-direction:row}
+body.touch #stick{width:120px;height:120px}
+body.touch #buildToggle{top:auto;bottom:calc(20px + env(safe-area-inset-bottom));right:120px;width:58px;height:58px}
+body.touch #chatToggle{top:calc(70px + env(safe-area-inset-top));right:auto;left:auto;bottom:auto;position:fixed;right:150px}
+body.touch #sideBtns{top:calc(150px + env(safe-area-inset-top))}
+body.touch #clock{top:calc(124px + env(safe-area-inset-top))}
+body.touch #effects{top:calc(54px + env(safe-area-inset-top))}
+body.touch #chat{top:calc(54px + env(safe-area-inset-top));left:50%;width:min(340px,40vw)}
+body.touch #people{display:none}
+body.touch.showPeople #people{display:flex}
+
+body.touch #bottom{left:150px;right:190px;bottom:calc(8px + env(safe-area-inset-bottom));transform:none;align-items:center}
+body.touch #hotbar{max-width:100%;width:auto}
+body.touch #emotes{position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);flex-direction:row}
+body.touch #emotes button{padding:3px 7px;font-size:16px}
+body.touch #chat{left:10px;top:calc(60px + env(safe-area-inset-top));transform:none;width:min(340px,42vw)}
+body.touch #chatToggle{top:calc(10px + env(safe-area-inset-top));right:auto;left:190px;width:44px;height:44px}
+body.touch #effects{top:calc(56px + env(safe-area-inset-top))}
+
+body.touch #emotes{bottom:auto;max-height:none;flex-wrap:nowrap}

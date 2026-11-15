@@ -3,13 +3,17 @@
 Explore a big world, build anything, and hang out with your friends, right in the browser.
 
 ## What's in it
-- **One big 3D world**: everyone who taps **Play** rolls into the same peaceful voxel island with forests, beaches, lakes, mountains, a day and night cycle, and a minimap.
-- **You're a rolling ball**: pick a color and a hat, and your hat rolls along with you. Jump, splash around in the water, and drag to look around.
-- **Things to do**: find items (shells on beaches, mushrooms in forests, feathers in meadows, crystals on mountains, coins anywhere), race through 12 rings for the record board, and climb the parkour tower for a trophy.
-- **Inventory**: use items for powers like speed, growing big, super jumps and glowing in the dark.
-- **Build tab**: blocks (wood, stone, brick, glass, leaves, lamps, planks, white, dark) and **machines**: jump pads, speed pads, teleporters in 4 colors (place two of the same color to link them), spawn points and bouncy blocks.
+- **A massive low-poly world**: 16 km across, made from a seed, with oceans, beaches, grasslands, forests, deserts, snowlands, mountains, swamps and glowing fields. Day and night, clouds, and a minimap that points to the station.
+- **You're a rolling ball**: pick a color and a hat, and your hat rolls along with you. Jump, float in water, and drag to look around.
+- **The abandoned station**: one giant ball half buried in the ground. Roll in through the door, climb the spiral ramp around the glowing core, and find relics on every deck. Nobody can build on it, in it, or break it.
+- **Caves**: roll into a cave entrance to drop into an underground level with crystals, gems and glowing beetles. The gold ring takes you back up.
+- **Structures to discover**: ruins, stone circles, villages, watchtowers, giant trees, cabins, pyramids, crashed pods, igloos, frozen towers, swamp huts, crystal arches, mushroom rings, shipwrecks and lighthouses.
+- **Creatures**: friendly hoppers, antlerbucks, sand crabs, snowpuffs, bog blobs, cliff goats, glowmoths, fish and birds.
+- **Things to do**: collect items for your inventory (and use them for powers), race through 12 rings, and beat the parkour climb with checkpoints.
+- **Build tab**: blocks, ramps and slabs; **machines** (jump pads, speed pads, teleporters, spawn points, bouncy blocks, fans); and **circuits** for making your own machines: buttons, levers, pressure plates, sensors, clocks, inverters, delays, lamps, doors, lifts and sliders, all joined with the **wire tool**. Link two teleporters by wiring them together.
+- **Protected spawn**: only the admin can build or break at the spawn plaza and the parkour.
 - **Chat and emotes**, with bubbles over players' heads.
-- **Device detection**: phones and tablets get a joystick and a jump button, and computers get WASD and the mouse.
+- **Device detection**: phones and tablets get a joystick and buttons (landscape mode only), and computers get WASD and the mouse.
 - **Installable**: it works as an app with its own icon.
 - **Special items**: the crown and the name Outernautica belong only to the owner (the admin).
 
@@ -19,8 +23,9 @@ Explore a big world, build anything, and hang out with your friends, right in th
 | Roll | WASD or arrow keys | Joystick |
 | Jump | Space | Jump button |
 | Look around | Drag the mouse, Q and E, wheel to zoom | Drag the screen |
-| Build | Left click (1–0 picks, Tab switches Blocks/Machines) | Tap "Build", then tap |
+| Build | Left click (1–0 or - and = pick, Tab switches Blocks/Machines/Circuits) | Tap "Build", then tap |
 | Break | Right click, or Shift + click | Pick the pickaxe, then tap |
+| Wire | Pick the wire tool, click one part, then another | Same, with taps |
 | Inventory | I | Bag button |
 | Back to spawn | R | Flag button |
 | Chat | Enter | Chat button |
@@ -43,10 +48,12 @@ The owner unlocks the crown and the name **Outernautica** once with a secret lin
 
 ## Files
 - `index.html`, `style.css`: the page and the look
-- `js/gl.js`: a tiny WebGL 3D engine
-- `js/world3d.js`: the island, blocks, machines, items, rings and tower
-- `js/mesher.js`: turns the world into 3D meshes, plus ball, hat and item models
-- `js/game3d.js`: rolling-ball physics, camera, building and drawing
+- `js/gl.js`: a small WebGL 3D engine
+- `js/terrain.js`: the world's height, biomes, chunks, trees and plants
+- `js/structures.js`: the plaza, parkour, ring race, structures, caves and the station
+- `js/parts.js`: blocks, machines, circuits and wires
+- `js/models.js`: balls, hats, items and creatures
+- `js/game.js`: physics, camera, creatures, building and drawing
 - `js/net.js`: multiplayer
 - `js/app.js`: menus, controls, game loop, items, race and admin
 - `js/icons.js`, `js/device.js`: drawn icons and device detection

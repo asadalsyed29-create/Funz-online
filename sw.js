@@ -1,7 +1,7 @@
 // Lets Funz Online install and open even with a weak connection.
-const CACHE = 'funz-online-v2';
+const CACHE = 'funz-online-v3';
 const FILES = ['./', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/icons.js', 'js/device.js', 'js/gl.js', 'js/world3d.js', 'js/mesher.js', 'js/game3d.js', 'js/net.js', 'js/app.js',
+  'js/icons.js', 'js/device.js', 'js/gl.js', 'js/terrain.js', 'js/structures.js', 'js/parts.js', 'js/models.js', 'js/game.js', 'js/net.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon.png',
   'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
 

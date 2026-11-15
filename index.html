@@ -18,12 +18,13 @@
 <body>
 <canvas id="game"></canvas>
 <canvas id="ov"></canvas>
+<div id="rotate"><div class="rotIcon"></div><b>Turn your device sideways</b><span>Funz Online plays in landscape mode</span></div>
 
 <div id="menu" class="screen">
   <div class="panel">
     <img src="icons/icon-192.png" alt="" class="logo">
     <h1>Funz Online</h1>
-    <p class="sub">One big peaceful 3D world. Roll around, explore, build machines and hang out with everyone.</p>
+    <p class="sub">A massive peaceful world. Roll around, explore biomes, caves and an abandoned station, build machines and hang out with everyone.</p>
     <div id="deviceBadge" class="badge"></div>
 
     <canvas id="avatarPreview" width="160" height="120"></canvas>
@@ -39,7 +40,7 @@
     <button id="installBtn" class="ghost hidden">Install Funz Online</button>
     <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
     <p id="menuMsg" class="msg"></p>
-    <p class="ver">Version 2</p>
+    <p class="ver">Version 3</p>
   </div>
 </div>
 
@@ -85,9 +86,11 @@
 <script src="js/icons.js"></script>
 <script src="js/device.js"></script>
 <script src="js/gl.js"></script>
-<script src="js/world3d.js"></script>
-<script src="js/mesher.js"></script>
-<script src="js/game3d.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/structures.js"></script>
+<script src="js/parts.js"></script>
+<script src="js/models.js"></script>
+<script src="js/game.js"></script>
 <script src="js/net.js"></script>
 <script src="js/app.js"></script>
 </body>

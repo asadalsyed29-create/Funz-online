@@ -5,7 +5,7 @@
   const COLORS = ['#48d6ac', '#5aa9ff', '#ff7a8a', '#ffc45a', '#b48cff', '#ff9f5a', '#e8eef7', '#7be36b'];
   const EMOTES = ['👋', '❤️', '😂', '🔥', '✨', '👍'];
   const SEED = 20261115;
-  const MAX_PLAYERS = 30, MAX_EDITS = 60000, REACH = 8, DAY_MS = 10 * 60 * 1000, ITEM_RESPAWN = 3 * 60 * 1000;
+  const MAX_PLAYERS = 30, MAX_EDITS = 60000, MAX_WIRES = 4000, REACH = 9, DAY_MS = 14 * 60 * 1000, ITEM_RESPAWN = 4 * 60 * 1000;
   const ADMIN_PUB = { kty: 'EC', crv: 'P-256', x: 'ElMxPCYM-fDGDUiwud0eo8Uojz3sEaSeyzh6w_nW2Rk', y: 'Z0isPmpbPF-0J9BpskcpSe9tvLWSjF1ZCF6VlIWS9yo' };
 
   const store = {
@@ -58,10 +58,7 @@
     if (!preview || $('menu').classList.contains('hidden')) { if (preview) preview.loop = false; return; }
     const { gfx } = preview, gl = gfx.gl, u = gfx.u;
     gl.clearColor(0.07, 0.13, 0.22, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.uniformMatrix4fv(u.uVP, false, M4.mul(M4.persp(0.6, 4 / 3, 0.1, 50), M4.lookAt([0, 0.7, 2.1], [0, 0.12, 0], [0, 1, 0])));
-    gl.uniform3fv(u.uSun, [0.45, 0.75, 0.5]); gl.uniform3fv(u.uSunC, [0.7, 0.68, 0.64]); gl.uniform3fv(u.uAmb, [0.5, 0.52, 0.6]);
-    gl.uniform3fv(u.uFog, [0.07, 0.13, 0.22]); gl.uniform1f(u.uFogD, 0); gl.uniform3fv(u.uEye, [0, 0.9, 3.2]);
-    gl.uniform4fv(u.uL, new Float32Array(32)); gl.uniform3fv(u.uLC, new Float32Array(24));
+    gfx.scene({ vp: M4.mul(M4.persp(0.6, 4 / 3, 0.1, 50), M4.lookAt([0, 0.7, 2.1], [0, 0.12, 0], [0, 1, 0])), sun: [0.45, 0.75, 0.5], sunC: [0.62, 0.6, 0.56], sky: [0.52, 0.55, 0.62], ground: [0.25, 0.25, 0.3], fog: [0.07, 0.13, 0.22], fogD: 0, eye: [0, 0.7, 2.1] });
     gfx.draw(preview.m, M4.model([0, 0, 0], M4.rotY(t / 1200)), 1);
     requestAnimationFrame(spin);
   }
@@ -123,29 +120,33 @@
 
   // ---------- game state ----------
   let G = null;
-  const saveKey = 'world3d';
+  const saveKey = 'world4';
   function saved() { return store.json(saveKey, {}); }
-  function saveWorld() { if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), edits: G.world.editList(), bans: [...G.bans], board: G.board })); }
+  function saveWorld() { if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), parts: G.B.list(), wires: [...G.B.wires], levers: [...G.circ.levers], bans: [...G.bans], board: G.board })); }
   setInterval(saveWorld, 8000);
   addEventListener('pagehide', saveWorld);
+  const DEFAULT_SPAWN = [0, SPAWN_H + 1.5, 7];
 
   async function play() {
     const name = myName(); if (!name) return;
     $('playBtn').disabled = true; menuMsg('Entering the world…');
-    const world = new World(SEED), s = saved();
-    world.loadEdits(s.edits || []);
+    if (Device.useTouch) { try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) {} }
+    const s = saved(), B = new Builds(); B.load(s.parts, s.wires);
     let game;
-    try { game = new Game3D($('game'), $('ov'), world); }
-    catch (e) { $('playBtn').disabled = false; menuMsg('Your device can\'t show 3D graphics (WebGL). Try another browser.'); return; }
-    const spawn = store.json('spawn', null) || world.spawn();
+    try { game = new Game($('game'), $('ov'), SEED, B); }
+    catch (e) { console.error(e); $('playBtn').disabled = false; menuMsg('Your device can\'t show 3D graphics (WebGL). Try another browser.'); return; }
+    game.radius = Device.type === 'phone' ? 4 : Device.type === 'tablet' ? 5 : 6;
+    game.allPartsChanged();
+    const circ = new Circuits(B); for (const l of s.levers || []) circ.levers.add(l);
+    const spawn = store.json('spawn4', null) || DEFAULT_SPAWN;
     const body = game.newBody([spawn[0] + (Math.random() - .5), spawn[1] + 1, spawn[2] + (Math.random() - .5)]);
     G = {
-      role: null, myId: null, players: new Map(), world, game, body,
+      role: null, myId: null, players: new Map(), B, game, circ, body,
       tool: 0, cat: 'blocks', building: !Device.useTouch, dayStart: performance.now() - DAY_MS * 0.875,
-      lastSend: 0, lastState: 0, lastHeard: performance.now(), rate: new Map(), running: true, dirty: false,
+      lastSend: 0, lastState: 0, lastCirc: 0, lastHeard: performance.now(), rate: new Map(), running: true, dirty: false,
       muted: new Set(), kicked: new Map(), bans: new Set(s.bans || []), nonces: new Map(), reconnecting: false,
       taken: new Map(), frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
-      board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '',
+      board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '', wireFrom: null,
       profile: { name, color: myColor, hat: myHat, dev: Device.short, devType: Device.type },
     };
     G.me = { id: 'me', ...G.profile, p: body.p, R: body.R, r: body.r };
@@ -169,7 +170,7 @@
 
   function addPlayer(p) {
     const pl = Object.assign({ R: [1, 0, 0, 0, 1, 0, 0, 0, 1], r: 0.45 }, p);
-    pl.p = [...(p.p || G.world.spawn())]; pl.tp = [...pl.p];
+    pl.p = [...(p.p || DEFAULT_SPAWN)]; pl.tp = [...pl.p];
     G.players.set(p.id, pl); return pl;
   }
 
@@ -180,7 +181,7 @@
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
     $('adminBtn').classList.toggle('hidden', !G.me.admin);
     onResize(); last = performance.now();
-    showToast(Device.useTouch ? 'Joystick to roll · drag to look · jump button to jump' : 'WASD to roll · drag to look · Space to jump', 4000);
+    showToast(Device.useTouch ? 'Joystick to roll · drag to look · jump button to jump' : 'WASD to roll · drag to look · Space to jump · the station is on your minimap!', 5000);
     requestAnimationFrame(loop);
   }
 
@@ -223,7 +224,7 @@
   });
 
   const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) ? Math.max(lo, Math.min(hi, v)) : null;
-  const vec = a => Array.isArray(a) && a.length === 3 ? [num(a[0], 0, WORLD), num(a[1], -20, HMAX + 60), num(a[2], 0, WORLD)] : null;
+  const vec = a => Array.isArray(a) && a.length === 3 ? [num(a[0], -LIMIT, LIMIT), num(a[1], -800, 700), num(a[2], -LIMIT, LIMIT)] : null;
   const okVec = v => v && v.every(x => x != null);
   function allow(id, kind, per, ms) {
     const k = id + kind, now = performance.now(), list = (G.rate.get(k) || []).filter(t => now - t < ms);
@@ -235,7 +236,10 @@
   const dayPhase = () => ((performance.now() - G.dayStart) / DAY_MS) % 1;
   const findPlayer = name => { name = (name || '').toLowerCase().replace(/^@/, ''); if (!name) return null; return [...G.players.values()].find(p => p.name.toLowerCase() === name) || [...G.players.values()].find(p => p.name.toLowerCase().startsWith(name)); };
   const takenList = () => [...G.taken.keys()];
-  const canBuildHere = (x, y, z, p) => !(G.world.tower.has(x + ',' + y + ',' + z)) || p.admin;
+  // nobody can build or break at the station; only the admin can at the spawn plaza and the parkour
+  const inSpawn = (x, z) => Math.hypot(x + 0.5, z + 0.5) < 50 || Math.hypot(x + 0.5 - 44, z + 0.5 - 38) < 16;
+  const canBuildHere = (x, y, z, p) => !nearStation(x + 0.5, z + 0.5) && Math.abs(x) < LIMIT && Math.abs(z) < LIMIT && y > -760 && y < 600 && (!inSpawn(x, z) || !!(p && p.admin));
+  const sendPower = () => Net.toAll({ t: 'pw', on: [...G.circ.on] });
 
   function keeperGot(id, m) {
     const p = G.players.get(id);
@@ -251,9 +255,9 @@
       const np = addPlayer({ id, name, wantName, color: COLORS.includes(m.color) ? m.color : COLORS[0],
         hat: HATS[m.hat] && !RESERVED_HATS.includes(m.hat) ? m.hat : 'none', wantHat: HATS[m.hat] ? m.hat : 'none',
         dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
-        p: okVec(pos) ? pos : G.world.spawn() });
+        p: okVec(pos) ? pos : DEFAULT_SPAWN });
       const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce);
-      Net.toOne(id, { t: 'welcome', id, edits: G.world.editList(), bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce });
+      Net.toOne(id, { t: 'welcome', id, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce });
       renderPeople();
       if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
       return;
@@ -280,14 +284,19 @@
       if (!EMOTES.includes(m.e) || !allow(id, 'e', 4, 3000)) return;
       emote(p, m.e); Net.toAll({ t: 'emote', id, e: m.e });
     } else if (m.t === 'block') {
-      const { x, y, z, k } = m;
-      if (![x, y, z].every(Number.isInteger) || !G.world.inside(x, y, z) || !(k === 0 || BUILD_BLOCKS.includes(k) || BUILD_MACHINES.includes(k))) return;
+      const { x, y, z, k } = m, r = (m.r | 0) & 3;
+      if (![x, y, z].every(Number.isInteger) || !(k === 0 || PARTS[k])) return;
       if (!allow(id, 'b', 15, 1000) || !canBuildHere(x, y, z, p)) return;
       if (!p.admin && Math.hypot(x + 0.5 - p.tp[0], y + 0.5 - p.tp[1], z + 0.5 - p.tp[2]) > REACH + 3) return;
-      if (k !== 0 && G.world.edits.size >= MAX_EDITS && !G.world.edits.has(x + ',' + y + ',' + z)) return;
-      applyBlock(x, y, z, k); Net.toAll({ t: 'block', x, y, z, k });
+      if (k !== 0 && G.B.parts.size >= MAX_EDITS && !G.B.parts.has(pkey(x, y, z))) return;
+      applyBlock(x, y, z, k, r); Net.toAll({ t: 'block', x, y, z, k, r });
+    } else if (m.t === 'wire') {
+      const okKey = s => typeof s === 'string' && /^-?\d+,-?\d+,-?\d+$/.test(s) && G.B.parts.has(s);
+      if (!okKey(m.a) || !allow(id, 'w', 10, 1000) || !canBuildHere(...unkey(m.a), p)) return;
+      if (m.add) { if (!okKey(m.b) || m.a === m.b || G.B.wires.size >= MAX_WIRES) return; const A = unkey(m.a), Bv = unkey(m.b); if (Math.hypot(A[0] - Bv[0], A[1] - Bv[1], A[2] - Bv[2]) > 40) return; applyWire(m.a, m.b, true); Net.toAll({ t: 'wire', a: m.a, b: m.b, add: true }); }
+      else { for (const o of G.B.wiresOf(m.a)) { applyWire(m.a, o, false); Net.toAll({ t: 'wire', a: m.a, b: o, add: false }); } }
     } else if (m.t === 'take') {
-      tryTake(p, m.id);
+      tryTake(p, m.id, m.type);
     } else if (m.t === 'race') {
       const time = num(m.time, 5, 3600); if (time != null && allow(id, 'r', 2, 10000)) recordRace(p.name, time);
     } else if (m.t === 'adminCmd') {
@@ -295,13 +304,15 @@
     }
   }
 
-  function tryTake(p, itemId) {
-    const it = G.world.items[itemId];
-    if (!it || it.type === 'trophy' || G.taken.has(itemId)) return;
-    if (Math.hypot(it.x - p.tp[0], it.y - p.tp[1], it.z - p.tp[2]) > 3) return;
+  function tryTake(p, itemId, claimType) {
+    if (typeof itemId !== 'string' || itemId.length > 80 || itemId === 'trophy' || G.taken.has(itemId)) return;
+    const it = G.game.findItem(itemId);
+    if (it === null) return;
+    if (it && Math.hypot(it.p[0] - p.tp[0], it.p[1] - p.tp[1], it.p[2] - p.tp[2]) > 3.5) return;
+    const type = it ? it.type : claimType; if (!ITEMS[type] || type === 'trophy') return;
     G.taken.set(itemId, Date.now() + ITEM_RESPAWN);
     Net.toAll({ t: 'taken', id: itemId });
-    if (p === G.me) gotItem(it.type); else Net.toOne(p.id, { t: 'got', id: itemId });
+    if (p === G.me) gotItem(type); else Net.toOne(p.id, { t: 'got', id: itemId, type });
   }
   function recordRace(name, time) {
     const b = G.board.filter(r => r.name !== name || r.time < time);
@@ -317,7 +328,7 @@
     if (m.t === 'welcome') {
       const first = !G.myId;
       G.myId = m.id; G.me.id = m.id;
-      G.world.loadEdits(m.edits || []); G.dirty = true; G.game.rebuildAll();
+      G.B.load(m.parts || [], m.wires || []); G.dirty = true; G.game.allPartsChanged(); G.game.setPower(new Set(m.power || []));
       G.bans = new Set((m.bans || []).filter(b => typeof b === 'string'));
       G.taken = new Map((m.taken || []).map(i => [i, 0]));
       G.board = Array.isArray(m.board) ? m.board.slice(0, 5) : [];
@@ -349,10 +360,12 @@
     } else if (m.t === 'bye') { const p = G.players.get(m.id); if (p) { sys(p.name + ' left'); G.players.delete(m.id); renderPeople(); } }
     else if (m.t === 'chat') { const p = G.players.get(m.id); if (p) say(p, cleanText(m.text)); }
     else if (m.t === 'emote') { const p = G.players.get(m.id); if (p && EMOTES.includes(m.e)) emote(p, m.e); }
-    else if (m.t === 'block') { if ([m.x, m.y, m.z].every(Number.isInteger)) applyBlock(m.x, m.y, m.z, m.k); }
+    else if (m.t === 'block') { if ([m.x, m.y, m.z].every(Number.isInteger) && (m.k === 0 || PARTS[m.k])) applyBlock(m.x, m.y, m.z, m.k, m.r | 0); }
+    else if (m.t === 'wire') { if (typeof m.a === 'string' && typeof m.b === 'string') applyWire(m.a, m.b, !!m.add); }
+    else if (m.t === 'pw') { if (Array.isArray(m.on)) G.game.setPower(new Set(m.on.filter(k => typeof k === 'string'))); }
     else if (m.t === 'taken') G.taken.set(m.id, 0);
     else if (m.t === 'back') G.taken.delete(m.id);
-    else if (m.t === 'got') { const it = G.world.items[m.id]; if (it) gotItem(it.type); }
+    else if (m.t === 'got') { if (ITEMS[m.type]) gotItem(m.type); }
     else if (m.t === 'board') { G.board = Array.isArray(m.list) ? m.list.slice(0, 5) : []; G.dirty = true; renderBag(); }
     else if (m.t === 'sys') sys(cleanText(m.text));
     else if (m.t === 'announce') announce(cleanText(m.text));
@@ -362,10 +375,10 @@
     else if (m.t === 'banned') leave('You are banned from this world.');
   }
 
-  function applyBlock(x, y, z, k) {
-    if (!G.world.set(x, y, z, k)) return;
-    G.dirty = true; G.game.blockChanged(x, y, z);
+  function applyBlock(x, y, z, k, r) {
+    G.B.set(x, y, z, k, r); G.dirty = true; G.game.partChanged(x, y, z);
   }
+  function applyWire(a, b, add) { G.B.wire(a, b, add); G.dirty = true; G.game.wiresDirty = true; }
 
   // ---------- items & inventory ----------
   function gotItem(type) {
@@ -376,15 +389,14 @@
   function useItem(type) {
     const it = ITEMS[type]; if (!it || !it.time || !(G.inv[type] > 0)) return;
     G.inv[type]--; if (!G.inv[type]) delete G.inv[type]; store.set('inv', JSON.stringify(G.inv));
-    const eff = { shell: 'fast', mushroom: 'big', feather: 'superJump', crystal: 'glow' }[type];
-    G.effects[eff] = performance.now() + it.time * 1000;
+    G.effects[it.eff] = performance.now() + it.time * 1000;
     showToast(it.name + ': ' + it.use, 2000); renderBag();
   }
   function renderBag() {
     if (!G) return;
     const box = $('bagItems'); box.textContent = '';
     const types = Object.keys(G.inv).filter(t => ITEMS[t]);
-    if (!types.length) { const e = document.createElement('p'); e.className = 'aEmpty'; e.textContent = 'Nothing yet! Explore to find shells on beaches, mushrooms in forests, feathers in meadows, crystals on mountains and coins anywhere.'; box.appendChild(e); }
+    if (!types.length) { const e = document.createElement('p'); e.className = 'aEmpty'; e.textContent = 'Nothing yet! Explore to find shells on beaches, mushrooms in forests, feathers in grasslands, crystals in the snow and mountains, gems in caves and deserts, relics in ruins and the station, and coins anywhere.'; box.appendChild(e); }
     for (const t of types) {
       const it = ITEMS[t];
       const b = document.createElement('button'); b.className = 'item' + (it.time ? '' : ' keep');
@@ -400,7 +412,7 @@
   $('bagBtn').onclick = () => { $('bag').classList.toggle('hidden'); renderBag(); };
   $('bagClose').onclick = () => $('bag').classList.add('hidden');
   $('respawnBtn').onclick = () => respawn();
-  function respawn() { if (!G) return; const s = G.spawn; G.body.p = [s[0], s[1] + 1.2, s[2]]; G.body.v = [0, 0, 0]; if (G.race) { G.race = null; showToast('Race cancelled', 1200); } }
+  function respawn() { if (!G) return; const s = G.spawn; G.body.p = [s[0], s[1] + 1.2, s[2]]; G.body.v = [0, 0, 0]; G.game.cave = null; if (G.race) { G.race = null; showToast('Race cancelled', 1200); } }
 
   // ---------- admin ----------
   function parseCommand(text) {
@@ -547,48 +559,80 @@
   function showToast(t, ms) { $('toast').textContent = t; $('toast').classList.remove('hidden'); clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => $('toast').classList.add('hidden'), ms); }
 
   // ---------- build tab ----------
-  const toolList = () => [...(G.cat === 'blocks' ? BUILD_BLOCKS : BUILD_MACHINES), 0];
+  const CATS = ['blocks', 'machines', 'circuits'], CAT_NAMES = { blocks: 'Blocks', machines: 'Machines', circuits: 'Circuits' }, CAT_ICONS = { blocks: 'build', machines: 'gear', circuits: 'chip' };
+  const toolList = () => [...TOOL_CATS[G.cat], 0];
+  const curTool = () => toolList()[G.tool];
+  function nextCat() { G.cat = CATS[(CATS.indexOf(G.cat) + 1) % CATS.length]; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); }
   function buildHotbar() {
     const bar = $('hotbar'); bar.textContent = '';
     const tab = document.createElement('button'); tab.className = 'tab';
-    tab.innerHTML = icon(G.cat === 'blocks' ? 'build' : 'gear', 20) + '<span>' + (G.cat === 'blocks' ? 'Blocks' : 'Machines') + '</span>';
-    tab.onclick = () => { G.cat = G.cat === 'blocks' ? 'machines' : 'blocks'; G.tool = 0; buildHotbar(); selectTool(0); };
-    bar.appendChild(tab);
+    tab.innerHTML = icon(CAT_ICONS[G.cat], 20) + '<span>' + CAT_NAMES[G.cat] + '</span>';
+    tab.onclick = nextCat; bar.appendChild(tab);
     toolList().forEach((k, i) => {
-      const b = document.createElement('button'); b.title = k ? BLOCKS[k].name : 'Break';
-      if (k) { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = BLOCKS[k].color; if (BLOCKS[k].top) sw.style.boxShadow = 'inset 0 7px 0 ' + BLOCKS[k].top; b.appendChild(sw); }
-      else { const x = document.createElement('span'); x.className = 'x'; x.innerHTML = icon('pick', 22); b.appendChild(x); }
-      if (!Device.useTouch) { const key = document.createElement('span'); key.className = 'k'; key.textContent = (i + 1) % 10; b.appendChild(key); }
+      const b = document.createElement('button');
+      if (k === 'wire' || k === 'cut' || k === 0) { const x = document.createElement('span'); x.className = 'x'; x.innerHTML = icon(k === 0 ? 'pick' : k, 22); b.appendChild(x); b.title = k === 0 ? 'Break' : k === 'wire' ? 'Wire tool' : 'Cut wires'; }
+      else { b.title = PARTS[k].name; b.appendChild(partSwatch(k)); }
+      if (!Device.useTouch && i < 10) { const key = document.createElement('span'); key.className = 'k'; key.textContent = (i + 1) % 10; b.appendChild(key); }
       b.onclick = () => { selectTool(i); if (Device.useTouch && !G.building) toggleBuild(true); };
       bar.appendChild(b);
     });
     selectTool(Math.min(G.tool, toolList().length - 1), true);
   }
-  const MACHINE_TIPS = { 40: 'Jump pad: launches you up', 41: 'Speed pad: zooms you forward', 42: 'Teleporter: place 2 of the same color to link them', 43: 'Teleporter: place 2 of the same color to link them', 44: 'Teleporter: place 2 of the same color to link them', 45: 'Teleporter: place 2 of the same color to link them', 46: 'Spawn point: roll on it to respawn there', 47: 'Bouncy block: boing!' };
+  // little drawn previews of each part for the build tab
+  function partSwatch(k) {
+    const P = PARTS[k], s = document.createElement('span'); s.className = 'sw';
+    const top = P.top || P.color, side = P.color;
+    s.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28">' + (P.ramp
+      ? '<path d="M3 20 L21 20 L21 6 Z" fill="' + side + '" stroke="rgba(0,0,0,.35)" stroke-width="1"/><path d="M3 20 L21 6" stroke="rgba(255,255,255,.5)" stroke-width="1.5"/>'
+      : P.slab && P.slab < 0.6 ? '<path d="M3 14 L12 9 L21 14 L12 19 Z" fill="' + top + '"/><path d="M3 14 L3 17 L12 22 L12 19 Z" fill="' + side + '" opacity=".85"/><path d="M21 14 L21 17 L12 22 L12 19 Z" fill="' + side + '" opacity=".65"/>'
+      : '<path d="M3 8 L12 3 L21 8 L12 13 Z" fill="' + top + '"/><path d="M3 8 L3 17 L12 22 L12 13 Z" fill="' + side + '" opacity=".85"/><path d="M21 8 L21 17 L12 22 L12 13 Z" fill="' + side + '" opacity=".6"/>') + '</svg>';
+    if (P.glass) s.style.opacity = .7;
+    return s;
+  }
   function selectTool(i, quiet) {
-    G.tool = i; [...$('hotbar').children].slice(1).forEach((b, j) => b.classList.toggle('on', j === i));
-    const k = toolList()[i]; if (!quiet) showToast(k ? (MACHINE_TIPS[k] || BLOCKS[k].name) : 'Break', 1400);
+    G.tool = i; G.wireFrom = null; [...$('hotbar').children].slice(1).forEach((b, j) => b.classList.toggle('on', j === i));
+    const k = curTool(); if (quiet) return;
+    showToast(k === 0 ? 'Break: tap a part you built' : k === 'wire' ? 'Wire tool: tap one part, then another to connect them' : k === 'cut' ? 'Cut wires: tap a part to remove its wires' : PARTS[k].name + (PARTS[k].tip ? ': ' + PARTS[k].tip : ''), 2200);
   }
   function toggleBuild(on) { G.building = on ?? !G.building; document.body.classList.toggle('building', G.building); $('buildToggle').classList.toggle('on', G.building); $('buildToggle').innerHTML = icon(G.building ? 'check' : 'build', 24) + '<span>' + (G.building ? 'Done' : 'Build') + '</span>'; }
   $('buildToggle').onclick = () => toggleBuild();
 
-  function target(sx, sy, breaking) {
-    const hit = G.game.pick(sx, sy, G.me.admin ? 80 : 30); if (!hit) return null;
-    const t = breaking ? { x: hit.x, y: hit.y, z: hit.z } : { x: hit.x + hit.nx, y: hit.y + hit.ny, z: hit.z + hit.nz };
-    const reach = Math.hypot(t.x + 0.5 - G.body.p[0], t.y + 0.5 - G.body.p[1], t.z + 0.5 - G.body.p[2]);
-    t.ok = G.world.inside(t.x, t.y, t.z) && (G.me.admin || reach <= REACH) && canBuildHere(t.x, t.y, t.z, G.me);
-    if (!breaking && t.ok) { // don't build inside a ball
-      for (const p of G.players.values()) { const r = p.r || 0.45; const cx = Math.max(t.x, Math.min(t.x + 1, p.p[0])), cy = Math.max(t.y, Math.min(t.y + 1, p.p[1])), cz = Math.max(t.z, Math.min(t.z + 1, p.p[2])); if (Math.hypot(p.p[0] - cx, p.p[1] - cy, p.p[2] - cz) < r) t.ok = false; }
+  // which way parts face: the way the camera looks
+  function facing() { const f = G.game.forward(); let best = 0, bd = -2; DIRS.forEach((d, i) => { const v = d[0] * f[0] + d[1] * f[1]; if (v > bd) { bd = v; best = i; } }); return best; }
+  function target(sx, sy, mode) {
+    const hit = G.game.pick(sx, sy, G.me.admin ? 90 : 34); if (!hit) return null;
+    let cell;
+    if (mode !== 'place') { if (!hit.part) return null; cell = hit.part; }
+    else if (hit.part) cell = [hit.part[0] + hit.n[0], hit.part[1] + hit.n[1], hit.part[2] + hit.n[2]];
+    else cell = [Math.floor(hit.p[0] + hit.n[0] * 0.5), Math.floor(hit.p[1] + hit.n[1] * 0.5 + 0.02), Math.floor(hit.p[2] + hit.n[2] * 0.5)];
+    const reach = Math.hypot(cell[0] + 0.5 - G.body.p[0], cell[1] + 0.5 - G.body.p[1], cell[2] + 0.5 - G.body.p[2]);
+    const t = { cell, ok: canBuildHere(...cell, G.me) && (G.me.admin || reach <= REACH) };
+    t.why = canBuildHere(...cell, G.me) ? null : nearStation(cell[0] + 0.5, cell[2] + 0.5) ? 'Nobody can build or break at the abandoned station' : 'The spawn area is protected. Roll a bit further out to build!';
+    if (mode === 'place' && t.ok) {
+      if (G.B.get(...cell)) t.ok = false;
+      for (const p of G.players.values()) { const r = p.r || 0.45; const cx = Math.max(cell[0], Math.min(cell[0] + 1, p.p[0])), cy = Math.max(cell[1], Math.min(cell[1] + 1, p.p[1])), cz = Math.max(cell[2], Math.min(cell[2] + 1, p.p[2])); if (Math.hypot(p.p[0] - cx, p.p[1] - cy, p.p[2] - cz) < r) t.ok = false; }
     }
-    if (breaking && t.ok && G.world.get(t.x, t.y, t.z) === 0) t.ok = false;
     return t;
   }
+  const send = msg => { if (G.role === 'guest') Net.toKeeper(msg); else Net.toAll(msg); };
   function edit(sx, sy, breaking) {
     if (!G.myId) return;
-    const k = breaking ? 0 : toolList()[G.tool];
-    const t = target(sx, sy, k === 0); if (!t || !t.ok) return;
-    applyBlock(t.x, t.y, t.z, k);
-    if (G.role === 'guest') Net.toKeeper({ t: 'block', x: t.x, y: t.y, z: t.z, k }); else Net.toAll({ t: 'block', x: t.x, y: t.y, z: t.z, k });
+    const k = breaking ? 0 : curTool();
+    if (k === 'wire' || k === 'cut') {
+      const t = target(sx, sy, 'pick'); if (!t) { G.wireFrom = null; return; }
+      const key = pkey(...t.cell);
+      if (k === 'cut') { const list = G.B.wiresOf(key); for (const o of list) applyWire(key, o, false); if (G.role === 'guest') Net.toKeeper({ t: 'wire', a: key, add: false }); else for (const o of list) Net.toAll({ t: 'wire', a: key, b: o, add: false }); showToast('Wires cut', 900); return; }
+      if (!G.wireFrom) { G.wireFrom = t.cell; showToast('Now tap the part to connect it to', 1500); return; }
+      const a = pkey(...G.wireFrom); G.wireFrom = null; if (a === key) return;
+      if (G.role === 'guest') Net.toKeeper({ t: 'wire', a, b: key, add: true }); else { applyWire(a, key, true); Net.toAll({ t: 'wire', a, b: key, add: true }); }
+      showToast('Connected!', 900); return;
+    }
+    const t = target(sx, sy, k === 0 ? 'pick' : 'place'); if (!t) return;
+    if (!t.ok) { if (t.why) showToast(t.why, 1500); return; }
+    const r = facing();
+    if (G.role === 'guest') Net.toKeeper({ t: 'block', x: t.cell[0], y: t.cell[1], z: t.cell[2], k, r });
+    else { applyBlock(...t.cell, k, r); Net.toAll({ t: 'block', x: t.cell[0], y: t.cell[1], z: t.cell[2], k, r }); }
+    if (G.role === 'guest') applyBlock(...t.cell, k, r);
   }
 
   // ---------- input ----------
@@ -598,9 +642,10 @@
     if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Escape') document.activeElement.blur(); return; }
     if (e.key === 'Enter' || e.key === '/') { e.preventDefault(); $('chat').classList.remove('hidden'); $('chatInput').focus(); if (e.key === '/') $('chatInput').value = '/'; return; }
     if (/^[0-9]$/.test(e.key)) { const i = (+e.key + 9) % 10; if (i < toolList().length) selectTool(i); return; }
+    if (e.key === '-' || e.key === '=') { const n = toolList().length; selectTool((G.tool + (e.key === '=' ? 1 : n - 1)) % n); return; }
     const k = e.key.toLowerCase();
     if (k === 'f' && G.me.admin) { setFly(!G.me.fly); return; }
-    if (k === 'tab') { e.preventDefault(); G.cat = G.cat === 'blocks' ? 'machines' : 'blocks'; G.tool = 0; buildHotbar(); return; }
+    if (k === 'tab') { e.preventDefault(); nextCat(); return; }
     if (k === 'i' || k === 'b') { $('bagBtn').click(); return; }
     if (k === 'r') { respawn(); return; }
     if (k === ' ') e.preventDefault();
@@ -627,7 +672,7 @@
     const d = drags.get(e.pointerId); drags.delete(e.pointerId); if (!d || !G || !G.myId) return;
     if (d.moved > 6 || e.type === 'pointercancel') return;
     if (e.pointerType === 'mouse') edit(e.clientX, e.clientY, d.btn === 2 || e.shiftKey);
-    else if (G.building) edit(e.clientX, e.clientY, toolList()[G.tool] === 0);
+    else if (G.building) edit(e.clientX, e.clientY, curTool() === 0);
   };
   cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
   cv.addEventListener('pointerleave', () => { mouse = null; });
@@ -654,42 +699,49 @@
 
   // ---------- activities ----------
   function activities(now) {
-    const b = G.body, W = G.world;
-    for (const it of W.items) { // pick up items you roll into
-      if (Math.abs(it.x - b.p[0]) > 1.4 || Math.abs(it.z - b.p[2]) > 1.4 || Math.abs(it.y - b.p[1]) > 1.6) continue;
-      if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('🏆 You climbed the parkour tower!'); } continue; }
+    const b = G.body, game = G.game;
+    for (const it of game.nearbyItems(b.p)) { // pick up items you roll into
+      if (Math.abs(it.p[0] - b.p[0]) > 1.4 || Math.abs(it.p[2] - b.p[2]) > 1.4 || Math.abs(it.p[1] - b.p[1]) > 1.6) continue;
+      if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('🏆 You beat the parkour climb!'); } continue; }
       if (G.taken.has(it.id) || G.asked === it.id) continue;
       G.asked = it.id; setTimeout(() => { if (G && G.asked === it.id) G.asked = null; }, 800);
-      if (G.role === 'guest') Net.toKeeper({ t: 'take', id: it.id }); else tryTake(G.me, it.id);
+      if (G.role === 'guest') Net.toKeeper({ t: 'take', id: it.id, type: it.type }); else tryTake(G.me, it.id, it.type);
     }
-    const rs = W.raceStart; // ring race
-    if (!G.race && now > G.raceCool && Math.hypot(b.p[0] - rs[0], b.p[2] - rs[2]) < 1.4 && Math.abs(b.p[1] - rs[1]) < 1.5) {
+    // parkour checkpoints
+    for (const cp of game.landmarks[1].checkpoints) if (Math.hypot(b.p[0] - cp[0], b.p[1] - cp[1], b.p[2] - cp[2]) < 2 && G.lastSpawnPad !== cp.join()) { G.lastSpawnPad = cp.join(); G.spawn = [...cp]; store.set('spawn4', JSON.stringify(G.spawn)); showToast('Checkpoint! You\'ll respawn here', 1500); }
+    const rs = game.raceStart; // ring race
+    if (!G.race && now > G.raceCool && Math.hypot(b.p[0] - rs[0], b.p[2] - rs[2]) < 1.6 && Math.abs(b.p[1] - rs[1]) < 2) {
       G.race = { next: 0, start: now }; showToast('Race! Roll through all 12 rings', 2200);
     }
     if (G.race) {
-      const r = W.rings[G.race.next], nx = Math.sin(r.yaw), nz = Math.cos(r.yaw);
+      const r = game.rings[G.race.next], nx = Math.sin(r.yaw), nz = Math.cos(r.yaw);
       const dx = b.p[0] - r.x, dy = b.p[1] - r.y, dz = b.p[2] - r.z, along = dx * nx + dz * nz;
       const off = Math.hypot(dx - along * nx, dy, dz - along * nz);
-      if (Math.abs(along) < 0.8 && off < 1.6) {
+      if (Math.abs(along) < 0.9 && off < 1.7) {
         G.race.next++;
-        if (G.race.next >= W.rings.length) {
+        if (G.race.next >= game.rings.length) {
           const time = (now - G.race.start) / 1000; G.race = null; G.raceCool = now + 4000;
           showToast('Finished in ' + time.toFixed(2) + 's!', 3500);
           if (G.role === 'guest') Net.toKeeper({ t: 'race', time }); else recordRace(G.me.name, time);
         } else showToast('Ring ' + G.race.next + '/12', 700);
       }
-      if (G.race && now - G.race.start > 5 * 60 * 1000) { G.race = null; showToast('Race timed out', 1500); }
+      if (G.race && now - G.race.start > 6 * 60 * 1000) { G.race = null; showToast('Race timed out', 1500); }
     }
+    game.triggers(b, fx);
     if (G.role !== 'guest') for (const [id, at] of G.taken) if (at && Date.now() > at) { G.taken.delete(id); Net.toAll({ t: 'back', id }); }
   }
   function fx(kind, arg) {
     if (kind === 'tp') showToast('Whoosh! Teleported', 900);
-    else if (kind === 'tp-alone') showToast('Place another teleporter of the same color to link it', 1800);
+    else if (kind === 'tp-alone') showToast('Use the wire tool (Circuits tab) to connect this teleporter to another one', 2500);
+    else if (kind === 'cave-in') showToast('You found a cave! Look for gems and crystals. The gold ring takes you back up', 3500);
+    else if (kind === 'cave-out') showToast('Back outside!', 1200);
     else if (kind === 'spawn') {
       const k = arg.join(','); if (G.lastSpawnPad === k) return; G.lastSpawnPad = k;
-      G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; store.set('spawn', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);
+      G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; store.set('spawn4', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);
     }
   }
+
+  if (new URLSearchParams(location.search).has('debug')) window.__funz = () => G;
 
   // ---------- loop ----------
   let last = performance.now();
@@ -710,7 +762,7 @@
     const input = { x: (rt[0] * ix - f[0] * iy) * go, z: (rt[1] * ix - f[1] * iy) * go,
       jump: !G.frozen && (keys.has(' ') || jumpHeld), up: keys.has(' ') || jumpHeld, down: keys.has('shift') || downHeld };
     G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, fx });
-    if (b.p[1] < -8) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
+    if (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30)) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
     m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow; m.big = !!G.effects.big;
     const a = 1 - Math.pow(0.0008, dt); // others glide to where they are and roll
     for (const p of G.players.values()) if (p !== m) {
@@ -720,6 +772,12 @@
       G.game.rollBy(p, p.p[0] - ox, p.p[2] - oz, p.r);
     }
     activities(now);
+    G.game.animParts(dt);
+    if (G.role !== 'guest' && now - G.lastCirc > 100) { // the keeper runs all the circuits
+      G.lastCirc = now;
+      if (G.circ.step([...G.players.values()].map(p => p.p))) { G.game.setPower(new Set(G.circ.on)); sendPower(); G.dirty = true; }
+    }
+    G.game.updateCreatures(dt, m, [...G.players.values()], G.wasNight);
 
     if (G.role === 'guest' && G.myId && now - G.lastSend > 66) {
       G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow });
@@ -742,8 +800,9 @@
 
     G.game.updateCamera(b.p, dt);
     let cursor = null;
-    if (mouse && G.myId && !drags.size) { const k = toolList()[G.tool]; const t = target(mouse.x, mouse.y, k === 0); if (t) cursor = t; }
-    G.game.render([...G.players.values()], m, { now, dark, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, taken: G.taken, race: G.race, radius: Device.type === 'phone' ? 5 : 6 });
+    if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
+    const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
+    G.game.render([...G.players.values()], m, { now, dark, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();
