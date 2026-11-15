@@ -32,7 +32,7 @@ const STRUCT_TYPES = {
 class Structures {
   constructor(T) {
     this.T = T; this.N = T.N; this.list = new Map(); this.grid = new TriGrid();
-    this.caves = new Map();
+    this.caves = new Map(); this.boosts = [];
   }
   // which structure (if any) is in a region
   plan(rx, rz) {
@@ -222,6 +222,25 @@ function buildLandmarks(gl, st) {
     s.mesh = mb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   }
   out.push(buildStation(gl, st));
+  // the Station Road: glowing posts and boost rings all the way from the plaza to the station door
+  {
+    const L = Math.hypot(STATION.x, STATION.z), dx = STATION.x / L, dz = STATION.z / L, px = -dz, pz = dx;
+    st.boosts = [];
+    let mb = null, seg = null;
+    const flush = () => { if (mb && seg) { seg.mesh = mb.build(gl); out.push(seg); } mb = null; seg = null; };
+    for (let d = 44; d < L - STATION.R - 14; d += 22) {
+      if (!mb || d - seg.d0 >= 110) { flush(); mb = new MeshBuilder(); seg = { key: 'road' + d, d0: d, x: dx * (d + 55), z: dz * (d + 55), items: [], lights: [], triggers: [], label: null }; }
+      for (const side of [-1, 1]) {
+        const x = dx * d + px * side * 4.5, z = dz * d + pz * side * 4.5, y = st.T.h(x, z); if (y < SEA + 0.2) continue;
+        mb.cyl(x, y - 0.4, z, 0.13, 0.09, 2.3, 5, hex('#39405a'), false);
+        mb.ico(x, y + 2.05, z, 0.28, 1, () => glowC(hex('#5ff0e0')));
+        mb.at([x, y + 1.35, z], M4.rotY(Math.atan2(dx, dz))); // little arrows pointing at the station
+        mb.tri([-0.3, 0, -0.02], [0.3, 0, -0.02], [0, 0.26, 0.2], glowC(hex('#ffc45a'))); mb.tri([0.3, 0, -0.02], [-0.3, 0, -0.02], [0, 0.26, 0.2], glowC(hex('#ffc45a'))); mb.reset();
+      }
+      if (Math.round((d - 44) / 22) % 4 === 1) { const x = dx * d, z = dz * d, y = st.T.h(x, z); if (y > SEA + 0.2) st.boosts.push({ p: [x, y + 1.9, z], yaw: Math.atan2(dx, dz), dir: [dx, dz] }); }
+    }
+    flush();
+  }
   return out;
 }
 
@@ -280,6 +299,9 @@ function buildStation(gl, st) {
   mb.cyl(cx, cy + 1.2, cz, 3.2, 3.2, 44, 10, glowC(hex('#6ff6ff')));
   for (let k = 0; k < 6; k++) mb.cyl(cx, cy + 6 + k * 7, cz, 4, 4, 0.8, 10, hex('#4a515c'));
   mb.ico(cx, cy + 47, cz, 3.5, 1, () => glowC(hex('#c8fbff')));
+  // a beam of light from the top that you can see from far away
+  mb.cyl(cx, cy + R - 1, cz, 2.2, 1.2, 12, 8, hex('#4a515c'), false);
+  { const beam = new MeshBuilder(); beam.cyl(cx, cy + R + 8, cz, 2.4, 1.6, 520, 6, glowC(hex('#b8fbff')), false); for (let k = 0; k < 3; k++) beam.cyl(cx, cy + R + 14 + k * 9, cz, 3.2 - k * 0.6, 3.2 - k * 0.6, 0.5, 10, glowC(hex('#5ff0e0'))); s.beam = beam.build(gl); const halo = new MeshBuilder(); halo.cyl(cx, cy + R + 8, cz, 8, 5, 520, 8, [0.55, 0.95, 1, 0.09], false); s.halo = halo.build(gl); }
   // spiral ramp around the core up to the top deck
   const turns = 1.5, segs = 72, top = 36, r0 = 8, r1 = 13;
   for (let k = 0; k < segs; k++) {

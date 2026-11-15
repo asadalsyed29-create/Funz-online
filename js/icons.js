@@ -34,6 +34,8 @@ const ICON_PATHS = {
   say: F('M3 4h18v12H11l-5 4v-4H3z') + '<path d="M3 4h18v12H11l-5 4v-4H3z"/><path d="M8 8l2.5 2-2.5 2M12.5 12h3.5"/>',
   kick: F('M14 6l6 6-6 6z') + '<path d="M3 12h15M14 6l6 6-6 6"/><path d="M5 5v14"/>',
   ban: F('M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z') + '<circle cx="12" cy="12" r="9.5"/><path d="M5.3 5.3l13.4 13.4"/>',
+  smile: F('M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z') + '<circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5a5 5 0 0 0 9 0"/><circle cx="8.8" cy="9.5" r="1" fill="currentColor"/><circle cx="15.2" cy="9.5" r="1" fill="currentColor"/>',
+  map: F('M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z') + '<path d="M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 3.5V18M15 6v14.5"/>',
   speed: F('M13 2L4 14h7l-1 8 9-12h-7z') + '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
 };
 function icon(name, size = 20) {

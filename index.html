@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=3.1.1">
+<link rel="stylesheet" href="style.css?v=3.2">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -40,19 +40,21 @@
     <button id="installBtn" class="ghost hidden">Install Funz Online</button>
     <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
     <p id="menuMsg" class="msg"></p>
-    <p class="ver" id="verLabel">Version 3.1.1</p>
+    <p class="ver" id="verLabel">Version 3.2</p>
   </div>
 </div>
 
 <div id="hud" class="hidden">
   <div id="topLeft">
-    <div id="roomBox"><span id="roomLabel"></span><button id="leaveBtn" class="mini leave">Leave</button><button id="adminBtn" class="mini hidden">★ Admin</button></div>
+    <div id="roomBox"><span id="roomLabel"></span><button id="leaveBtn" class="mini leave">Leave</button><button id="adminBtn" class="mini hidden">Admin</button></div>
+    <div id="quick"><button id="chatToggle" title="Chat"></button><button id="emoteToggle" title="Emotes"></button><button id="peopleToggle" title="Players"></button></div>
     <div id="people"></div>
   </div>
-  <div id="clock"><span id="clockIc"></span><span id="clockT"></span></div>
+  <div id="clock"><span id="clockIc"></span><span id="clockT"></span><span id="placeT"></span></div>
   <div id="adminPanel" class="hidden"></div>
   <div id="toast" class="hidden"></div>
   <div id="effects" class="hidden"></div>
+  <div id="emotes"></div>
   <div id="sideBtns"><button id="bagBtn" title="Inventory (I)"></button><button id="respawnBtn" title="Back to spawn (R)"></button></div>
   <div id="bag" class="hidden">
     <div class="aHead"><b>Inventory</b><button id="bagClose" class="iconBtn">✕</button></div>
@@ -60,8 +62,9 @@
     <div class="aTitle">Ring race records</div>
     <div id="board"></div>
   </div>
-  <div id="bottom">
-    <div id="emotes"></div>
+  <div id="buildBar">
+    <div id="toolName"></div>
+    <div id="tabs"></div>
     <div id="hotbar"></div>
   </div>
   <button id="buildToggle" class="hidden">Build</button>
@@ -74,7 +77,6 @@
     <button type="submit" class="mini">Send</button>
   </form>
 </div>
-<button id="chatToggle" class="hidden"></button>
 
 <div id="touch" class="hidden">
   <div id="stick"><div id="knob"></div></div>
@@ -82,17 +84,17 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
-<script>window.FUNZ_VERSION = '3.1.1';</script>
+<script>window.FUNZ_VERSION = '3.2';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js?v=3.1.1"></script>
-<script src="js/device.js?v=3.1.1"></script>
-<script src="js/gl.js?v=3.1.1"></script>
-<script src="js/terrain.js?v=3.1.1"></script>
-<script src="js/structures.js?v=3.1.1"></script>
-<script src="js/parts.js?v=3.1.1"></script>
-<script src="js/models.js?v=3.1.1"></script>
-<script src="js/game.js?v=3.1.1"></script>
-<script src="js/net.js?v=3.1.1"></script>
-<script src="js/app.js?v=3.1.1"></script>
+<script src="js/icons.js?v=3.2"></script>
+<script src="js/device.js?v=3.2"></script>
+<script src="js/gl.js?v=3.2"></script>
+<script src="js/terrain.js?v=3.2"></script>
+<script src="js/structures.js?v=3.2"></script>
+<script src="js/parts.js?v=3.2"></script>
+<script src="js/models.js?v=3.2"></script>
+<script src="js/game.js?v=3.2"></script>
+<script src="js/net.js?v=3.2"></script>
+<script src="js/app.js?v=3.2"></script>
 </body>
 </html>

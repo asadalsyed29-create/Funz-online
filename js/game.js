@@ -44,6 +44,10 @@ class Game {
     this.dpr = dpr; this.w = innerWidth; this.h = innerHeight;
     for (const c of [this.canvas, this.ov]) { c.width = Math.round(this.w * dpr); c.height = Math.round(this.h * dpr); }
     this.gfx.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    // room for notches on phones
+    let pr = document.getElementById('safeProbe');
+    if (!pr) { pr = document.createElement('div'); pr.id = 'safeProbe'; pr.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right)'; document.body.appendChild(pr); }
+    const cs = getComputedStyle(pr); this.safeTop = parseFloat(cs.paddingTop) || 0; this.safeRight = parseFloat(cs.paddingRight) || 0;
   }
   ballFor(color, hat) { const k = color + '|' + hat; if (!this.models.has(k)) this.models.set(k, ballModel(this.gfx, color, hat)); return this.models.get(k); }
   itemFor(t) { return this.itemModels[t] || (this.itemModels[t] = itemModel(this.gfx, t)); }
@@ -390,7 +394,7 @@ class Game {
     if (this.cave) { sky = [0.02, 0.02, 0.04]; fog = sky; amb = [0.1, 0.1, 0.14]; gnd = [0.05, 0.05, 0.07]; sunC = [0, 0, 0]; fogD = 1 / 45; }
     else if (inSt) { amb = [0.24, 0.32, 0.36]; gnd = [0.12, 0.16, 0.18]; sunC = sunC.map(v => v * 0.3); fog = [0.05, 0.12, 0.14]; fogD = 1 / 110; }
     gl.clearColor(sky[0], sky[1], sky[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const proj = M4.persp(this.fov, this.w / this.h, 0.1, this.radius * CHUNK * 1.3 + 200), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
+    const proj = M4.persp(this.fov, this.w / this.h, 0.25, 3400), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
     this.vp = M4.mul(proj, view);
     const sa = o.sunAngle, sun = [Math.cos(sa) * 0.5, Math.max(0.2, Math.sin(sa)), 0.55], sl = Math.hypot(...sun);
     // lights near the camera
@@ -431,7 +435,16 @@ class Game {
     const far = RAD * CHUNK + 40;
     if (!this.cave) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (Math.hypot(x - ccx, z - ccz) <= RAD + 0.5) G.draw(ch.mesh); }
     if (this.cave) G.draw(this.cave.mesh);
-    for (const s of this.landmarks) if (vis(s.x, s.z, far + 80)) { G.draw(s.mesh); if (s.inside) G.draw(s.inside); }
+    for (const s of this.landmarks) {
+      if (s.station && !this.cave) { // the giant station shows through the haze from far away
+        if (!vis(s.x, s.z, 3000)) continue;
+        if (!inSt) gl.uniform1f(G.u.uFogD, Math.min(fogD, 1 / 1500));
+        G.draw(s.mesh); G.draw(s.inside);
+        if (!inSt) { gl.uniform1f(G.u.uFogD, 1 / 2600); G.draw(s.beam); }
+        gl.uniform1f(G.u.uFogD, fogD);
+      } else if (vis(s.x, s.z, far + 80)) G.draw(s.mesh);
+    }
+    if (!this.cave) for (const bo of this.St.boosts) if (vis(bo.p[0], bo.p[2], far)) G.draw(this.ringNext, M4.model(bo.p, M4.rotY(bo.yaw), 1.7));
     if (!this.cave) for (const s of this.St.list.values()) if (s && vis(s.x, s.z, far)) G.draw(s.mesh);
     for (const [kk, pc] of this.partChunks) { const [x, z] = kk.split(',').map(Number); if (vis(x * 16 + 8, z * 16 + 8, far)) { G.draw(pc.mesh); for (const [pk, px, py, pz, part] of pc.dyn) { const off = this.partOffset(pk, part), on = this.wired(pk) ? this.power.has(pk) : (PARTS[part.id].input ? this.power.has(pk) : undefined); G.draw(this.partFor(part.id, part.rot, on), M4.model([px + off[0], py + off[1], pz + off[2]])); } } }
     G.draw(this.wireMesh);
@@ -462,6 +475,7 @@ class Game {
       G.draw(this.water, M4.model([Math.round(c.target[0] / 40) * 40, SEA - 0.1, Math.round(c.target[2] / 40) * 40]), 1, [1, 1, 1], 0);
       for (let q = 0; q < 14; q++) { const cx = Math.floor(c.target[0] / 300) * 300 + (q % 4) * 140 - 210 + ((t * 2 + q * 37) % 300) - 150, cz = Math.floor(c.target[2] / 300) * 300 + Math.floor(q / 4) * 140 - 210; G.draw(this.cloudM, M4.model([cx, 110 + (q % 3) * 12, cz], M4.rotY(q)), 0.9, o.dark > 0.3 ? [0.3, 0.32, 0.4] : [1, 1, 1], 1); }
     }
+    if (!this.cave && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { gl.uniform1f(G.u.uFogD, 1 / 2600); G.draw(stn.halo, null, 1, null, 1); gl.uniform1f(G.u.uFogD, fogD); } }
     for (const pc of this.partChunks.values()) G.draw(pc.clear);
     if (o.cursor) G.draw(this.cursorM, M4.model(o.cursor.cell), 1, o.cursor.ok ? [1, 1, 1] : [1, 0.3, 0.3], 1);
     gl.depthMask(true);
@@ -487,7 +501,34 @@ class Game {
       else { const r = this.rings[o.race.next]; if (r) { const s = this.project(r.x, r.y + 2.2, r.z); if (s) { g.font = '800 16px system-ui'; g.fillStyle = '#ffc45a'; g.fillText(String(o.race.next + 1), s[0], s[1]); } } }
     } else sign(this.cave.exit[0], this.cave.exit[1] + 2.4, this.cave.exit[2], 'Way out', '#ffc45a', 40);
     if (o.wireFrom) { const [x, y, z] = o.wireFrom; const s = this.project(x + 0.5, y + 1.2, z + 0.5); if (s) { g.font = '700 12px system-ui'; g.fillStyle = '#ff8a5a'; g.fillText('wire from here', s[0], s[1]); } }
+    this.drawCompass(g, me);
     this.drawMinimap(g, players, me);
+  }
+  // a strip at the top: turn until a marker is in the middle and you're heading straight for it
+  drawCompass(g, me) {
+    if (this.cave) return;
+    const W = Math.min(380, this.w * 0.4), cx = this.w / 2, y = 8 + (this.safeTop || 0), H = 30, f = this.forward();
+    g.fillStyle = 'rgba(10,16,34,.55)'; this.rr(g, cx - W / 2, y, W, H, 12); g.fill();
+    g.save(); this.rr(g, cx - W / 2, y, W, H, 12); g.clip();
+    const bearing = (dx, dz) => Math.atan2(f[0] * dz - f[1] * dx, f[0] * dx + f[1] * dz); // + = to the right
+    const X = a => cx + a / (Math.PI * 0.5) * (W / 2 - 14);
+    g.textAlign = 'center';
+    for (const [n, dx, dz] of [['N', 0, -1], ['E', 1, 0], ['S', 0, 1], ['W', -1, 0]]) {
+      const a = bearing(dx, dz); if (Math.abs(a) > Math.PI * 0.5) continue;
+      g.font = '700 11px system-ui'; g.fillStyle = 'rgba(255,255,255,.45)'; g.fillText(n, X(a), y + 12);
+    }
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(cx - 0.75, y + H - 7, 1.5, 7);
+    const mark = (tx, tz, col, name) => {
+      const dx = tx - me.p[0], dz = tz - me.p[2], d = Math.hypot(dx, dz); if (d < 12) return;
+      const a = bearing(dx, dz), off = Math.abs(a) > Math.PI * 0.5, x = off ? cx + Math.sign(a) * (W / 2 - 16) : X(a);
+      g.fillStyle = col; g.beginPath();
+      if (off) { const s = Math.sign(a); g.moveTo(x + s * 7, y + 11); g.lineTo(x - s * 4, y + 5); g.lineTo(x - s * 4, y + 17); } else g.arc(x, y + 10, 5.5, 0, 7);
+      g.fill();
+      g.font = '700 10px system-ui'; g.fillText(name + ' ' + (d < 1000 ? Math.round(d / 5) * 5 + 'm' : (d / 1000).toFixed(1) + 'km'), Math.max(cx - W / 2 + 34, Math.min(cx + W / 2 - 34, x)), y + 26);
+    };
+    mark(0, 0, '#ffc45a', 'Plaza');
+    mark(STATION.x, STATION.z, '#5ff0e0', 'Station');
+    g.restore();
   }
   label(g, x, y, p, now, dist) {
     const sc = Math.max(0.7, Math.min(1.1, 14 / dist)); g.save(); g.translate(x, y); g.scale(sc, sc);
@@ -505,38 +546,45 @@ class Game {
   }
   wrap(g, text, max) { const words = text.split(/\s+/), lines = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (g.measureText(t).width > max && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines.slice(0, 4); }
   rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
-  // minimap redraws a few rows each frame around where you are
+  // minimap: turns with the camera (up is the way you're looking) and redraws a few rows each frame
   drawMinimap(g, players, me) {
-    const S = 100, span = 520, mg = this.mini.getContext('2d');
-    if (!this.miniCenter || Math.hypot(me.p[0] - this.miniCenter[0], me.p[2] - this.miniCenter[1]) > 120) { this.miniCenter = [Math.round(me.p[0]), Math.round(me.p[2])]; this.miniRow = 0; }
+    const S = 128, MAPSPAN = 860, span = 520, mg = this.mini.getContext('2d');
+    if (this.mini.width !== S) { this.mini.width = this.mini.height = S; this.miniCenter = null; }
+    if (!this.miniCenter || Math.hypot(me.p[0] - this.miniCenter[0], me.p[2] - this.miniCenter[1]) > 150) {
+      // keep the old picture on screen (shifted) while the new one draws in
+      const nc = [Math.round(me.p[0]), Math.round(me.p[2])];
+      if (this.miniCenter) { const k = S / MAPSPAN, tmp = document.createElement('canvas'); tmp.width = tmp.height = S; tmp.getContext('2d').drawImage(this.mini, 0, 0); mg.fillStyle = '#0a1124'; mg.fillRect(0, 0, S, S); mg.drawImage(tmp, (this.miniCenter[0] - nc[0]) * k, (this.miniCenter[1] - nc[1]) * k); }
+      this.miniCenter = nc; this.miniRow = 0;
+    }
     if (this.miniRow < S && !this.cave) {
-      const img = mg.createImageData(S, 4);
-      for (let r = 0; r < 4 && this.miniRow + r < S; r++) for (let i = 0; i < S; i++) {
-        const x = this.miniCenter[0] + (i / S - 0.5) * span, z = this.miniCenter[1] + ((this.miniRow + r) / S - 0.5) * span, inf = this.T.info(x, z);
+      const rows = 3, img = mg.createImageData(S, rows);
+      for (let r = 0; r < rows && this.miniRow + r < S; r++) for (let i = 0; i < S; i++) {
+        const x = this.miniCenter[0] + (i / S - 0.5) * MAPSPAN, z = this.miniCenter[1] + ((this.miniRow + r) / S - 0.5) * MAPSPAN, inf = this.T.info(x, z);
         const c = hex(inf.h < -1.2 ? '#2c74b8' : BIOMES[inf.b].ground), k = 0.75 + Math.min(0.4, Math.max(0, inf.h) / 120);
         img.data.set([c[0] * 255 * k, c[1] * 255 * k, c[2] * 255 * k, 255], (r * S + i) * 4);
       }
-      mg.putImageData(img, 0, this.miniRow); this.miniRow += 4;
+      mg.putImageData(img, 0, this.miniRow); this.miniRow += rows;
     }
-    const size = this.w < 700 ? 92 : 128, x = this.w - size - 10, y = 10 + (parseFloat(getComputedStyle(document.body).getPropertyValue('--sat')) || 0);
-    g.save(); g.beginPath(); g.arc(x + size / 2, y + size / 2, size / 2, 0, 7); g.clip();
+    const size = this.w < 700 ? 92 : 128, x = this.w - size - 10 - (this.safeRight || 0), y = 10 + (this.safeTop || 0), cx = x + size / 2, cy = y + size / 2;
+    const f = this.forward(), rot = -Math.PI / 2 - Math.atan2(f[1], f[0]), sc = size / span;
+    g.save(); g.beginPath(); g.arc(cx, cy, size / 2, 0, 7); g.clip();
     g.fillStyle = '#0a1124'; g.fillRect(x, y, size, size);
-    const sc = size / span, ox = x + size / 2 - (me.p[0] - this.miniCenter[0]) * sc, oy = y + size / 2 - (me.p[2] - this.miniCenter[1]) * sc;
-    if (!this.cave) g.drawImage(this.mini, ox - size / 2, oy - size / 2, size, size);
-    for (const p of players) { g.fillStyle = p === me ? '#fff' : p.color; g.beginPath(); g.arc(x + size / 2 + (p.p[0] - me.p[0]) * sc, y + size / 2 + (p.p[2] - me.p[2]) * sc, p === me ? 3.2 : 2.6, 0, 7); g.fill(); }
+    g.translate(cx, cy); g.rotate(rot);
+    if (!this.cave) { const d = MAPSPAN * sc; g.imageSmoothingEnabled = true; g.drawImage(this.mini, (this.miniCenter[0] - me.p[0]) * sc - d / 2, (this.miniCenter[1] - me.p[2]) * sc - d / 2, d, d); }
+    for (const p of players) { if (p === me) continue; g.fillStyle = p.color; g.strokeStyle = '#0a1124'; g.lineWidth = 1; g.beginPath(); g.arc((p.p[0] - me.p[0]) * sc, (p.p[2] - me.p[2]) * sc, 3, 0, 7); g.fill(); g.stroke(); }
     g.restore();
-    g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2; g.beginPath(); g.arc(x + size / 2, y + size / 2, size / 2, 0, 7); g.stroke();
-    const f = this.forward(); g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(x + size / 2, y + size / 2); g.lineTo(x + size / 2 + f[0] * 12, y + size / 2 + f[1] * 12); g.stroke();
-    // arrows at the edge pointing to the station and the plaza
+    // you: an arrow in the middle that always points up
+    g.fillStyle = '#fff'; g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx, cy - 7); g.lineTo(cx + 5, cy + 5); g.lineTo(cx, cy + 2); g.lineTo(cx - 5, cy + 5); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, size / 2, 0, 7); g.stroke();
+    // dots for the station and the plaza (they slide around the edge when far away)
+    const cr = Math.cos(rot), sr = Math.sin(rot);
     const mark = (tx, tz, col, txt) => {
-      const dx = tx - me.p[0], dz = tz - me.p[2], d = Math.hypot(dx, dz); let px, py;
-      if (d * sc < size / 2 - 6) { px = x + size / 2 + dx * sc; py = y + size / 2 + dz * sc; } else { px = x + size / 2 + dx / d * (size / 2 - 6); py = y + size / 2 + dz / d * (size / 2 - 6); }
-      g.fillStyle = col; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill(); g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.stroke();
-      if (txt) { g.font = '700 10px system-ui'; g.fillStyle = col; g.fillText(txt, px, py + 14); }
+      const wx = (tx - me.p[0]) * sc, wz = (tz - me.p[2]) * sc; let px = wx * cr - wz * sr, py = wx * sr + wz * cr; const d = Math.hypot(px, py), lim = size / 2 - 6;
+      if (d > lim) { px *= lim / d; py *= lim / d; }
+      g.fillStyle = col; g.beginPath(); g.arc(cx + px, cy + py, 4.5, 0, 7); g.fill(); g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.stroke();
+      if (txt) { g.font = '700 10px system-ui'; g.textAlign = 'center'; g.fillStyle = col; g.fillText(txt, Math.max(x + 18, Math.min(x + size - 18, cx + px)), cy + py + (py > size / 2 - 22 ? -8 : 14)); }
     };
-    mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', '');
-    g.font = '600 10px system-ui'; g.fillStyle = 'rgba(255,255,255,.8)';
-    const b = this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name;
-    g.fillText(b, x + size / 2, y + size + 13);
+    if (!this.cave) { mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', ''); }
+    this.place = this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name;
   }
 }

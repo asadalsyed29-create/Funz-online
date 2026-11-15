@@ -83,7 +83,9 @@
     nameInput.value = n; store.set('name', n); return n;
   };
 
-  $('chatToggle').innerHTML = icon('chat', 24);
+  $('chatToggle').innerHTML = icon('chat', 22);
+  $('emoteToggle').innerHTML = icon('smile', 22);
+  $('peopleToggle').innerHTML = icon('users', 22);
   $('leaveBtn').innerHTML = icon('leave', 15) + ' Leave';
   $('adminBtn').innerHTML = icon('star', 15) + ' Admin';
   $('bagBtn').innerHTML = icon('bag', 22);
@@ -210,7 +212,7 @@
   function enterGame() {
     $('menu').classList.add('hidden'); $('playBtn').disabled = false; menuMsg('');
     $('hud').classList.remove('hidden'); $('chat').classList.remove('hidden'); $('toast').classList.add('hidden');
-    if (Device.useTouch) { $('touch').classList.remove('hidden'); $('buildToggle').classList.remove('hidden'); $('chatToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); }
+    if (Device.useTouch) { $('touch').classList.remove('hidden'); $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
     $('adminBtn').classList.toggle('hidden', !G.me.admin);
     onResize(); last = performance.now();
@@ -221,7 +223,8 @@
   function leave(msg) {
     if (!G) return;
     saveWorld(); G.running = false; Net.leave(); G = null;
-    ['hud', 'chat', 'touch', 'chatToggle', 'buildToggle', 'bag', 'adminPanel'].forEach(id => $(id).classList.add('hidden'));
+    ['hud', 'chat', 'touch', 'buildToggle', 'bag', 'adminPanel'].forEach(id => $(id).classList.add('hidden'));
+    document.body.classList.remove('building', 'showPeople');
     $('chatLog').textContent = '';
     const o = $('ov').getContext('2d'); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, 9999, 9999);
     $('menu').classList.remove('hidden'); $('playBtn').disabled = false; menuMsg(msg || '');
@@ -568,11 +571,13 @@
     else { say(G.me, text); Net.toAll({ t: 'chat', id: G.myId, text }); }
   };
   $('chatToggle').onclick = () => { $('chat').classList.toggle('hidden'); if (!$('chat').classList.contains('hidden')) $('chatInput').focus(); };
+  $('emoteToggle').onclick = () => $('emotes').classList.toggle('hidden');
+  $('peopleToggle').onclick = () => $('peopleToggle').classList.toggle('on', document.body.classList.toggle('showPeople'));
   function buildEmotes() {
     const box = $('emotes'); box.textContent = '';
     for (const e of EMOTES) {
       const b = document.createElement('button'); b.textContent = e;
-      b.onclick = () => { if (!G || !G.myId) return; if (G.role === 'guest') Net.toKeeper({ t: 'emote', e }); else { emote(G.me, e); Net.toAll({ t: 'emote', id: G.myId, e }); } };
+      b.onclick = () => { if (!G || !G.myId) return; if (Device.useTouch) box.classList.add('hidden'); if (G.role === 'guest') Net.toKeeper({ t: 'emote', e }); else { emote(G.me, e); Net.toAll({ t: 'emote', id: G.myId, e }); } };
       box.appendChild(b);
     }
   }
@@ -603,10 +608,14 @@
   const curTool = () => toolList()[G.tool];
   function nextCat() { G.cat = CATS[(CATS.indexOf(G.cat) + 1) % CATS.length]; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); }
   function buildHotbar() {
-    const bar = $('hotbar'); bar.textContent = '';
-    const tab = document.createElement('button'); tab.className = 'tab';
-    tab.innerHTML = icon(CAT_ICONS[G.cat], 20) + '<span>' + CAT_NAMES[G.cat] + '</span>';
-    tab.onclick = nextCat; bar.appendChild(tab);
+    const tabs = $('tabs'); tabs.textContent = '';
+    for (const c of CATS) { // the three kinds of things you can build are always on show
+      const t = document.createElement('button'); if (c === G.cat) t.className = 'on';
+      t.innerHTML = icon(CAT_ICONS[c], 16) + '<span>' + CAT_NAMES[c] + '</span>';
+      t.onclick = () => { if (G.cat === c) return; G.cat = c; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); };
+      tabs.appendChild(t);
+    }
+    const bar = $('hotbar'); bar.textContent = ''; bar.scrollLeft = 0;
     toolList().forEach((k, i) => {
       const b = document.createElement('button');
       if (k === 'wire' || k === 'cut' || k === 0) { const x = document.createElement('span'); x.className = 'x'; x.innerHTML = icon(k === 0 ? 'pick' : k, 22); b.appendChild(x); b.title = k === 0 ? 'Break' : k === 'wire' ? 'Wire tool' : 'Cut wires'; }
@@ -629,8 +638,11 @@
     return s;
   }
   function selectTool(i, quiet) {
-    G.tool = i; G.wireFrom = null; [...$('hotbar').children].slice(1).forEach((b, j) => b.classList.toggle('on', j === i));
-    const k = curTool(); if (quiet) return;
+    G.tool = i; G.wireFrom = null; [...$('hotbar').children].forEach((b, j) => b.classList.toggle('on', j === i));
+    const k = curTool();
+    $('toolName').textContent = k === 0 ? 'Break' : k === 'wire' ? 'Wire tool' : k === 'cut' ? 'Cut wires' : PARTS[k].name;
+    const on = $('hotbar').children[i]; if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (quiet) return;
     showToast(k === 0 ? 'Break: tap a part you built' : k === 'wire' ? 'Wire tool: tap one part, then another to connect them' : k === 'cut' ? 'Cut wires: tap a part to remove its wires' : PARTS[k].name + (PARTS[k].tip ? ': ' + PARTS[k].tip : ''), 2200);
   }
   function toggleBuild(on) { G.building = on ?? !G.building; document.body.classList.toggle('building', G.building); $('buildToggle').classList.toggle('on', G.building); $('buildToggle').innerHTML = icon(G.building ? 'check' : 'build', 24) + '<span>' + (G.building ? 'Done' : 'Build') + '</span>'; }
@@ -766,11 +778,21 @@
       }
       if (G.race && now - G.race.start > 6 * 60 * 1000) { G.race = null; showToast('Race timed out', 1500); }
     }
+    // boost rings (like the ones on the Station Road) fling you along
+    for (const bo of game.St.boosts) {
+      if (Math.abs(bo.p[0] - b.p[0]) > 4 || Math.abs(bo.p[2] - b.p[2]) > 4 || now < (b.boostCool || 0)) continue;
+      const ddx = b.p[0] - bo.p[0], ddy = b.p[1] - bo.p[1], ddz = b.p[2] - bo.p[2], along = ddx * bo.dir[0] + ddz * bo.dir[1];
+      if (Math.abs(along) < 1.2 && Math.hypot(ddx - along * bo.dir[0], ddy, ddz - along * bo.dir[1]) < 3) {
+        const s = (b.v[0] * bo.dir[0] + b.v[2] * bo.dir[1]) < 0 ? -1 : 1;
+        b.v[0] = bo.dir[0] * s * 27; b.v[2] = bo.dir[1] * s * 27; b.v[1] = Math.max(b.v[1], 3); b.boostT = 2.2; b.boostCool = now + 800; fx('boost');
+      }
+    }
     game.triggers(b, fx);
     if (G.role !== 'guest') for (const [id, at] of G.taken) if (at && Date.now() > at) { G.taken.delete(id); Net.toAll({ t: 'back', id }); }
   }
   function fx(kind, arg) {
     if (kind === 'jumped') return;
+    if (kind === 'boost') { showToast('Whoosh!', 600); return; }
     if (kind === 'tp') showToast('Whoosh! Teleported', 900);
     else if (kind === 'tp-alone') showToast('Use the wire tool (Circuits tab) to connect this teleporter to another one', 2500);
     else if (kind === 'cave-in') showToast('You found a cave! Look for gems and crystals. The gold ring takes you back up', 3500);
@@ -840,6 +862,7 @@
     const hrs = (ph * 24 + 12) % 24;
     const night = dark > 0.3; if (night !== G.wasNight) { G.wasNight = night; $('clockIc').innerHTML = icon(night ? 'moon' : 'sun', 15); }
     $('clockT').textContent = String(Math.floor(hrs)).padStart(2, '0') + ':' + String(Math.floor((hrs % 1) * 60)).padStart(2, '0');
+    if ($('placeT').textContent !== (G.game.place || '')) $('placeT').textContent = G.game.place || '';
     const chips = Object.entries(G.effects).map(([k, t]) => ({ fast: 'Speed', big: 'Big', superJump: 'Super jump', glow: 'Glow' }[k] + ' ' + Math.ceil((t - now) / 1000) + 's'));
     if (G.race) chips.unshift('Race ' + ((now - G.race.start) / 1000).toFixed(1) + 's · ring ' + (G.race.next + 1) + '/12');
     const ct = chips.join('  ·  '); if ($('effects').textContent !== ct) $('effects').textContent = ct;
