@@ -99,6 +99,31 @@
   if ((Device.os === 'iPhone' || Device.os === 'iPad') && !Device.standalone) $('iosHint').classList.remove('hidden');
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
+  // ---------- updates: always get the newest version ----------
+  const VERSION = window.FUNZ_VERSION || '';
+  if ($('verLabel') && VERSION) $('verLabel').textContent = 'Version ' + VERSION;
+  if (new URLSearchParams(location.search).has('u')) history.replaceState(null, '', location.pathname);
+  let updateWaiting = null;
+  async function applyUpdate(v) {
+    try { sessionStorage.setItem('funz.updated', v); } catch (e) {}
+    menuMsg('Getting the newest version…');
+    try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
+    try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) {}
+    location.replace(location.pathname + '?u=' + encodeURIComponent(v));
+  }
+  async function checkUpdate() {
+    if (!VERSION || !location.protocol.startsWith('http')) return;
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
+      const v = (await r.json()).v; if (typeof v !== 'string' || !v || v === VERSION) return;
+      let tried = null; try { tried = sessionStorage.getItem('funz.updated'); } catch (e) {}
+      if (tried === v) return; // already tried this one, don't loop
+      if (G) { if (!updateWaiting) sys('A new update is ready! You get it the next time you open the game.'); updateWaiting = v; return; }
+      applyUpdate(v);
+    } catch (e) {}
+  }
+  checkUpdate(); setInterval(checkUpdate, 4 * 60 * 1000);
+
   // ---------- owner signature ----------
   const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
@@ -201,6 +226,7 @@
     const o = $('ov').getContext('2d'); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, 9999, 9999);
     $('menu').classList.remove('hidden'); $('playBtn').disabled = false; menuMsg(msg || '');
     if (preview && !preview.loop) { preview.loop = true; requestAnimationFrame(spin); }
+    if (updateWaiting && !msg) applyUpdate(updateWaiting);
   }
   $('leaveBtn').onclick = () => leave();
 

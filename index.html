@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=3.1.1">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -40,7 +40,7 @@
     <button id="installBtn" class="ghost hidden">Install Funz Online</button>
     <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
     <p id="menuMsg" class="msg"></p>
-    <p class="ver">Version 3.1</p>
+    <p class="ver" id="verLabel">Version 3.1.1</p>
   </div>
 </div>
 
@@ -82,16 +82,17 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
+<script>window.FUNZ_VERSION = '3.1.1';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js"></script>
-<script src="js/device.js"></script>
-<script src="js/gl.js"></script>
-<script src="js/terrain.js"></script>
-<script src="js/structures.js"></script>
-<script src="js/parts.js"></script>
-<script src="js/models.js"></script>
-<script src="js/game.js"></script>
-<script src="js/net.js"></script>
-<script src="js/app.js"></script>
+<script src="js/icons.js?v=3.1.1"></script>
+<script src="js/device.js?v=3.1.1"></script>
+<script src="js/gl.js?v=3.1.1"></script>
+<script src="js/terrain.js?v=3.1.1"></script>
+<script src="js/structures.js?v=3.1.1"></script>
+<script src="js/parts.js?v=3.1.1"></script>
+<script src="js/models.js?v=3.1.1"></script>
+<script src="js/game.js?v=3.1.1"></script>
+<script src="js/net.js?v=3.1.1"></script>
+<script src="js/app.js?v=3.1.1"></script>
 </body>
 </html>
