@@ -17,12 +17,13 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<canvas id="ov"></canvas>
 
 <div id="menu" class="screen">
   <div class="panel">
     <img src="icons/icon-192.png" alt="" class="logo">
     <h1>Funz Online</h1>
-    <p class="sub">One big peaceful world. Explore, build and hang out with everyone.</p>
+    <p class="sub">One big peaceful 3D world. Roll around, explore, build machines and hang out with everyone.</p>
     <div id="deviceBadge" class="badge"></div>
 
     <canvas id="avatarPreview" width="160" height="120"></canvas>
@@ -38,7 +39,7 @@
     <button id="installBtn" class="ghost hidden">Install Funz Online</button>
     <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
     <p id="menuMsg" class="msg"></p>
-    <p class="ver">Version 1.2</p>
+    <p class="ver">Version 2</p>
   </div>
 </div>
 
@@ -50,6 +51,14 @@
   <div id="clock"><span id="clockIc"></span><span id="clockT"></span></div>
   <div id="adminPanel" class="hidden"></div>
   <div id="toast" class="hidden"></div>
+  <div id="effects" class="hidden"></div>
+  <div id="sideBtns"><button id="bagBtn" title="Inventory (I)"></button><button id="respawnBtn" title="Back to spawn (R)"></button></div>
+  <div id="bag" class="hidden">
+    <div class="aHead"><b>Inventory</b><button id="bagClose" class="iconBtn">✕</button></div>
+    <div id="bagItems"></div>
+    <div class="aTitle">Ring race records</div>
+    <div id="board"></div>
+  </div>
   <div id="bottom">
     <div id="emotes"></div>
     <div id="hotbar"></div>
@@ -68,13 +77,17 @@
 
 <div id="touch" class="hidden">
   <div id="stick"><div id="knob"></div></div>
+  <button id="jumpBtn"></button>
+  <button id="downBtn" class="hidden"></button>
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/device.js"></script>
-<script src="js/world.js"></script>
-<script src="js/render.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/world3d.js"></script>
+<script src="js/mesher.js"></script>
+<script src="js/game3d.js"></script>
 <script src="js/net.js"></script>
 <script src="js/app.js"></script>
 </body>

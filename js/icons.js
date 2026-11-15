@@ -26,6 +26,10 @@ const ICON_PATHS = {
   unmute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/>',
   thaw: '<circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
   speed: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  bag: '<path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  up: '<path d="M12 19V6M6 11l6-6 6 6"/>',
+  down: '<path d="M12 5v13M6 13l6 6 6-6"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   spawn: '<path d="M5 21V4M5 4h12l-3 4 3 4H5"/>',
 };
 function icon(name, size = 20) {
