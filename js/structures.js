@@ -48,7 +48,12 @@ class Structures {
     else if (r < 0.5) type = { 2: pick(['ruins', 'circle', 'village', 'tower']), 3: pick(['bigtree', 'cabin', 'ruins']), 4: pick(['pyramid', 'ruins', 'pod']),
       5: pick(['igloo', 'frozen', 'pod']), 6: pick(['tower', 'cave']), 7: pick(['stilts', 'ruins']), 8: pick(['arch', 'shroomring']), 1: pick(['wreck', 'lighthouse']) }[inf.b] || null;
     if (!type) return null;
-    return { key: rx + ',' + rz, type, x, z, y: inf.h, b: inf.b, rot: N.hash(rx, rz, 904) * 6.28, seed: Math.floor(N.hash(rx, rz, 905) * 1e6) };
+    let rot = N.hash(rx, rz, 904) * 6.28;
+    if (type === 'cave') { // the cave mouth looks downhill
+      const gx = this.T.h(x + 8, z) - this.T.h(x - 8, z), gz = this.T.h(x, z + 8) - this.T.h(x, z - 8);
+      if (Math.hypot(gx, gz) > 0.5) rot = Math.atan2(-gx, -gz);
+    }
+    return { key: rx + ',' + rz, type, x, z, y: inf.h, b: inf.b, rot, seed: Math.floor(N.hash(rx, rz, 905) * 1e6) };
   }
   // make sure structures near (x,z) are built; drop far ones
   update(gl, x, z, rad) {
@@ -326,7 +331,7 @@ class Cave {
     this.o = [entrance.p[0], -300 - Math.floor(h * 4) * 70, entrance.p[2]];
     this.seed = Math.floor(h * 1e6);
     const rnd = k => N.hash(this.seed, k, 961);
-    this.ch = [[0, 0, 7]];
+    this.ch = [[0, 0, 11]]; // the first room is big and open, with the way out in the middle
     for (let k = 1; k < 7; k++) { const a = rnd(k) * 6.28, d = 18 + rnd(k + 20) * 34; this.ch.push([Math.cos(a) * d, Math.sin(a) * d, 7 + rnd(k + 40) * 6]); }
     this.items = this.ch.slice(1).map((c, k) => ({ id: 'cave:' + key + ':' + k, type: k % 3 === 0 ? 'gem' : 'crystal', p: [this.o[0] + c[0], 0, this.o[2] + c[1]] }));
     for (const it of this.items) it.p[1] = this.floor(it.p[0], it.p[2]) + 0.6;

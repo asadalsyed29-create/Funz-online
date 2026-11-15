@@ -132,19 +132,32 @@ class Game {
       this.roll(b, dt); b.grounded = false; return;
     }
     const maxS = 8 * (opts.fast ? 1.7 : 1), acc = b.grounded ? 28 : 11;
-    v[0] += input.x * acc * dt; v[2] += input.z * acc * dt;
+    // on the ground, push along the slope (so hills can be climbed) instead of into it
+    let ax = input.x, ay = 0, az = input.z;
+    if (b.grounded && b.gn && (ax || az)) {
+      const n = b.gn, d = ax * n[0] + az * n[2], tx = ax - n[0] * d, ty = -n[1] * d, tz = az - n[2] * d, tl = Math.hypot(tx, ty, tz);
+      if (tl > 1e-4) { const k = Math.hypot(ax, az) / tl; ax = tx * k; ay = ty * k; az = tz * k; }
+    }
+    v[0] += ax * acc * dt; v[1] += ay * acc * dt; v[2] += az * acc * dt;
     const hs = Math.hypot(v[0], v[2]);
     if (hs > maxS && b.boostT <= 0) { const k = Math.max(maxS / hs, 1 - dt * 4); v[0] *= k; v[2] *= k; }
     if (b.boostT > 0) b.boostT -= dt;
-    if (!input.x && !input.z && b.grounded) { const k = Math.exp(-3.2 * dt); v[0] *= k; v[2] *= k; }
+    if (!input.x && !input.z && b.grounded) {
+      const gentle = !b.gn || b.gn[1] > 0.9, k = Math.exp(-(gentle ? 6 : 3.2) * dt); v[0] *= k; v[2] *= k;
+      if (gentle && Math.hypot(v[0], v[2]) < 0.7) { v[0] = 0; v[2] = 0; } // stay put instead of slowly sliding
+    }
     v[1] -= 24 * dt;
     const depth = (this.cave ? -1e9 : SEA - 0.15) - b.p[1];
     if (depth > -b.r) { const sub = Math.min(1, (depth + b.r) / (2 * b.r)); v[1] += 40 * sub * dt; const k = Math.exp(-2.2 * sub * dt); v[0] *= k; v[2] *= k; v[1] *= Math.exp(-4.5 * sub * dt); }
     // fans blow you up
     const fx = Math.floor(b.p[0]), fz = Math.floor(b.p[2]);
     for (let dy = 0; dy < 10; dy++) { const y = Math.floor(b.p[1]) - dy, part = this.B.get(fx, y, fz); if (part) { if (part.id === 48 && this.active(pkey(fx, y, fz))) v[1] += (48 - dy * 2.5) * dt; break; } }
-    if (input.jump && (b.grounded || (depth > -0.1 && depth < 0.6))) { v[1] = opts.superJump ? 13 : 8.8; b.grounded = false; }
-    b.grounded = false; b.ground = null; b.carry = null;
+    b.airT = b.grounded ? 0 : (b.airT || 0) + dt; b.hopCool = (b.hopCool || 0) - dt;
+    if (input.jump && b.hopCool <= 0) {
+      if (b.airT < 0.13 || (depth > -0.1 && depth < 0.6)) { v[1] = opts.superJump ? 13 : 8.8; b.airT = 1; b.hopCool = 0.2; opts.fx('jumped'); }
+      else if (b.wn) { v[1] = Math.max(v[1], 7.5); v[0] += b.wn[0] * 3.5; v[2] += b.wn[2] * 3.5; b.hopCool = 0.35; opts.fx('jumped'); } // hop off steep walls so you never get stuck
+    }
+    b.grounded = false; b.ground = null; b.carry = null; b.gn = null; b.wn = null;
     const steps = 3;
     for (let s = 0; s < steps; s++) { const h = dt / steps; b.p[0] += v[0] * h; b.p[1] += v[1] * h; b.p[2] += v[2] * h; this.collide(b); }
     if (b.carry) { b.p[0] += b.carry[0]; b.p[1] += b.carry[1]; b.p[2] += b.carry[2]; }
@@ -162,7 +175,8 @@ class Game {
     const v = b.v, vn = v[0] * dx + v[1] * dy + v[2] * dz;
     const bounce = info && info.bouncy;
     if (vn < 0) { const k = bounce ? 1.85 : 1; v[0] -= dx * vn * k; v[1] -= dy * vn * k; v[2] -= dz * vn * k; if (bounce && dy > 0.5) v[1] = Math.max(v[1], 11); }
-    if (dy > 0.55) { b.grounded = true; if (info) b.ground = info; }
+    if (dy > 0.55) { b.grounded = true; if (info) b.ground = info; if (!b.gn || dy > b.gn[1]) b.gn = [dx, dy, dz]; }
+    else if (dy > 0.2 && (!b.wn || dy > b.wn[1])) b.wn = [dx, dy, dz];
   }
   collide(b) {
     const p = b.p, r = b.r, tris = [];
@@ -213,11 +227,22 @@ class Game {
   // structure doors: caves
   triggers(b, fx) {
     if (b.tpCool > 0) return;
-    if (this.cave) { const e = this.cave.exit; if (Math.hypot(b.p[0] - e[0], b.p[1] - e[1], b.p[2] - e[2]) < 2) { const out = this.cave.ex.out; b.p = [...out]; b.v = [0, 0, 0]; b.tpCool = 1.5; this.cave = null; fx('cave-out'); } return; }
+    if (this.cave) {
+      const e = this.cave.exit;
+      if (Math.hypot(b.p[0] - e[0], b.p[1] - e[1], b.p[2] - e[2]) < 1.8) {
+        // come out on the lowest ground near the entrance, so you roll away from it and not back in
+        const t = this.cave.ex; let best = null;
+        for (let k = 0; k < 16; k++) { const a = k / 16 * 6.2832, x = t.p[0] + Math.cos(a) * 9, z = t.p[2] + Math.sin(a) * 9, gy = this.T.ground(x, z); if (!best || gy < best[1]) best = [x, gy, z]; }
+        b.p = [best[0], Math.max(best[1], SEA) + 1.2, best[2]]; b.v = [0, 0, 0]; b.tpCool = 1.5; b.caveLock = t; this.cave = null; fx('cave-out');
+      }
+      return;
+    }
+    if (b.caveLock) { const t = b.caveLock; if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) > t.r + 4) b.caveLock = null; }
     for (const s of this.St.list.values()) if (s) for (const t of s.triggers) {
+      if (b.caveLock && b.caveLock.cave === t.cave) continue;
       if (Math.hypot(b.p[0] - t.p[0], b.p[1] - t.p[1], b.p[2] - t.p[2]) < t.r) {
         let c = this.caves.get(t.cave); if (!c) { c = new Cave(this.T.N, t.cave, t); c.build(this.gfx); this.caves.set(t.cave, c); }
-        this.cave = c; b.p = [c.exit[0] + 3, c.exit[1] + 0.5, c.exit[2]]; b.v = [0, 0, 0]; b.tpCool = 1.5; fx('cave-in'); return;
+        c.ex = t; this.cave = c; b.p = [c.exit[0] + 4.5, c.floor(c.exit[0] + 4.5, c.exit[2]) + 1, c.exit[2]]; b.v = [0, 0, 0]; b.tpCool = 2; fx('cave-in'); return;
       }
     }
   }

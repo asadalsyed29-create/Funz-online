@@ -1,7 +1,7 @@
 // The massive low-poly world: noise, height, biomes, chunk meshes and decorations.
 const SEA = 0, LIMIT = 8000, CHUNK = 64, CELL = 4, CN = CHUNK / CELL;
 const STATION = { x: 640, z: -420, ground: 10, R: 60 };
-const SPAWN_H = 6;
+let SPAWN_H = 6; // set from the land around the plaza when the world is made
 
 const BIOMES = {
   0: { name: 'Ocean', ground: '#c9b47f' },
@@ -35,7 +35,15 @@ class Noise {
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 class Terrain {
-  constructor(seed) { this.N = new Noise(seed); this.cache = new Map(); }
+  constructor(seed) {
+    this.N = new Noise(seed); this.cache = new Map();
+    // The plaza and the station sit level with the land around them (never down in a pit).
+    this.flat = false;
+    const ring = (cx, cz, r) => { let s = 0; for (let k = 0; k < 12; k++) s += this.info(cx + Math.cos(k / 12 * 6.2832) * r, cz + Math.sin(k / 12 * 6.2832) * r).h; return s / 12; };
+    SPAWN_H = Math.max(4, Math.round(ring(0, 0, 50) * 10) / 10);
+    STATION.ground = Math.max(4, Math.round(ring(STATION.x, STATION.z, 140) * 10) / 10);
+    this.flat = true;
+  }
   // height + biome numbers at a point
   info(x, z) {
     const N = this.N, d0 = Math.hypot(x, z), dS = Math.hypot(x - STATION.x, z - STATION.z);
@@ -57,8 +65,10 @@ class Terrain {
     if (desertW > 0 && h > 2) h += (Math.sin(x / 23 + N.v(x / 60, z / 60, 43) * 6) * 0.5 + 0.5) * 5 * desertW;
     // flat places: the plaza and the station grounds
     let b = -1;
-    const wP = smooth(60, 30, d0); if (wP > 0) { h += (SPAWN_H - h) * wP; if (d0 < 27) b = 9; }
-    const wS = smooth(170, 100, dS); if (wS > 0) { h += (STATION.ground - h) * wS; if (wS > 0.9) b = 10; }
+    if (this.flat) {
+      const wP = smooth(75, 30, d0); if (wP > 0) { h += (SPAWN_H - h) * wP; if (d0 < 27) b = 9; }
+      const wS = smooth(190, 100, dS); if (wS > 0) { h += (STATION.ground - h) * wS; if (wS > 0.9) b = 10; }
+    }
     if (b < 0) {
       if (h < -1.5) b = 0; else if (h < 1.6 && swampW < 0.5) b = 1;
       else if (h > 60 && mnt > 0.3) b = temp < 0.38 || h > 110 ? 5 : 6;

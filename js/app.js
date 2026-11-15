@@ -120,12 +120,20 @@
 
   // ---------- game state ----------
   let G = null;
-  const saveKey = 'world4';
+  const saveKey = 'world5';
   function saved() { return store.json(saveKey, {}); }
   function saveWorld() { if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), parts: G.B.list(), wires: [...G.B.wires], levers: [...G.circ.levers], bans: [...G.bans], board: G.board })); }
   setInterval(saveWorld, 8000);
   addEventListener('pagehide', saveWorld);
-  const DEFAULT_SPAWN = [0, SPAWN_H + 1.5, 7];
+  const defaultSpawn = () => [0, SPAWN_H + 1.5, 7];
+
+  // a saved spawn point is only used if it isn't buried in the ground
+  function safeSpawn(game, s) {
+    if (!Array.isArray(s) || s.length !== 3 || !s.every(v => typeof v === 'number' && isFinite(v))) return null;
+    if (s[1] < -150) return s; // down in a cave
+    const g = game.T.ground(s[0], s[2]);
+    return s[1] < g + 0.4 ? [s[0], g + 1.5, s[2]] : s;
+  }
 
   async function play() {
     const name = myName(); if (!name) return;
@@ -138,7 +146,7 @@
     game.radius = Device.type === 'phone' ? 4 : Device.type === 'tablet' ? 5 : 6;
     game.allPartsChanged();
     const circ = new Circuits(B); for (const l of s.levers || []) circ.levers.add(l);
-    const spawn = store.json('spawn4', null) || DEFAULT_SPAWN;
+    const spawn = safeSpawn(game, store.json('spawn5', null)) || defaultSpawn();
     const body = game.newBody([spawn[0] + (Math.random() - .5), spawn[1] + 1, spawn[2] + (Math.random() - .5)]);
     G = {
       role: null, myId: null, players: new Map(), B, game, circ, body,
@@ -170,7 +178,7 @@
 
   function addPlayer(p) {
     const pl = Object.assign({ R: [1, 0, 0, 0, 1, 0, 0, 0, 1], r: 0.45 }, p);
-    pl.p = [...(p.p || DEFAULT_SPAWN)]; pl.tp = [...pl.p];
+    pl.p = [...(p.p || defaultSpawn())]; pl.tp = [...pl.p];
     G.players.set(p.id, pl); return pl;
   }
 
@@ -255,7 +263,7 @@
       const np = addPlayer({ id, name, wantName, color: COLORS.includes(m.color) ? m.color : COLORS[0],
         hat: HATS[m.hat] && !RESERVED_HATS.includes(m.hat) ? m.hat : 'none', wantHat: HATS[m.hat] ? m.hat : 'none',
         dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
-        p: okVec(pos) ? pos : DEFAULT_SPAWN });
+        p: okVec(pos) ? pos : defaultSpawn() });
       const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce);
       Net.toOne(id, { t: 'welcome', id, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce });
       renderPeople();
@@ -412,7 +420,12 @@
   $('bagBtn').onclick = () => { $('bag').classList.toggle('hidden'); renderBag(); };
   $('bagClose').onclick = () => $('bag').classList.add('hidden');
   $('respawnBtn').onclick = () => respawn();
-  function respawn() { if (!G) return; const s = G.spawn; G.body.p = [s[0], s[1] + 1.2, s[2]]; G.body.v = [0, 0, 0]; G.game.cave = null; if (G.race) { G.race = null; showToast('Race cancelled', 1200); } }
+  function respawn() {
+    if (!G) return;
+    const s = safeSpawn(G.game, G.spawn) || defaultSpawn();
+    G.body.p = [s[0], s[1] + 1.2, s[2]]; G.body.v = [0, 0, 0]; G.body.caveLock = null; G.game.cave = null;
+    if (G.race) { G.race = null; showToast('Race cancelled', 1200); }
+  }
 
   // ---------- admin ----------
   function parseCommand(text) {
@@ -708,7 +721,7 @@
       if (G.role === 'guest') Net.toKeeper({ t: 'take', id: it.id, type: it.type }); else tryTake(G.me, it.id, it.type);
     }
     // parkour checkpoints
-    for (const cp of game.landmarks[1].checkpoints) if (Math.hypot(b.p[0] - cp[0], b.p[1] - cp[1], b.p[2] - cp[2]) < 2 && G.lastSpawnPad !== cp.join()) { G.lastSpawnPad = cp.join(); G.spawn = [...cp]; store.set('spawn4', JSON.stringify(G.spawn)); showToast('Checkpoint! You\'ll respawn here', 1500); }
+    for (const cp of game.landmarks[1].checkpoints) if (Math.hypot(b.p[0] - cp[0], b.p[1] - cp[1], b.p[2] - cp[2]) < 2 && G.lastSpawnPad !== cp.join()) { G.lastSpawnPad = cp.join(); G.spawn = [...cp]; store.set('spawn5', JSON.stringify(G.spawn)); showToast('Checkpoint! You\'ll respawn here', 1500); }
     const rs = game.raceStart; // ring race
     if (!G.race && now > G.raceCool && Math.hypot(b.p[0] - rs[0], b.p[2] - rs[2]) < 1.6 && Math.abs(b.p[1] - rs[1]) < 2) {
       G.race = { next: 0, start: now }; showToast('Race! Roll through all 12 rings', 2200);
@@ -731,13 +744,14 @@
     if (G.role !== 'guest') for (const [id, at] of G.taken) if (at && Date.now() > at) { G.taken.delete(id); Net.toAll({ t: 'back', id }); }
   }
   function fx(kind, arg) {
+    if (kind === 'jumped') return;
     if (kind === 'tp') showToast('Whoosh! Teleported', 900);
     else if (kind === 'tp-alone') showToast('Use the wire tool (Circuits tab) to connect this teleporter to another one', 2500);
     else if (kind === 'cave-in') showToast('You found a cave! Look for gems and crystals. The gold ring takes you back up', 3500);
     else if (kind === 'cave-out') showToast('Back outside!', 1200);
     else if (kind === 'spawn') {
       const k = arg.join(','); if (G.lastSpawnPad === k) return; G.lastSpawnPad = k;
-      G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; store.set('spawn4', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);
+      G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; store.set('spawn5', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);
     }
   }
 
@@ -772,6 +786,13 @@
       G.game.rollBy(p, p.p[0] - ox, p.p[2] - oz, p.r);
     }
     activities(now);
+    // if someone keeps pushing but isn't getting anywhere, remind them about the flag button
+    if (now - (G.stuckAt || 0) > 2500) {
+      const sp = G.stuckP || b.p, moved = Math.hypot(b.p[0] - sp[0], b.p[1] - sp[1], b.p[2] - sp[2]);
+      if (G.stuckPush > 100 && moved < 0.6 && !m.fly && !G.frozen) showToast('Stuck? Jump, or tap the flag button to go back to your spawn point', 3500);
+      G.stuckAt = now; G.stuckP = [...b.p]; G.stuckPush = 0;
+    }
+    if (go) G.stuckPush = (G.stuckPush || 0) + 1;
     G.game.animParts(dt);
     if (G.role !== 'guest' && now - G.lastCirc > 100) { // the keeper runs all the circuits
       G.lastCirc = now;
