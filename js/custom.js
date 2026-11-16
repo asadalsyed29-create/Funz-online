@@ -62,7 +62,6 @@ const GADGETS = {
 // Owner gadgets: only the owner has these, and can use lots at once
 const OWNER_GADGETS = {
   ship: { name: 'Owner ship', desc: 'Press V (or the ship button) to call your ship, jump in and fly it from the cockpit' },
-  legs: { name: 'Robo legs', desc: 'Four robot legs and a robot arm' },
 };
 
 // Quests: stat is counted by the game; when it reaches goal you get the coins and anything locked behind the quest.

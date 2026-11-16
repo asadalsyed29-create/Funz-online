@@ -2,7 +2,6 @@
 // the world-keeper rules, items, the ring race, saving, and admin tools.
 (() => {
   const $ = id => document.getElementById(id);
-  const EMOTES = ['👋', '❤️', '😂', '🔥', '✨', '👍'];
   const SEED = 20261115;
   const MAX_PLAYERS = 30, MAX_EDITS = 60000, MAX_WIRES = 4000, REACH = 9, DAY_MS = 14 * 60 * 1000, ITEM_RESPAWN = 4 * 60 * 1000;
   const ADMIN_PUB = { kty: 'EC', crv: 'P-256', x: 'ElMxPCYM-fDGDUiwud0eo8Uojz3sEaSeyzh6w_nW2Rk', y: 'Z0isPmpbPF-0J9BpskcpSe9tvLWSjF1ZCF6VlIWS9yo' };
@@ -69,7 +68,7 @@
   }
   const lockText = (kind, id) => {
     const l = prog.lockOf(kind, id); if (!l) return null;
-    if (l.owner) return { t: '★ Owner', c: 'c' };
+    if (l.owner) return { t: 'Owner', c: 'c' };
     if (l.quest) { const q = QUESTS.find(q => q.id === l.quest); return { t: 'Quest', c: 'q', q }; }
     return { t: l.coins + ' coins', c: 'c', coins: l.coins };
   };
@@ -101,7 +100,7 @@
     const owner = isOwner();
     $('coinCount').textContent = owner ? '∞' : prog.coins;
     const tabs = $('wTabs'); tabs.textContent = '';
-    const T = [...W_TABS, ['shop', 'Shop']]; if (owner) T.push(['owner', '★ Owner']);
+    const T = [...W_TABS, ['shop', 'Shop']]; if (owner) T.push(['owner', 'Owner']);
     if (!T.some(t => t[0] === wTab)) wTab = 'skin';
     for (const [k, n] of T) { const b = document.createElement('button'); b.textContent = n; if (k === wTab) b.className = 'on'; if (k === 'owner') b.classList.add('own'); b.onclick = () => { wTab = k; renderWardrobe(); }; tabs.appendChild(b); }
     const grid = $('wGrid'); grid.textContent = ''; const L = myLook();
@@ -128,7 +127,7 @@
       for (const kind of ['skin', 'hat', 'trail', 'color']) {
         const list = idsOf(kind).filter(id => { const l = prog.lockOf(kind, id); return l && l.coins; }); if (!list.length) continue;
         head(KIND_NAME[kind] + 's');
-        for (const id of list) { const owns = prog.owns(kind, id, owner); grid.appendChild(wTile(kind, id, L, owner, owns ? (owner ? 'Yours ★' : 'Yours') : null)); n++; }
+        for (const id of list) { const owns = prog.owns(kind, id, owner); grid.appendChild(wTile(kind, id, L, owner, owns ? 'Yours' : null)); n++; }
       }
       wInfo(owner ? 'You own everything in the shop already! Tap a gadget to use it.' : 'Gadgets need coins plus things you found. Tap one to see what it does.');
       return;
@@ -137,16 +136,15 @@
       head('Skins'); for (const id of Object.keys(SKINS).filter(id => ownerOnly('skin', id))) grid.appendChild(wTile('skin', id, L, owner));
       head('Hats'); for (const id of Object.keys(HATS).filter(id => ownerOnly('hat', id))) grid.appendChild(wTile('hat', id, L, owner));
       head('Trails'); for (const id of Object.keys(TRAILS).filter(id => ownerOnly('trail', id))) grid.appendChild(wTile('trail', id, L, owner));
-      head('Owner gadgets (use as many as you like)');
-      const OG_ICON = { ship: '🛸', legs: '🦿', wings: '🪽', dragon: '🐉', aura: '✨' };
+      head('Owner gadget');
       for (const [k, g] of Object.entries(OWNER_GADGETS)) {
         const b = document.createElement('button'), on = ownerGadgets.includes(k); b.className = 'ogad' + (on ? ' on' : ''); b.title = g.name + ': ' + g.desc;
-        b.innerHTML = '<span class="em"></span><span class="lk c"></span>'; b.firstChild.textContent = OG_ICON[k]; b.lastChild.textContent = g.name;
+        b.innerHTML = '<span class="em"></span><span class="lk c"></span>'; b.firstChild.innerHTML = icon(k === 'ship' ? 'ship' : 'star', 30); b.lastChild.textContent = g.name;
         b.onclick = () => { ownerGadgets = on ? ownerGadgets.filter(x => x !== k) : [...ownerGadgets, k]; store.set('og', JSON.stringify(ownerGadgets)); wear('og', null); wInfo((on ? 'Put away: ' : 'Using: ') + g.name + '. ' + g.desc); };
         grid.appendChild(b);
       }
       head('Colors'); for (const id of COLORS.filter(id => ownerOnly('color', id))) grid.appendChild(wTile('color', id, L, owner)); for (const id of COLORS.filter(id => ownerOnly('color', id))) grid.appendChild(wTile('color2', id, L, owner, '2nd'));
-      wInfo('★ Special things only the owner can wear.');
+      wInfo('Special things only the owner can wear.');
       return;
     }
     const sorted = idsOf(wTab).filter(id => !ownerOnly(wTab, id));
@@ -206,7 +204,7 @@
   if (unlock) {
     history.replaceState(null, '', location.pathname);
     setTimeout(() => adminSign(unlock, 'test').then(ok => {
-      if (ok) { store.set('pass', unlock); OWNER = true; renderWardrobe(); drawPreview(); menuMsg('★ The crown and the name Outernautica are now in your wardrobe forever!'); }
+      if (ok) { store.set('pass', unlock); OWNER = true; renderWardrobe(); drawPreview(); menuMsg('The crown and the name Outernautica are now in your wardrobe forever!'); }
       else menuMsg('That unlock link is not right.');
     }), 0);
   }
@@ -229,7 +227,9 @@
   $('adminBtn').innerHTML = icon('star', 15) + ' Admin';
   $('bagBtn').innerHTML = icon('bag', 22);
   $('wardBtn').innerHTML = icon('shirt', 22);
-  $('shipBtn').innerHTML = '<span style="font-size:22px">🛸</span>';
+  $('shipBtn').innerHTML = icon('ship', 24);
+  $('wardClose').innerHTML = icon('close', 18); $('bagClose').innerHTML = icon('close', 18);
+  $('gateInstall').innerHTML = icon('down', 22) + ' Install Funz Online'; document.querySelectorAll('#gateIos .gIc').forEach(e => { e.innerHTML = icon('share', 16); });
   $('shipBtn').onclick = () => toggleShip();
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
   try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}
@@ -255,11 +255,11 @@
   $('gateInstall').onclick = async () => {
     if (!installEvt) return;
     installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; $('gateInstall').disabled = true;
-    gateMsg(r && r.outcome === 'accepted' ? 'Installing! Open Funz Online from your apps to play ✨' : 'No problem! Tap install whenever you are ready.');
+    gateMsg(r && r.outcome === 'accepted' ? 'Installing! Open Funz Online from your apps to play!' : 'No problem! Tap install whenever you are ready.');
   };
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!Device.standalone) $('installBtn').classList.remove('hidden'); $('gateInstall').disabled = false; gateMsg(''); $('gateBrowser').classList.add('hidden'); });
   $('installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('installBtn').classList.add('hidden'); };
-  addEventListener('appinstalled', () => { $('installBtn').classList.add('hidden'); $('gateInstall').disabled = true; gateMsg('Installed! Open Funz Online from your apps to play ✨'); });
+  addEventListener('appinstalled', () => { $('installBtn').classList.add('hidden'); $('gateInstall').disabled = true; gateMsg('Installed! Open Funz Online from your apps to play!'); });
   if ((Device.os === 'iPhone' || Device.os === 'iPad') && !Device.standalone) $('iosHint').classList.remove('hidden');
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
@@ -535,7 +535,7 @@
       if (nonce && typeof m.sig === 'string') Promise.all([adminVerify(nonce, m.sig), typeof m.proof === 'string' ? adminVerify('admin:' + id, m.proof) : false]).then(([ok, pok]) => {
         if (ok && G && G.players.get(id) === p) {
           p.admin = true; p.proof = pok ? m.proof : null; p.pt = 0; p.name = p.wantName; if (p.wantLook) Object.assign(p, p.wantLook); renderPeople();
-          const t = '★ ' + p.name + ' (the admin) joined'; sys(t); Net.toAll({ t: 'sys', text: t });
+          const t = p.name + ' (the owner) joined'; sys(t); Net.toAll({ t: 'sys', text: t });
         }
       });
     } else if (m.t === 'chat') {
@@ -718,7 +718,7 @@
       const done = !!prog.done[q.id], v = Math.min(q.goal, prog.value(q)), row = document.createElement('div'); row.className = 'qRow' + (done ? ' done' : '');
       const un = prog.unlocks(q.id);
       row.innerHTML = '<b></b><span class="rw"></span><small></small><div class="bar"><i></i></div>';
-      row.querySelector('b').textContent = (done ? '✓ ' : '') + q.name; row.querySelector('.rw').textContent = '+' + q.coins;
+      row.querySelector('b').innerHTML = done ? icon('check', 14) + ' ' : ''; row.querySelector('b').appendChild(document.createTextNode(q.name)); row.querySelector('.rw').textContent = '+' + q.coins;
       row.querySelector('small').textContent = q.desc + (un.length ? ' · unlocks ' + un.join(', ') : '') + (done ? '' : ' (' + (q.stat === 'dist' || q.stat === 'swim' ? Math.floor(v) + 'm' : Math.floor(v)) + '/' + q.goal + ')');
       row.querySelector('.bar i').style.width = (v / q.goal * 100) + '%'; qb.appendChild(row);
     }
@@ -855,14 +855,14 @@
     // spawn: 1. pick one thing  2. for clouds, pick the kind of cloud  3. type how many
     const sp = sec('coin', 'Spawn: pick one thing');
     for (const t of ['coin', 'shell', 'mushroom', 'feather', 'crystal', 'gem', 'cloud', 'pepper', 'pearl', 'relic', 'star', 'fossil', 'key']) sp.append(tbtn(ITEMS[t].name, () => { spawnPick.type = t; renderAdmin(); }, spawnPick.type === t));
-    sp.append(tbtn('☁ Real clouds', () => { spawnPick.type = 'sky'; renderAdmin(); }, spawnPick.type === 'sky'));
+    sp.append(tbtn('Real clouds', () => { spawnPick.type = 'sky'; renderAdmin(); }, spawnPick.type === 'sky'));
     if (spawnPick.type === 'sky') { const cs = sec('sun', 'Which kind of cloud?'); for (const [k, n] of Object.entries(CLOUD_KINDS)) cs.append(tbtn(n, () => { spawnPick.cloud = k; renderAdmin(); }, spawnPick.cloud === k)); }
     { const r = document.createElement('div'); r.className = 'aRow'; const amt = document.createElement('input'); amt.type = 'number'; amt.min = 1; amt.max = spawnPick.type === 'sky' ? 10 : 20; amt.value = spawnPick.n; amt.placeholder = 'How many'; amt.oninput = () => { spawnPick.n = amt.value; };
       const what = spawnPick.type === 'sky' ? CLOUD_KINDS[spawnPick.cloud] : ITEMS[spawnPick.type].name;
       r.append(amt, btn('check', 'Spawn ' + what, () => { const n = Math.max(1, Math.min(+amt.max, Math.floor(+amt.value) || 1)); if (spawnPick.type === 'sky') runAdmin({ cmd: 'clouds', kind: spawnPick.cloud, n, at: G.body.p.map(v => +v.toFixed(1)) }); else runAdmin({ cmd: 'spawn', type: spawnPick.type, n }); })); box.appendChild(r); }
     const wx = sec('sun', 'Weather');
     for (const [m, n] of [['auto', 'Normal'], ['clear', 'Clear'], ['cloudy', 'Cloudy'], ['rain', 'Rain'], ['storm', 'Storm']]) wx.append(tbtn(n, () => runAdmin({ cmd: 'weather', mode: m }), G.wx === m));
-    wx.append(tbtn('⚡ Lightning', () => runAdmin({ cmd: 'flash' })));
+    wx.append(tbtn('Lightning', () => runAdmin({ cmd: 'flash' })));
     const tp = sec('go', 'Teleport');
     for (const [w, n] of [['plaza', 'Plaza'], ['station', 'Station'], ['parkour', 'Parkour'], ['up', 'Up high'], ['1', 'Beach'], ['3', 'Forest'], ['4', 'Desert'], ['5', 'Snow'], ['6', 'Mountains'], ['7', 'Swamp'], ['8', 'Glow fields'], ['0', 'Ocean'], ['space', 'Space'], ['sea', 'Coral kingdom'], ['crystal', 'Crystal hollow']]) tp.append(tbtn(n, () => teleportTo(w)));
     tp.append(tbtn('Bring everyone', () => runAdmin({ cmd: 'bringall' })));
@@ -903,11 +903,11 @@
   function say(p, text) {
     p.say = text; p.sayAt = performance.now();
     const row = document.createElement('div'); row.className = 'm';
-    const b = document.createElement('b'); b.style.color = p.admin ? '#ffd27a' : p.color; b.textContent = (p.admin ? '★ ' : '') + p.name + ':';
+    const b = document.createElement('b'); b.style.color = p.admin ? '#ffd27a' : p.color; b.innerHTML = p.admin ? icon('star', 13) + ' ' : ''; b.appendChild(document.createTextNode(p.name + ':'));
     row.append(b, document.createTextNode(text)); addLog(row);
   }
   function sys(text) { const row = document.createElement('div'); row.className = 'sys'; row.textContent = text; addLog(row); }
-  function announce(text) { const row = document.createElement('div'); row.className = 'ann'; row.textContent = '📢 ' + text; addLog(row); showToast('📢 ' + text, 5000); }
+  function announce(text) { const row = document.createElement('div'); row.className = 'ann'; row.innerHTML = icon('announce', 15) + ' '; row.appendChild(document.createTextNode(text)); addLog(row); showToast(text, 5000); }
   function addLog(row) { const log = $('chatLog'); log.appendChild(row); while (log.children.length > 80) log.firstChild.remove(); log.scrollTop = log.scrollHeight; }
   function emote(p, e) { p.emote = e; p.emoteAt = performance.now(); }
 
@@ -927,7 +927,7 @@
   function buildEmotes() {
     const box = $('emotes'); box.textContent = '';
     for (const e of EMOTES) {
-      const b = document.createElement('button'); b.textContent = e;
+      const b = document.createElement('button'); b.innerHTML = emoteSvg(e, 26); b.title = e;
       b.onclick = () => { if (!G || !G.myId) return; prog.add('emotes'); questCheck(); if (Device.useTouch) box.classList.add('hidden'); if (G.role === 'guest') Net.toKeeper({ t: 'emote', e }); else { emote(G.me, e); Net.toAll({ t: 'emote', id: G.myId, e }); } };
       box.appendChild(b);
     }
@@ -940,7 +940,7 @@
     for (const p of list.slice(0, 10)) {
       const row = document.createElement('div'); row.className = 'p' + (p.admin ? ' admin' : '');
       const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = p.color;
-      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = (p.admin ? '★ ' : '') + p.name + (p === G.me ? ' (you)' : '');
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.innerHTML = p.admin ? icon('star', 13) + ' ' : ''; nm.appendChild(document.createTextNode(p.name + (p === G.me ? ' (you)' : '')));
       const dv = document.createElement('span'); dv.className = 'dev'; dv.innerHTML = icon(p.devType || 'computer', 13); dv.appendChild(document.createTextNode(' ' + (p.dev || '')));
       row.append(dot, nm, dv); box.appendChild(row);
     }
@@ -1154,7 +1154,7 @@
     const b = G.body, game = G.game;
     for (const it of game.nearbyItems(b.p)) { // pick up items you roll into
       const pr = G.me.gadget === 'magnet' ? 5.5 : 1.4; if (Math.abs(it.p[0] - b.p[0]) > pr || Math.abs(it.p[2] - b.p[2]) > pr || Math.abs(it.p[1] - b.p[1]) > pr + 0.2) continue;
-      if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('🏆 You beat the parkour climb!'); } continue; }
+      if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('You beat the parkour climb!'); } continue; }
       if (G.taken.has(it.id) || G.asked === it.id) continue;
       G.asked = it.id; setTimeout(() => { if (G && G.asked === it.id) G.asked = null; }, 800);
       if (G.role === 'guest') Net.toKeeper({ t: 'take', id: it.id, type: it.type }); else tryTake(G.me, it.id, it.type);

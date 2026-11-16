@@ -621,7 +621,7 @@ class Game {
         if (!(p === me && this.fpv)) { G.mat(1, 0.35, 0.8); const SM = M4.model(p.p, M4.mul3(HR, M4.rotZ(pit)), 1), sm = this.rigFor('ship', shipModel); G.draw(sm, SM); G.outline(sm, SM, 0.03); }
         continue;
       }
-      const lift = og.includes('legs') ? 0.62 * r / 0.45 : 0, bp = lift ? [p.p[0], p.p[1] + lift, p.p[2]] : p.p;
+      const bp = p.p;
       const M = M4.model(bp, p.R, r);
       if (CLEAR_SKINS.includes(sk)) clear.push([M, sk, A, B]); else G.ball(M, sk, A, B);
       G.ball(M, sk, A, B, 1, 0.045);
@@ -630,7 +630,6 @@ class Game {
       if (h && !near) { G.mat(1, 0.35, 0.7); const HM = M4.model(bp, HR, r / 0.45); G.draw(h, HM); G.outline(h, HM, 0.016); }
       if (og.length) {
         G.mat(1, 0.35, 0.6); const st = { t: t + 1, walk: p._walk, mv: p._mv, blink: (t * 0.37) % 4 < 0.13 ? 0.1 : 1, hop: 0, seed: 1, flap: 12 };
-        if (lift) drawRig(G, this.rigFor('robot', robotRig), M4.model([p.p[0], p.p[1] - r, p.p[2]], HR, r / 0.45), st, true);
         if (og.includes('wings')) { const fl = p._air ? Math.sin(t * 13) * 0.7 - 0.2 : Math.sin(t * 2.5) * 0.15 + 0.35; for (const sd of [-1, 1]) { const wm = this.rigFor('wing' + sd, gl => wingsModel(gl, sd)), WM = M4.mul(M4.model(bp, HR, r / 0.45), M4.model([-0.1, 0.12, sd * 0.36], M4.rotX(-sd * fl))); G.draw(wm, WM, 1, null, 0.25); G.outline(wm, WM, 0.012); } }
         if (og.includes('dragon')) { const tgt = [bp[0] + Math.cos(hd + 2.3) * 1.1, bp[1] + 0.9 + Math.sin(t * 2) * 0.15, bp[2] + Math.sin(hd + 2.3) * 1.1]; p._dg = p._dg && Math.hypot(p._dg[0] - tgt[0], p._dg[2] - tgt[2]) < 20 ? p._dg.map((v, i) => v + (tgt[i] - v) * Math.min(1, (o.dt || 0.016) * 4)) : tgt; drawRig(G, this.rigFor('dragon', dragonRig), M4.model(p._dg, HR, 1.2), { ...st, flap: 14 }, true); if (Math.random() < 0.15) this.fx.emit(p._dg, { v: [0, 0.3, 0], life: 0.9, size: 0.1, col: Math.random() < 0.5 ? [0.66, 0.85, 1] : [0.8, 0.71, 1], shape: 26, drag: 1 }); }
         if (og.includes('aura')) { const am = this.rigFor('aura', auraModel); G.mat(0, 0, 0); G.draw(am, M4.model([bp[0], bp[1] - 0.1, bp[2]], M4.rotY(t * 1.3), r / 0.45), 1, null, 1); G.draw(am, M4.model([bp[0], bp[1] + 0.1, bp[2]], M4.mul3(M4.rotY(-t * 0.9), M4.rotX(0.6)), r / 0.45 * 0.8), 1, null, 1); if (Math.random() < 0.3) this.fx.emit([bp[0] + (Math.random() - 0.5) * 1.6, bp[1] - 0.3, bp[2] + (Math.random() - 0.5) * 1.6], { v: [0, 0.8, 0], life: 1.2, size: 0.09, col: Math.random() < 0.5 ? [0.66, 0.85, 1] : [0.8, 0.71, 1], shape: 22, drag: 0.5 }); }
@@ -737,16 +736,16 @@ class Game {
   }
   label(g, x, y, p, now, dist) {
     const sc = Math.max(0.7, Math.min(1.1, 14 / dist)); g.save(); g.translate(x, y); g.scale(sc, sc);
-    g.font = '600 12px system-ui'; const tag = (p.admin ? '★ ' : '') + p.name, w = g.measureText(tag).width + 26;
+    g.font = '600 12px system-ui'; const tag = p.name, sw = p.admin ? 14 : 0, w = g.measureText(tag).width + 26 + sw;
     g.fillStyle = p.admin ? 'rgba(120,80,0,.75)' : 'rgba(0,0,0,.5)'; this.rr(g, -w / 2, -9, w, 18, 7); g.fill();
-    g.fillStyle = p.admin ? '#ffd27a' : '#fff'; g.fillText(tag, -7, 4);
+    g.fillStyle = p.admin ? '#ffd27a' : '#fff'; g.fillText(tag, -7 + sw / 2, 4); if (sw) drawStar(g, -w / 2 + 11, 0, 5.5, '#ffd27a');
     drawDeviceIcon(g, p.devType, w / 2 - 10, 0, p.admin ? '#ffd27a' : 'rgba(255,255,255,.85)');
     if (p.say && now - p.sayAt < 6000) {
       g.font = '13px system-ui'; const lines = this.wrap(g, p.say, 180), lh = 16, bw = Math.min(196, Math.max(...lines.map(l => g.measureText(l).width)) + 18), bh = lines.length * lh + 10, by = -14 - bh;
       g.fillStyle = 'rgba(255,255,255,.96)'; this.rr(g, -bw / 2, by, bw, bh, 9); g.fill(); g.beginPath(); g.moveTo(-5, by + bh); g.lineTo(5, by + bh); g.lineTo(0, by + bh + 6); g.fill();
       g.fillStyle = '#1b1b2b'; lines.forEach((l, i) => g.fillText(l, 0, by + 18 + i * lh));
     }
-    if (p.emote && now - p.emoteAt < 2500) { const t = (now - p.emoteAt) / 2500; g.globalAlpha = 1 - t * t; g.font = '26px system-ui'; g.fillText(p.emote, 0, -30 - t * 26 - (p.say && now - p.sayAt < 6000 ? 40 : 0)); g.globalAlpha = 1; }
+    if (p.emote && now - p.emoteAt < 2500) { const t = (now - p.emoteAt) / 2500; g.globalAlpha = 1 - t * t; const im = emoteImg(p.emote); if (im.complete && im.naturalWidth) g.drawImage(im, -15, -58 - t * 26 - (p.say && now - p.sayAt < 6000 ? 40 : 0), 30, 30); g.globalAlpha = 1; }
     g.restore();
   }
   wrap(g, text, max) { const words = text.split(/\s+/), lines = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (g.measureText(t).width > max && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines.slice(0, 4); }

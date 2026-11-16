@@ -42,7 +42,37 @@ const ICON_PATHS = {
   smile: F('M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z') + '<circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5a5 5 0 0 0 9 0"/><circle cx="8.8" cy="9.5" r="1" fill="currentColor"/><circle cx="15.2" cy="9.5" r="1" fill="currentColor"/>',
   map: F('M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z') + '<path d="M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 3.5V18M15 6v14.5"/>',
   speed: F('M13 2L4 14h7l-1 8 9-12h-7z') + '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  ship: F('M2.5 13.5c0-2 4.3-3.5 9.5-3.5s9.5 1.5 9.5 3.5-4.3 3.5-9.5 3.5-9.5-1.5-9.5-3.5z') + '<ellipse cx="12" cy="13.5" rx="9.5" ry="3.5"/><path d="M7.3 10.6a4.7 4.7 0 0 1 9.4 0"/><path d="M8 19.5l-1 2M16 19.5l1 2M12 17.5v3"/>',
+  cloud: F('M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.5 3.5 0 0 0 7 18.5z') + '<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.5 3.5 0 0 0 7 18.5z"/>',
+  share: F('M6 10h12v11H6z') + '<path d="M12 3v12M8 7l4-4 4 4"/><path d="M9 10H6v11h12V10h-3"/>',
+  trophy: F('M7 3h10v6a5 5 0 0 1-10 0z') + '<path d="M7 3h10v6a5 5 0 0 1-10 0z"/><path d="M7 5H4a3 3 0 0 0 3 4M17 5h3a3 3 0 0 1-3 4M12 14v4M8 21h8M9.5 18h5"/>',
 };
+// Emotes: little colored stickers (drawn, not emoji). Used on the buttons and over players' heads.
+const EMOTE_SVG = (() => {
+  const o = 'stroke="#3a2a1a" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"';
+  const finger = (x, y, h, w = 2.6) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${w / 2}" fill="#ffd27a" ${o}/>`;
+  return {
+    wave: `<path d="M17.5 3.5a5 5 0 0 1 3 3M19 1.8a7 7 0 0 1 3.4 3.4" fill="none" stroke="#5ff0e0" stroke-width="1.5" stroke-linecap="round"/><g transform="rotate(-14 12 13)">${finger(6.2, 4, 9)}${finger(9.1, 2.6, 10)}${finger(12, 3.2, 9.5)}${finger(14.9, 5.2, 8)}<rect x="2.6" y="10.5" width="2.8" height="7" rx="1.4" fill="#ffd27a" ${o} transform="rotate(-38 4 14)"/><rect x="5.6" y="9.6" width="12" height="11.4" rx="4.6" fill="#ffd27a" ${o}/><path d="M8.5 15.5c1 1.4 3.2 2 5.2 1" fill="none" stroke="#e0a840" stroke-width="1.1" stroke-linecap="round"/></g>`,
+    heart: `<path d="M12 21s-8.5-5-8.5-11.2A4.6 4.6 0 0 1 12 7.2a4.6 4.6 0 0 1 8.5 2.6C20.5 16 12 21 12 21z" fill="#ff5a7a" ${o.replace('#3a2a1a', '#7a1a2e')}/><path d="M7 9.6a2.4 2.4 0 0 1 2.2-2" fill="none" stroke="#ffd0da" stroke-width="1.4" stroke-linecap="round"/>`,
+    laugh: `<circle cx="12" cy="12" r="9.5" fill="#ffd27a" ${o}/><path d="M7 9.8l2.2-1.3L7 7.3M17 9.8l-2.2-1.3L17 7.3" fill="none" stroke="#3a2a1a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.8 12.5h10.4a5.2 5.2 0 0 1-10.4 0z" fill="#7a2a1a" ${o}/><path d="M9 16.2a4 4 0 0 0 6 0" fill="#ff7a8a"/><path d="M3.5 11.5c-1 1.6-1 3 0 3.6.9.5 1.8-.4 1.6-1.6zM20.5 11.5c1 1.6 1 3 0 3.6-.9.5-1.8-.4-1.6-1.6z" fill="#7ad8ff" stroke="#2a6a9a" stroke-width=".9"/>`,
+    fire: `<path d="M12 22c-4.4 0-7-2.9-7-6.6 0-3.6 2.6-5.2 3.4-8.4 1.6 1.3 2 3 2 4.4C12 9.5 12.6 5.4 15 2.5c.4 3.4 4 6.2 4 11.6 0 4.4-2.8 7.9-7 7.9z" fill="#ff7a3a" ${o.replace('#3a2a1a', '#7a2a0a')}/><path d="M12 21c-2 0-3.3-1.3-3.3-3.2 0-2 1.6-3 2.2-4.8 1.2 1 1.4 2 1.4 2.8.8-.9 1.3-2.2 1.4-3.5 1.4 1.4 1.8 3 1.8 4.6 0 2.4-1.5 4.1-3.5 4.1z" fill="#ffd27a"/>`,
+    sparkle: `<path d="M10 2.5l1.7 5.3 5.3 1.7-5.3 1.7L10 16.5l-1.7-5.3L3 9.5l5.3-1.7z" fill="#ffe27a" ${o.replace('#3a2a1a', '#8a6a10')}/><path d="M18 13.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" fill="#a8d8ff" ${o.replace('#3a2a1a', '#2a5a8a')}/><path d="M5 17l.6 1.6 1.6.6-1.6.6L5 21.4l-.6-1.6-1.6-.6 1.6-.6z" fill="#cdb4ff" ${o.replace('#3a2a1a', '#5a3a9a')}/>`,
+    thumb: `<path d="M3.5 10.5h3.8v10.5H3.5a1 1 0 0 1-1-1V11.5a1 1 0 0 1 1-1z" fill="#7ad8ff" ${o}/><path d="M7.3 10.5l3.6-7.3a2.3 2.3 0 0 1 2.6 2.3V9h5.2a2.1 2.1 0 0 1 2.1 2.4l-1.3 7.8A2.2 2.2 0 0 1 17.3 21H7.3z" fill="#ffd27a" ${o}/><path d="M12.5 13.5h4M12.8 16.5h3.6" stroke="#e0a840" stroke-width="1.1" stroke-linecap="round"/>`,
+  };
+})();
+const EMOTES = Object.keys(EMOTE_SVG);
+function emoteSvg(name, size = 26) { return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">${EMOTE_SVG[name] || ''}</svg>`; }
+const emoteImgs = {};
+function emoteImg(name) { // a picture of the emote for drawing on the game canvas
+  if (!emoteImgs[name]) { const im = new Image(); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24">${EMOTE_SVG[name] || ''}</svg>`); emoteImgs[name] = im; }
+  return emoteImgs[name];
+}
+// the owner star, drawn on the game canvas
+function drawStar(g, x, y, r, color) {
+  g.save(); g.fillStyle = color; g.beginPath();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+  g.closePath(); g.fill(); g.restore();
+}
 function icon(name, size = 20) {
   return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
 }

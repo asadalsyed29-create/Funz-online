@@ -257,19 +257,6 @@ function cockpitModel(gl) {
   for (const s2 of [-1, 1]) MB.tube(mb, [[0.9, -0.4, s2 * 0.8], [1.1, 0.1, s2 * 0.9], [0.8, 0.55, s2 * 0.7], [0.2, 0.75, s2 * 0.4]], 0.035, 6, C('#eef3fb'));
   return mb.build(gl);
 }
-// robot legs and arm (a rig: the ball sits on top of the hips)
-function robotRig(gl) {
-  const parts = [], C = hex, metal = C('#c8ccd8'), dark = C('#5a6070'), add = (anim, parent, at, fn, o = {}) => { const mb = new MeshBuilder(); fn(mb); parts.push({ m: mb.build(gl), at, parent, anim, ...o }); return parts.length - 1; };
-  const hip = add('body', -1, [0, 0.62, 0], mb => { mb.tor([0, 0, 0], 0.3, 0.06, 20, 6, dark); mb.sph([0, -0.04, 0], [0.32, 0.08, 0.32], 12, metal, 0.2); });
-  for (const [x, z, ph] of [[0.24, 0.24, 0], [0.24, -0.24, Math.PI], [-0.24, 0.24, Math.PI], [-0.24, -0.24, 0]]) {
-    const up = add('leg', hip, [x, -0.04, z], mb => { mb.sph([0, 0, 0], 0.07, 8, C(PB), 0); mb.caps([0, 0, 0], [x * 0.5, -0.3, z * 0.5], 0.045, 0.04, 7, metal); }, { ph, amp: 0.5 });
-    add('knee', up, [x * 0.5, -0.3, z * 0.5], mb => { mb.sph([0, 0, 0], 0.055, 8, C(PP), 0); mb.caps([0, 0, 0], [0, -0.28, 0], 0.04, 0.035, 7, metal); mb.sph([0.03, -0.3, 0], [0.09, 0.035, 0.07], 8, dark, 0); }, { ph });
-  }
-  const sh = add('shoulder', hip, [-0.1, 0.83, 0.12], mb => { mb.sph([0, 0, 0], 0.08, 10, C(PP), 0); mb.caps([0, 0, 0], [0.05, 0.32, 0.08], 0.045, 0.04, 7, metal); });
-  const el = add('elbow', sh, [0.05, 0.32, 0.08], mb => { mb.sph([0, 0, 0], 0.06, 8, C(PB), 0); mb.caps([0, 0, 0], [0.22, 0.2, 0.02], 0.04, 0.035, 7, metal); });
-  add('hand', el, [0.22, 0.2, 0.02], mb => { mb.sph([0, 0, 0], 0.035, 6, dark, 0); mb.sph([0.06, 0.06, 0], 0.09, 12, C('#eef3fb'), 0.1); });
-  return { parts };
-}
 // pastel wings that flap (made of long soft feathers)
 function wingsModel(gl, side) {
   const mb = new MeshBuilder();
