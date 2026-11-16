@@ -81,16 +81,50 @@ function buildLandmarks(gl, st) {
   const out = [];
   // plaza
   {
-    const mb = new MeshBuilder().collect(), y = SPAWN_H, s = { key: 'plaza', items: [], lights: [], triggers: [], label: null, x: 0, z: 0 };
-    mb.cyl(0, y - 0.5, 0, 4.5, 4.5, 1.1, 12, hex('#b9b2a2')); mb.cyl(0, y + 0.5, 0, 3.8, 3.8, 0.08, 12, hex('#3a8fd8'), true);
-    mb.cyl(0, y, 0, 0.7, 0.5, 3, 8, hex('#d8d2c4')); mb.ico(0, y + 3.3, 0, 0.7, 1, () => glowC(hex('#8ff6ff')));
-    for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28 + 0.26, px = Math.cos(a) * 20, pz = Math.sin(a) * 20; mb.cyl(px, y - 0.2, pz, 0.18, 0.14, 4, 6, hex('#3a3f55')); mb.ico(px, y + 4.1, pz, 0.45, 1, () => glowC(hex('#ffe9a8'))); s.lights.push({ p: [px, y + 4.1, pz], r: 9, c: [1, 0.85, 0.55] }); }
-    // welcome arch facing the station
+    const mb = new MeshBuilder().collect(), y = SPAWN_H, s = { key: 'plaza', items: [], lights: [], triggers: [], label: null, x: 0, z: 0 }, H = bh(mb), C = h => hex(h);
+    // paving: rings of two-tone stone tiles with a teal star pattern in the middle
+    const ringR = [0, 5.2, 8.5, 12, 16, 20.5, 23.5], seg = 24;
+    for (let r = 0; r < ringR.length - 1; r++) for (let k = 0; k < seg; k++) {
+      const a0 = k / seg * 6.2832, a1 = (k + 1) / seg * 6.2832, r0 = ringR[r], r1 = ringR[r + 1], yy = y + 0.16;
+      const col = r === ringR.length - 2 ? C(BC.stoneD) : r === 1 ? C(k % 2 ? '#48d6ac' : '#2fae8a') : shadeC(C((k + r) % 2 ? '#d8d2c4' : '#c8c0b0'), 0.96 + ((k * 7 + r * 3) % 5) * 0.012);
+      if (r0 === 0) mb.tri([0, yy, 0], [Math.cos(a0) * r1, yy, Math.sin(a0) * r1], [Math.cos(a1) * r1, yy, Math.sin(a1) * r1], col);
+      else mb.quad([Math.cos(a1) * r0, yy, Math.sin(a1) * r0], [Math.cos(a1) * r1, yy, Math.sin(a1) * r1], [Math.cos(a0) * r1, yy, Math.sin(a0) * r1], [Math.cos(a0) * r0, yy, Math.sin(a0) * r0], col);
+    }
+    // the fountain: a round pool, two bowls and a glowing orb on top
+    mb.cyl(0, y - 0.2, 0, 4.6, 4.6, 1.0, 16, C(BC.stoneL)); mb.cyl(0, y + 0.8, 0, 4.8, 4.8, 0.18, 16, C(BC.stone));
+    mb.cyl(0, y + 0.62, 0, 4.0, 4.0, 0.06, 16, glowC(C('#5ab8f0')), true);
+    mb.cyl(0, y + 0.6, 0, 0.7, 0.55, 1.4, 8, C(BC.stoneL));
+    mb.push([0, y + 2.0, 0]); mb.lathe([[0.4, 0], [1.9, 0.35], [2.1, 0.62], [1.8, 0.62], [0, 0.4]], 14, C(BC.stone), 0); mb.pop();
+    mb.cyl(0, y + 2.4, 0, 0.32, 0.26, 1.3, 8, C(BC.stoneL));
+    mb.push([0, y + 3.6, 0]); mb.lathe([[0.25, 0], [1.0, 0.25], [1.1, 0.45], [0.9, 0.45], [0, 0.3]], 12, C(BC.stone), 0); mb.pop();
+    mb.ico(0, y + 4.6, 0, 0.6, 1, () => glowC(C('#8ff6ff')));
+    // benches around the fountain, flower planters and lamps further out
+    for (let k = 0; k < 6; k++) {
+      const a = k / 6 * 6.2832, bx = Math.cos(a) * 9.2, bz = Math.sin(a) * 9.2;
+      mb.push([bx, y, bz], M4.rotY(-a + Math.PI / 2));
+      H.box(-1.3, 0.45, -0.3, 1.3, 0.6, 0.3, BC.woodL); H.box(-1.3, 0.6, 0.22, 1.3, 1.25, 0.34, BC.wood);
+      for (const sx of [-1.05, 1.05]) H.flatBox(sx - 0.08, 0, -0.25, sx + 0.08, 0.45, 0.25, '#3a3f55');
+      mb.pop();
+      const a2 = a + Math.PI / 6, px = Math.cos(a2) * 14, pz = Math.sin(a2) * 14;
+      mb.push([px, y, pz], M4.rotY(-a2));
+      H.box(-1.3, 0, -0.8, 1.3, 0.7, 0.8, BC.stoneL); mb.box(-1.15, 0.7, -0.65, 1.15, 0.78, 0.65, C('#6a4a32'), true);
+      for (let q = 0; q < 3; q++) { mb.ico(-0.75 + q * 0.75, 1.05, 0, 0.42, 0, () => C(q % 2 ? '#5aa86a' : '#4a9a5a')); const fc = ['#ff8fb8', '#ffd24a', '#cdb4ff', '#a8d8ff', '#ff9a6a', '#ffffff'][(k + q) % 6]; for (let f = 0; f < 3; f++) mb.ico(-0.75 + q * 0.75 + Math.cos(f * 2.1) * 0.3, 1.32, Math.sin(f * 2.1) * 0.3, 0.1, 0, () => C(fc)); }
+      mb.pop();
+      const a3 = a + 0.26, lx = Math.cos(a3) * 21.5, lz = Math.sin(a3) * 21.5;
+      mb.cyl(lx, y, lz, 0.32, 0.26, 0.4, 6, C('#3a3f55')); mb.cyl(lx, y + 0.4, lz, 0.11, 0.09, 3.8, 6, C('#3a3f55'));
+      mb.box(lx - 0.3, y + 4.2, lz - 0.3, lx + 0.3, y + 4.8, lz + 0.3, glowC(C('#ffe9a8'))); mb.cyl(lx, y + 4.8, lz, 0.45, 0.05, 0.4, 4, C('#3a3f55'), true, 0.785); mb.box(lx - 0.36, y + 4.12, lz - 0.36, lx + 0.36, y + 4.2, lz + 0.36, C('#3a3f55'));
+      s.lights.push({ p: [lx, y + 4.5, lz], r: 9, c: [1, 0.85, 0.55] });
+    }
+    // welcome arch facing the station: two pillars and a round arch of blocks
     const sa = Math.atan2(STATION.z, STATION.x);
-    mb.at([Math.cos(sa) * 26, y, Math.sin(sa) * 26], M4.rotY(-sa + Math.PI / 2));
-    mb.box(-5, -0.5, -0.6, -4, 6, 0.6, hex('#48d6ac')); mb.box(4, -0.5, -0.6, 5, 6, 0.6, hex('#48d6ac')); mb.box(-5, 6, -0.6, 5, 7, 0.6, hex('#2fae8a'));
-    s.signs = [{ p: [Math.cos(sa) * 26, y + 8, Math.sin(sa) * 26], t: 'The station is this way →' }];
-    s.lights.push({ p: [0, y + 3.3, 0], r: 10, c: [0.4, 0.9, 1] });
+    mb.push([Math.cos(sa) * 26, y, Math.sin(sa) * 26], M4.rotY(-sa + Math.PI / 2));
+    for (const sx of [-4.6, 4.6]) { H.box(sx - 0.8, 0, -0.8, sx + 0.8, 0.6, 0.8, BC.stoneD); H.box(sx - 0.6, 0.6, -0.6, sx + 0.6, 5.2, 0.6, BC.stoneL); H.box(sx - 0.75, 5.2, -0.75, sx + 0.75, 5.6, 0.75, '#48d6ac'); }
+    for (let k = 0; k < 9; k++) { const a0 = Math.PI * k / 9, a1 = Math.PI * (k + 1) / 9, r0 = 4.0, r1 = 5.3, P = (a, r, z) => [-Math.cos(a) * r, 5.6 + Math.sin(a) * r * 0.62, z], col = C(k % 2 ? '#48d6ac' : '#2fae8a');
+      for (const [z0, z1] of [[-0.55, 0.55]]) { mb.quad(P(a0, r1, z1), P(a1, r1, z1), P(a1, r1, z0), P(a0, r1, z0), col); mb.quad(P(a0, r0, z0), P(a1, r0, z0), P(a1, r0, z1), P(a0, r0, z1), shadeC(col, 0.8)); mb.quad(P(a0, r0, z1), P(a1, r0, z1), P(a1, r1, z1), P(a0, r1, z1), shadeC(col, 0.92)); mb.quad(P(a1, r0, z0), P(a0, r0, z0), P(a0, r1, z0), P(a1, r1, z0), shadeC(col, 0.92)); } }
+    mb.ico(0, 9.4, 0, 0.5, 1, () => glowC(C('#ffd27a')));
+    mb.pop();
+    s.signs = [{ p: [Math.cos(sa) * 26, y + 10.6, Math.sin(sa) * 26], t: 'The station is this way →' }];
+    s.lights.push({ p: [0, y + 4.6, 0], r: 11, c: [0.4, 0.9, 1] });
     s.mesh = mb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   }
   // parkour: fair jumps, checkpoints every 8 steps, trophy at the top
