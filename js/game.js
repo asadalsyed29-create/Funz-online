@@ -29,7 +29,8 @@ class Game {
     this.landmarks = buildLandmarks(this.gfx, this.St);
     const rr = raceRings(this.T); this.rings = rr.rings; this.raceStart = rr.start;
     this.ringM = this.ringModel('#48d6ac'); this.ringNext = this.ringModel('#ffc45a'); this.ringDone = this.ringModel('#8a93a8');
-    this.water = this.waterModel(); this.shadow = this.shadowModel(); this.cursorM = this.cursorModel(); this.cloudM = this.cloudModel();
+    this.water = this.waterModel(); this.shadow = this.shadowModel(); this.cursorM = this.cursorModel(); this.cloudM = buildCloudModels(this.gfx, this.T.N); this.cloudCells = new Map(); this.flash = 0; this.rain = 0;
+    this.fx = new Particles();
     this.cam = { yaw: Math.PI * 0.75, pitch: 0.42, dist: 9, eye: [0, 0, 0], target: [0, 0, 0] };
     this.fov = 1.05; this.power = new Set(); this.anim = new Map();
     this.partChunks = new Map(); this.partDirty = new Set(); this.partModels = new Map(); this.wireMesh = null; this.wiresDirty = true;
@@ -49,15 +50,27 @@ class Game {
     if (!pr) { pr = document.createElement('div'); pr.id = 'safeProbe'; pr.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right)'; document.body.appendChild(pr); }
     const cs = getComputedStyle(pr); this.safeTop = parseFloat(cs.paddingTop) || 0; this.safeRight = parseFloat(cs.paddingRight) || 0;
   }
-  ballFor(color, hat) { const k = color + '|' + hat; if (!this.models.has(k)) this.models.set(k, ballModel(this.gfx, color, hat)); return this.models.get(k); }
+  hatFor(h) { if (!h || h === 'none') return null; return this.models.get(h) || (this.models.set(h, hatModel(this.gfx, h)), this.models.get(h)); }
   itemFor(t) { return this.itemModels[t] || (this.itemModels[t] = itemModel(this.gfx, t)); }
-  creatureFor(t) { return this.creatureModels[t] || (this.creatureModels[t] = creatureModel(this.gfx, t)); }
+  creatureFor(t) { return this.creatureModels[t] || (this.creatureModels[t] = creatureRig(this.gfx, t)); }
   partFor(id, rot, on) { const k = id + ':' + rot + ':' + on; if (!this.partModels.has(k)) this.partModels.set(k, partModel(this.gfx, id, rot, on)); return this.partModels.get(k); }
-  ringModel(c) { const mb = new MeshBuilder(); for (let k = 0; k < 24; k++) { const a0 = k / 24 * 6.28, a1 = (k + 1) / 24 * 6.28; mb.at([0, 0, 0], M4.rotZ(a0)); mb.box(1.35, -0.17, -0.17, 1.65, 0.17 + (a1 - a0) * 1.5, 0.17, glowC(hex(c)), false); } return mb.build(this.gfx); }
-  waterModel() { const mb = new MeshBuilder(), c = hex('#2c7cc8', 0.32), E = 700; for (let i = -4; i < 4; i++) for (let j = -4; j < 4; j++) mb.quad([i * E / 4, 0, j * E / 4], [i * E / 4, 0, (j + 1) * E / 4], [(i + 1) * E / 4, 0, (j + 1) * E / 4], [(i + 1) * E / 4, 0, j * E / 4], c); return mb.build(this.gfx); }
-  shadowModel() { const mb = new MeshBuilder(), c = [0, 0, 0, 0.18]; for (let j = 0; j < 14; j++) { const a = j / 14 * 6.28, b = (j + 1) / 14 * 6.28; mb.tri([0, 0, 0], [Math.cos(b), 0, Math.sin(b)], [Math.cos(a), 0, Math.sin(a)], c); } return mb.build(this.gfx); }
+  ringModel(c) { const mb = new MeshBuilder(), col = glowC(hex(c)); mb.push([0, 0, 0], M4.rotX(Math.PI / 2)); mb.tor([0, 0, 0], 1.5, 0.17, 40, 10, col); mb.pop(); return mb.build(this.gfx); }
+  waterModel() { const mb = new MeshBuilder(), c = hex('#1d6fbf', 0.7), N = 90, E = 10; for (let i = -N / 2; i < N / 2; i++) for (let j = -N / 2; j < N / 2; j++) mb.quad([i * E, 0, j * E], [i * E, 0, (j + 1) * E], [(i + 1) * E, 0, (j + 1) * E], [(i + 1) * E, 0, j * E], c); return mb.build(this.gfx); }
+  shadowModel() { const mb = new MeshBuilder(); for (let j = 0; j < 20; j++) { const a = j / 20 * 6.28, b = (j + 1) / 20 * 6.28; for (const [r0, r1, al] of [[0, 0.6, 0.2], [0.6, 1, 0.1]]) { mb.tri([Math.cos(a) * r0, 0, Math.sin(a) * r0], [Math.cos(b) * r1, 0, Math.sin(b) * r1], [Math.cos(a) * r1, 0, Math.sin(a) * r1], [0, 0, 0, al]); if (r0) mb.tri([Math.cos(a) * r0, 0, Math.sin(a) * r0], [Math.cos(b) * r0, 0, Math.sin(b) * r0], [Math.cos(b) * r1, 0, Math.sin(b) * r1], [0, 0, 0, al]); } } return mb.build(this.gfx); }
   cursorModel() { const mb = new MeshBuilder(), c = [1, 1, 1, 0.16]; mb.box(-0.02, -0.02, -0.02, 1.02, 1.02, 1.02, c, false); return mb.build(this.gfx); }
-  cloudModel() { const mb = new MeshBuilder(); for (let k = 0; k < 5; k++) mb.ico(k * 5 - 10, Math.sin(k) * 1.5, (k % 2) * 3, 4 + (k % 3) * 1.5, 0, (x, y) => [1, 1, 1, 0.42 + y * 0.03]); return mb.build(this.gfx); }
+  cloudModel(seed) {
+    // a big soft puffy cloud: a flat base with round puffs on top
+    const mb = new MeshBuilder(), N = this.T.N, n = 6 + Math.floor(N.hash(seed, 1, 900) * 5), L = 26 + N.hash(seed, 2, 900) * 22;
+    const col = (nx, ny) => ny < -0.35 ? [0.8, 0.84, 0.94, 1] : ny < 0 ? [0.92, 0.94, 0.99, 1] : [1, 1, 1, 1];
+    mb.sph([0, 0, 0], [L * 0.62, 4, L * 0.32], 12, col, 0.1);
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n - 0.5, x = t * L * 1.05 + (N.hash(seed, k, 901) - 0.5) * 5, z = (N.hash(seed, k, 903) - 0.5) * L * 0.35;
+      const r = (7 + N.hash(seed, k, 902) * 6) * (1 - Math.abs(t) * 0.9);
+      mb.sph([x, r * 0.35, z], [r, r * 0.85, r * 0.9], 12, col, 0.12);
+    }
+    return mb.build(this.gfx);
+  }
+  rgb3(h) { let v = this._rgb && this._rgb.get(h); if (!v) { (this._rgb || (this._rgb = new Map())).set(h, v = new Float32Array(hex(h || '#48d6ac').slice(0, 3))); } return v; }
 
   // ---------- building changes ----------
   partChanged(x, y, z) { this.partDirty.add(Math.floor(x / 16) + ',' + Math.floor(z / 16)); this.wiresDirty = true; }
@@ -298,19 +311,21 @@ class Game {
       const t = types[Math.floor(N.hash(i, j, 701) * types.length)], n = 1 + Math.floor(N.hash(i, j, 702) * (t === 'fish' ? 5 : 3));
       for (let q = 0; q < n; q++) {
         const cx = x + (N.hash(i, j, 710 + q) - 0.5) * 50, cz = z + (N.hash(i, j, 720 + q) - 0.5) * 50;
-        this.creatures.push({ type: t, chunk: k, p: [cx, 0, cz], yaw: N.hash(i, j, 730 + q) * 6.28, target: null, t: Math.random() * 5, hop: 0, flee: 0 });
+        this.creatures.push({ type: t, chunk: k, p: [cx, 0, cz], yaw: N.hash(i, j, 730 + q) * 6.28, target: null, t: Math.random() * 5, hop: 0, flee: 0, walk: 0, mv: 0, seed: Math.random() * 9, nb: Math.random() * 4, graze: 0, calm: 1 });
       }
     }
-    if (this.cave && !this.cave.bugs) { this.cave.bugs = true; this.cave.ch.slice(1).forEach((c, q) => this.creatures.push({ type: 'beetle', chunk: 'cave:' + this.cave.key, p: [this.cave.o[0] + c[0], 0, this.cave.o[2] + c[1]], yaw: q, t: 0, hop: 0, flee: 0 })); }
+    if (this.cave && !this.cave.bugs) { this.cave.bugs = true; this.cave.ch.slice(1).forEach((c, q) => this.creatures.push({ type: 'beetle', chunk: 'cave:' + this.cave.key, p: [this.cave.o[0] + c[0], 0, this.cave.o[2] + c[1]], yaw: q, t: 0, hop: 0, flee: 0, walk: 0, mv: 0, seed: q, nb: 2, graze: 0, calm: 1 })); }
     this.creatures = this.creatures.filter(c => act.has(c.chunk) || (this.cave && c.chunk === 'cave:' + this.cave.key));
     for (const k of [...this.creatureChunks]) if (!act.has(k)) this.creatureChunks.delete(k);
     for (const c of this.creatures) {
-      const C = CREATURES[c.type]; c.t -= dt;
+      const C = CREATURES[c.type]; c.t -= dt; const ox = c.p[0], oz = c.p[2];
       let near = null, nd = 7; for (const p of players) { const d = Math.hypot(p.p[0] - c.p[0], p.p[2] - c.p[2]); if (d < nd) { nd = d; near = p; } }
       let sp = C.speed;
       if (near && c.type !== 'bird') { c.yaw = Math.atan2(c.p[2] - near.p[2], c.p[0] - near.p[0]); sp *= 1.8; c.t = 1; }
       else if (c.t <= 0) { c.t = 2 + Math.random() * 4; c.idle = Math.random() < 0.4; c.yaw += (Math.random() - 0.5) * 2.5; }
       if (c.idle && !near) sp = 0;
+      c.calm += ((near ? 0 : 1) - c.calm) * Math.min(1, dt * 3);
+      if (near && nd < 1.3 && !c.touched && near === me) { c.touched = true; if (this.onTouch) this.onTouch(c); }
       const nx = c.p[0] + Math.cos(c.yaw) * sp * dt, nz = c.p[2] + Math.sin(c.yaw) * sp * dt;
       const gnd = this.cave ? this.cave.floor(nx, nz) : this.T.ground(nx, nz);
       const water = !this.cave && gnd < SEA - 0.3;
@@ -320,6 +335,10 @@ class Game {
       else if (C.fly) c.p[1] = gnd + 1.5 + Math.sin(performance.now() / 300 + c.yaw) * 0.6;
       else { if (C.hop && sp > 0) { c.hop += dt * 6; c.p[1] = gnd + Math.abs(Math.sin(c.hop)) * 0.5; } else c.p[1] = gnd; }
       c.vis = !(c.type === 'moth' && !night);
+      // animation: steps, blinking, grazing
+      const moved = Math.hypot(c.p[0] - ox, c.p[2] - oz); c.walk += moved * (C.hop ? 3 : 7); c.mv += ((moved > 0.002 ? 1 : 0) - c.mv) * Math.min(1, dt * 6);
+      c.nb -= dt; if (c.nb < -0.13) c.nb = 2 + Math.random() * 4;
+      c.graze += (((c.idle && !near && (c.type === 'deer' || c.type === 'goat' || c.type === 'hopper')) ? 1 : 0) - c.graze) * Math.min(1, dt * 2);
     }
     // birds circle in the sky in a few flocks
     if (!this.cave && this.birds.length === 0) for (let f = 0; f < 3; f++) for (let k = 0; k < 5; k++) this.birds.push({ f, k, ph: Math.random() * 6 });
@@ -381,22 +400,37 @@ class Game {
     return best;
   }
 
+  stat(n) { if (!this.stats) return; const t = this.gfx.tris; this.stats[n] = Math.round(t - (this.statT || 0)); this.statT = t; }
   // ---------- drawing ----------
   render(players, me, o) {
-    const gl = this.gfx.gl, G = this.gfx, c = this.cam, now = o.now;
+    const gl = this.gfx.gl, G = this.gfx, c = this.cam, now = o.now, t = now / 1000;
     this.cave = this.caveAt(me.p) || (this.cave && me.p[1] < -150 ? this.cave : null);
     const inSt = insideStation(c.target);
-    const k = Math.min(1, o.dark / 0.72);
-    let sky = [0.55 * (1 - k) + 0.05 * k, 0.78 * (1 - k) + 0.07 * k, 0.96 * (1 - k) + 0.17 * k];
-    const dusk = Math.max(0, 1 - Math.abs(k - 0.45) * 3) * 0.5; sky = sky.map((v, i) => v * (1 - dusk) + [0.98, 0.6, 0.45][i] * dusk);
-    let amb = [0.38 * (1 - k) + 0.07 * k, 0.42 * (1 - k) + 0.09 * k, 0.5 * (1 - k) + 0.2 * k], gnd = [0.26 * (1 - k) + 0.05, 0.24 * (1 - k) + 0.05, 0.2 * (1 - k) + 0.1], sunC = [0.62 * (1 - k) + 0.03, 0.6 * (1 - k) + 0.03, 0.54 * (1 - k) + 0.07];
-    let fog = sky, fogD = 1 / (this.radius * CHUNK * 0.62);
-    if (this.cave) { sky = [0.02, 0.02, 0.04]; fog = sky; amb = [0.1, 0.1, 0.14]; gnd = [0.05, 0.05, 0.07]; sunC = [0, 0, 0]; fogD = 1 / 45; }
+    const k = Math.min(1, o.dark / 0.72), day = 1 - k, dusk = Math.max(0, 1 - Math.abs(k - 0.42) * 3.2);
+    const L3 = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+    // sky colours through the day: blue day, orange evening, deep blue night
+    let zen = L3([0.22, 0.48, 0.9], [0.02, 0.03, 0.1], k), hor = L3([0.66, 0.84, 0.98], [0.07, 0.09, 0.2], k);
+    hor = L3(hor, [1.0, 0.58, 0.38], dusk * 0.75); zen = L3(zen, [0.32, 0.3, 0.62], dusk * 0.4);
+    let amb = L3([0.42, 0.47, 0.58], [0.08, 0.1, 0.22], k), gnd = L3([0.3, 0.27, 0.22], [0.05, 0.05, 0.1], k);
+    let sunC = L3([0.78, 0.72, 0.6], [0.04, 0.05, 0.1], k); sunC = L3(sunC, [0.95, 0.55, 0.32], dusk * 0.6);
+    let fog = hor, fogD = 1 / (this.radius * CHUNK * 0.66), night = Math.max(0, (k - 0.55) / 0.45);
+    // weather here: rain darkens the light and thickens the haze; storms flash with lightning
+    const wHere = this.cave || inSt ? 0 : weatherAt(this.T.N, c.target[0], c.target[2]), rainK = Math.max(0, Math.min(1, (wHere - 0.7) / 0.2)) * (c.target[1] < 150 ? 1 : 0);
+    this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = wHere;
+    if (this.rain > 0.01) { const r = this.rain; sunC = sunC.map(v => v * (1 - r * 0.55)); zen = L3(zen, L3([0.36, 0.4, 0.48], [0.03, 0.04, 0.08], k), r * 0.75); hor = L3(hor, L3([0.58, 0.61, 0.67], [0.06, 0.07, 0.12], k), r * 0.75); fog = hor; fogD *= 1 + r * 0.9; amb = amb.map(v => v * (1 - r * 0.2)); }
+    if (wHere > 0.78 && Math.random() < (o.dt || 0.016) * 0.12) { this.flash = 1; const d = 0.4 + Math.random() * 1.8; setTimeout(() => Sound.play('thunder'), d * 1000); }
+    if (this.flash > 0) { const f = this.flash; amb = amb.map(v => v + f * 0.7); zen = L3(zen, [0.85, 0.88, 1], f * 0.5); hor = L3(hor, [0.8, 0.82, 0.95], f * 0.4); fog = hor; this.flash = Math.max(0, f - (o.dt || 0.016) * 6); }
+    if (!this.cave && c.eye[1] < SEA - 0.2) { fog = [0.08, 0.3, 0.42]; fogD = 1 / 38; amb = [0.25, 0.42, 0.5]; sunC = sunC.map(v => v * 0.5); } // under the water
+    if (this.cave) { zen = hor = fog = [0.015, 0.02, 0.035]; amb = [0.1, 0.11, 0.15]; gnd = [0.05, 0.05, 0.07]; sunC = [0, 0, 0]; fogD = 1 / 45; night = 0; }
     else if (inSt) { amb = [0.24, 0.32, 0.36]; gnd = [0.12, 0.16, 0.18]; sunC = sunC.map(v => v * 0.3); fog = [0.05, 0.12, 0.14]; fogD = 1 / 110; }
-    gl.clearColor(sky[0], sky[1], sky[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const proj = M4.persp(this.fov, this.w / this.h, 0.25, 3400), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
+    const proj = M4.persp(this.fov, this.w / this.h, 0.25, 4200), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
     this.vp = M4.mul(proj, view);
     const sa = o.sunAngle, sun = [Math.cos(sa) * 0.5, Math.max(0.2, Math.sin(sa)), 0.55], sl = Math.hypot(...sun);
+    const sd = [Math.cos(sa) * 0.6, Math.sin(sa), 0.55], sdl = Math.hypot(...sd);
+    // camera directions (for the sky and the particles)
+    const f = [c.target[0] - c.eye[0], c.target[1] - c.eye[1], c.target[2] - c.eye[2]], fl = Math.hypot(...f); f[0] /= fl; f[1] /= fl; f[2] /= fl;
+    const rt = [-f[2], 0, f[0]], rl = Math.hypot(...rt) || 1; rt[0] /= rl; rt[2] /= rl;
+    const up = [rt[1] * f[2] - rt[2] * f[1], rt[2] * f[0] - rt[0] * f[2], rt[0] * f[1] - rt[1] * f[0]];
     // lights near the camera
     const L = [];
     const addL = (p, r, col) => { const d = Math.hypot(p[0] - c.target[0], p[2] - c.target[2]); if (d < 90) L.push([p, r, col, d]); };
@@ -408,8 +442,12 @@ class Game {
     if (this.cave) addL([me.p[0], me.p[1] + 1.2, me.p[2]], 10, [0.6, 0.55, 0.45]);
     L.sort((a, b) => a[3] - b[3]);
     const lp = new Float32Array(32), lc = new Float32Array(24), lk = this.cave || inSt ? 1 : Math.min(1, o.dark / 0.45) * 0.85 + 0.15;
-    L.slice(0, 8).forEach((l, i) => { lp.set([l[0][0], l[0][1], l[0][2], l[1]], i * 4); lc.set(l[2].map(v => v * lk), i * 3); });
-    G.scene({ vp: this.vp, sun: sun.map(v => v / sl), sunC, sky: amb, ground: gnd, fog, fogD, eye: c.eye, lp, lc });
+    L.slice(0, 8).forEach((l, i) => { lp.set([l[0][0] - c.eye[0], l[0][1] - c.eye[1], l[0][2] - c.eye[2], l[1]], i * 4); lc.set(l[2].map(v => v * lk), i * 3); });
+    const tanY = Math.tan(this.fov / 2);
+    G.begin({ vp: this.vp, eye: c.eye, sun: sun.map(v => v / sl), sunC, sky: amb, ground: gnd, fog, fogD, time: t, horizon: hor, zenith: zen, right: rt, up, fwd: f, tanX: tanY * this.w / this.h, tanY, lp, lc, night, sunDisc: sd.map(v => v / sdl), sunCol: L3([1, 0.95, 0.8], [1, 0.55, 0.3], dusk) });
+    gl.clearColor(fog[0], fog[1], fog[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!this.cave && !inSt && c.eye[1] >= SEA - 0.2) G.sky();
+    this.statT = 0;
 
     // stream terrain chunks
     const ccx = Math.floor(c.target[0] / CHUNK), ccz = Math.floor(c.target[2] / CHUNK), RAD = this.radius;
@@ -420,9 +458,9 @@ class Game {
         if (!this.chunks.has(x + ',' + z)) want.push([d, x, z]);
       }
       want.sort((a, b) => a[0] - b[0]);
-      let t0 = performance.now();
+      const t0 = performance.now();
       for (const [, x, z] of want) { if (performance.now() - t0 > (o.budget || 10)) break; const ch = buildTerrainChunk(G, this.T, x, z); ch.items = this.chunkItems(x, z); this.chunks.set(x + ',' + z, ch); }
-      for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (Math.hypot(x - ccx, z - ccz) > RAD + 2.5) { G.free(ch.mesh); this.chunks.delete(kk); } }
+      for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (Math.hypot(x - ccx, z - ccz) > RAD + 2.5) { G.free(ch.mesh); G.free(ch.deco); G.free(ch.decoLo); this.chunks.delete(kk); } }
       this.St.update(G, c.target[0], c.target[2], RAD * CHUNK + 60);
     }
     // parts
@@ -431,54 +469,115 @@ class Game {
     if (this.wiresDirty) this.rebuildWires();
 
     gl.disable(gl.BLEND);
-    const vis = (x, z, r) => { const dx = x - c.target[0], dz = z - c.target[2]; return dx * dx + dz * dz < (r * r); };
+    // only draw what's in front of the camera (sideways angle check with some room to spare)
+    const fh = Math.hypot(f[0], f[2]) || 1, fx0 = f[0] / fh, fz0 = f[2] / fh, halfH = Math.atan(Math.tan(this.fov / 2) * this.w / this.h) + 0.12;
+    const inView = (x, z, rad) => { const dx = x - c.eye[0], dz = z - c.eye[2], d = Math.hypot(dx, dz); if (d < rad * 1.5 + 10) return true; const a = Math.acos(Math.max(-1, Math.min(1, (dx * fx0 + dz * fz0) / d))); return a < halfH + Math.atan(rad / d) + (f[1] < -0.5 ? 0.6 : 0); };
+    const vis = (x, z, r, rad = 30) => { const dx = x - c.target[0], dz = z - c.target[2]; return dx * dx + dz * dz < (r * r) && inView(x, z, rad); };
     const far = RAD * CHUNK + 40;
-    if (!this.cave) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (Math.hypot(x - ccx, z - ccz) <= RAD + 0.5) G.draw(ch.mesh); }
+    // the ground
+    G.mat(0, 0, 0.06); G.tex(1);
+    const chunkVis = (x, z) => Math.hypot(x - ccx, z - ccz) <= RAD + 0.5 && inView(x * CHUNK + 32, z * CHUNK + 32, 48);
+    if (!this.cave) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (chunkVis(x, z)) G.draw(ch.mesh); }
+    this.stat('ground');
+    // trees, plants and rocks: cartoon shading
+    G.mat(1, 0.18, 0.06); G.tex(2);
+    if (!this.cave) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number), d = Math.hypot(x - ccx, z - ccz); if (chunkVis(x, z)) G.draw(d <= (this.near || 2.3) ? ch.deco : ch.decoLo); }
+    G.mat(0, 0, 0.06);
     if (this.cave) G.draw(this.cave.mesh);
+    this.stat('deco');
+    // big places and structures
+    G.mat(0, 0.12, 0.2);
     for (const s of this.landmarks) {
       if (s.station && !this.cave) { // the giant station shows through the haze from far away
         if (!vis(s.x, s.z, 3000)) continue;
-        if (!inSt) gl.uniform1f(G.u.uFogD, Math.min(fogD, 1 / 1500));
+        if (!inSt) G.fog(Math.min(fogD, 1 / 1500));
         G.draw(s.mesh); G.draw(s.inside);
-        if (!inSt) { gl.uniform1f(G.u.uFogD, 1 / 2600); G.draw(s.beam); }
-        gl.uniform1f(G.u.uFogD, fogD);
-      } else if (vis(s.x, s.z, far + 80)) G.draw(s.mesh);
+        if (!inSt) { G.tex(0); G.fog(1 / 2600); G.draw(s.beam); G.tex(2); }
+        G.fog();
+      } else if (vis(s.x, s.z, s.far || far + 80)) { if (s.far) G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.mesh); if (s.far) G.fog(); }
     }
-    if (!this.cave) for (const bo of this.St.boosts) if (vis(bo.p[0], bo.p[2], far)) G.draw(this.ringNext, M4.model(bo.p, M4.rotY(bo.yaw), 1.7));
-    if (!this.cave) for (const s of this.St.list.values()) if (s && vis(s.x, s.z, far)) G.draw(s.mesh);
+    if (!this.cave) for (const s of this.St.list.values()) if (s && vis(s.x, s.z, far, 40)) G.draw(s.mesh);
+    this.stat('structures');
+    // built things
+    G.mat(0, 0.1, 0.25); G.tex(3);
     for (const [kk, pc] of this.partChunks) { const [x, z] = kk.split(',').map(Number); if (vis(x * 16 + 8, z * 16 + 8, far)) { G.draw(pc.mesh); for (const [pk, px, py, pz, part] of pc.dyn) { const off = this.partOffset(pk, part), on = this.wired(pk) ? this.power.has(pk) : (PARTS[part.id].input ? this.power.has(pk) : undefined); G.draw(this.partFor(part.id, part.rot, on), M4.model([px + off[0], py + off[1], pz + off[2]])); } } }
-    G.draw(this.wireMesh);
-    // items
-    const t = now / 1000;
+    G.tex(0); G.draw(this.wireMesh);
+    this.stat('parts');
+    // glowing rings
+    G.mat(1, 0.5, 0.8);
+    if (!this.cave) for (const bo of this.St.boosts) if (vis(bo.p[0], bo.p[2], far)) G.draw(this.ringNext, M4.model(bo.p, M4.rotY(bo.yaw), 1.7), 1, null, 0.6);
+    if (!this.cave) {
+      this.rings.forEach((r, i) => { if (!vis(r.x, r.z, far)) return; const m = o.race ? (i === o.race.next ? this.ringNext : i < o.race.next ? this.ringDone : this.ringM) : this.ringM; G.draw(m, M4.model([r.x, r.y, r.z], M4.rotY(r.yaw)), 1, null, 0.6); });
+      const rs = this.raceStart; G.draw(o.race ? this.ringDone : this.ringNext, M4.model([rs[0], rs[1], rs[2]], [1, 0, 0, 0, 0, 1, 0, -1, 0], 0.7), 1, null, 0.6);
+    }
+    this.stat('rings');
+    // items (cartoon look with an outline)
+    G.mat(1, 0.45, 0.9);
     for (const it of o.items) {
       if (!vis(it.p[0], it.p[2], 60)) continue;
-      G.draw(this.itemFor(it.type), M4.model([it.p[0], it.p[1] + Math.sin(t * 2 + it.p[0]) * 0.12, it.p[2]], M4.rotY(t * 1.5 + it.p[2])), 1, null, 0.25);
+      const m = this.itemFor(it.type), M = M4.model([it.p[0], it.p[1] + Math.sin(t * 2 + it.p[0]) * 0.12, it.p[2]], M4.rotY(t * 1.5 + it.p[2]), 1.15);
+      G.draw(m, M, 1, null, 0.2); G.outline(m, M, 0.018);
     }
-    // race rings
-    if (!this.cave) {
-      this.rings.forEach((r, i) => { if (!vis(r.x, r.z, far)) return; const m = o.race ? (i === o.race.next ? this.ringNext : i < o.race.next ? this.ringDone : this.ringM) : this.ringM; G.draw(m, M4.model([r.x, r.y, r.z], M4.rotY(r.yaw))); });
-      const rs = this.raceStart; G.draw(o.race ? this.ringDone : this.ringNext, M4.model([rs[0], rs[1], rs[2]], [1, 0, 0, 0, 0, 1, 0, -1, 0], 0.7));
+    this.stat('items');
+    // creatures (each one is a little animated rig)
+    G.mat(1, 0.35, 0.45);
+    for (const cr of this.creatures) {
+      if (cr.vis === false || !vis(cr.p[0], cr.p[2], 90, 3)) continue;
+      const C = CREATURES[cr.type], hopH = C.hop ? Math.abs(Math.sin(cr.hop)) : 0;
+      const st = { t: t + cr.seed, walk: cr.walk, mv: cr.mv, blink: cr.nb < 0 ? 0.1 : 1, hop: hopH, hopv: Math.cos(cr.hop) > 0 ? -1 : 1, seed: cr.seed, graze: cr.graze, calm: cr.calm, flap: 16 };
+      drawRig(G, this.creatureFor(cr.type), M4.model(cr.p, M4.rotY(-cr.yaw)), st, vis(cr.p[0], cr.p[2], 26));
     }
-    // creatures
-    for (const cr of this.creatures) { if (cr.vis === false || !vis(cr.p[0], cr.p[2], 120)) continue; G.draw(this.creatureFor(cr.type), M4.model(cr.p, M4.rotY(-cr.yaw))); }
-    if (!this.cave && o.dark < 0.5) for (const b of this.birds) { const a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; G.draw(this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 8 + b.k) * 0.4)))); }
-    // players
-    for (const p of players) G.draw(this.ballFor(p.color, p.hat), M4.model(p.p, p.R, (p.r || 0.45) / 0.45));
+    if (!this.cave && o.dark < 0.5) for (const b of this.birds) { const a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
+    this.stat('creatures');
+    // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
+    const clear = [];
+    for (const p of players) {
+      const r = p.r || 0.45, sk = (SKINS[p.skin] || SKINS.plain).n, A = this.rgb3(p.color), B = this.rgb3(p.color2 || p.color);
+      // which way it's going (for the hat), smoothed
+      const lp0 = p._lp || p.p, dx = p.p[0] - lp0[0], dz = p.p[2] - lp0[2], mv = Math.hypot(dx, dz);
+      if (mv > 0.004 && mv < 3) { const want = Math.atan2(dz, dx), cur = p._hd ?? want; let d = want - cur; d = Math.atan2(Math.sin(d), Math.cos(d)); p._hd = cur + d * Math.min(1, 0.25); }
+      if (p.trail && p.trail !== 'none' && mv < 3 && o.dt) this.fx.trail(p.id || p.name, p.trail, p.p, [dx / o.dt, (p.p[1] - lp0[1]) / o.dt, dz / o.dt], r, p.grounded !== false, o.dt, t);
+      p._lp = [p.p[0], p.p[1], p.p[2]];
+      const M = M4.model(p.p, p.R, r);
+      if (CLEAR_SKINS.includes(sk)) clear.push([M, sk, A, B]); else G.ball(M, sk, A, B);
+      G.ball(M, sk, A, B, 1, 0.045);
+      const h = this.hatFor(p.hat);
+      if (h && !(p === me && Math.hypot(c.eye[0] - p.p[0], c.eye[1] - p.p[1], c.eye[2] - p.p[2]) < 1.7)) { G.mat(1, 0.35, 0.7); const HM = M4.model(p.p, M4.rotY(-(p._hd || 0)), r / 0.45); G.draw(h, HM); G.outline(h, HM, 0.016); }
+    }
+    this.stat('players');
     // see-through things last
-    gl.enable(gl.BLEND); gl.depthMask(false);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    G.mat(0, 0, 0);
     for (const p of players) {
       const gy = this.cave ? this.cave.floor(p.p[0], p.p[2]) : Math.max(this.T.ground(p.p[0], p.p[2]), SEA - 0.1), hgt = p.p[1] - gy;
       if (hgt < 0 || hgt > 24 || insideStation(p.p)) continue;
-      G.draw(this.shadow, M4.model([p.p[0], gy + 0.05, p.p[2]], null, (p.r || 0.45) * (1 - Math.min(0.6, hgt / 12))), Math.max(0.2, 1 - hgt / 14));
+      G.draw(this.shadow, M4.model([p.p[0], gy + 0.06, p.p[2]], null, (p.r || 0.45) * 1.2 * (1 - Math.min(0.6, hgt / 12))), Math.max(0.2, 1 - hgt / 14));
     }
     if (!this.cave) {
-      G.draw(this.water, M4.model([Math.round(c.target[0] / 40) * 40, SEA - 0.1, Math.round(c.target[2] / 40) * 40]), 1, [1, 1, 1], 0);
-      for (let q = 0; q < 14; q++) { const cx = Math.floor(c.target[0] / 300) * 300 + (q % 4) * 140 - 210 + ((t * 2 + q * 37) % 300) - 150, cz = Math.floor(c.target[2] / 300) * 300 + Math.floor(q / 4) * 140 - 210; G.draw(this.cloudM, M4.model([cx, 110 + (q % 3) * 12, cz], M4.rotY(q)), 0.9, o.dark > 0.3 ? [0.3, 0.32, 0.4] : [1, 1, 1], 1); }
+      gl.depthMask(true); G.water(this.water, [Math.round(c.target[0] / 10) * 10, SEA - 0.1, Math.round(c.target[2] / 10) * 10]); gl.depthMask(false);
+      // clouds: every weather cell has its own kinds of cloud, made of soft puffs (see sky.js)
+      const CC = CLOUD_CELL, ci = Math.floor(c.target[0] / CC), cj = Math.floor(c.target[2] / CC), near = [];
+      for (let i = ci - 2; i <= ci + 2; i++) for (let j = cj - 2; j <= cj + 2; j++) {
+        const key = i + ',' + j; let list = this.cloudCells.get(key);
+        if (!list) { list = cloudsInCell(this.T.N, this.T, i, j); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
+        for (const cl of list) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
+      }
+      const top = L3(L3([1, 1, 1], [1, 0.84, 0.72], dusk), [0.28, 0.31, 0.42], Math.max(0, (k - 0.35) / 0.65)), bot = L3(L3([0.6, 0.64, 0.75], [0.55, 0.42, 0.5], dusk), [0.1, 0.11, 0.18], Math.max(0, (k - 0.35) / 0.65));
+      if (!this.cloudData) this.cloudData = new Float32Array(6000 * 44);
+      const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, 5000);
+      gl.depthMask(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 3000)); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.enable(gl.BLEND);
+      G.fog();
     }
-    if (!this.cave && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { gl.uniform1f(G.u.uFogD, 1 / 2600); G.draw(stn.halo, null, 1, null, 1); gl.uniform1f(G.u.uFogD, fogD); } }
+    if (!this.cave && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }
+    G.mat(0, 0.1, 0.3); G.tex(0);
     for (const pc of this.partChunks.values()) G.draw(pc.clear);
+    for (const [M, sk, A, B] of clear) G.ball(M, sk, A, B);
     if (o.cursor) G.draw(this.cursorM, M4.model(o.cursor.cell), 1, o.cursor.ok ? [1, 1, 1] : [1, 0.3, 0.3], 1);
-    gl.depthMask(true);
+    // particles
+    if (o.dt && this.rain > 0.02 && !this.cave && !inSt) { const n = Math.floor(this.rain * 180 * o.dt + Math.random()); for (let q = 0; q < n; q++) { const a = Math.random() * 6.283, d = 1 + Math.random() * 18; this.fx.emit([c.target[0] + Math.cos(a) * d, c.target[1] + 9 + Math.random() * 4, c.target[2] + Math.sin(a) * d], { v: [-1.2, -24, -0.4], life: 0.7, size: 0.16, col: [0.78, 0.84, 0.95], a: 0.55, shape: 9, drag: 0 }); } }
+    if (o.dt) { this.fx.ambient(c.target, this.cave ? -1 : BIOMES[this.T.info(c.target[0], c.target[2]).b] ? this.T.info(c.target[0], c.target[2]).b : -1, k, o.dt, !!this.cave, inSt); this.fx.update(o.dt); }
+    G.particles(this.fx.data, this.fx.fill());
+    gl.depthMask(true); gl.disable(gl.BLEND);
     this.drawOverlay(players, me, o);
   }
   project(x, y, z) {
@@ -585,6 +684,6 @@ class Game {
       if (txt) { g.font = '700 10px system-ui'; g.textAlign = 'center'; g.fillStyle = col; g.fillText(txt, Math.max(x + 18, Math.min(x + size - 18, cx + px)), cy + py + (py > size / 2 - 22 ? -8 : 14)); }
     };
     if (!this.cave) { mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', ''); }
-    this.place = this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name;
+    this.place = this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name + ((this.weather || 0) >= 0.64 ? ' · ' + WEATHER_NAMES(this.weather) : '');
   }
 }

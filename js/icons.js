@@ -1,6 +1,11 @@
 // Hand-drawn two-tone icons (24×24): a soft filled shape plus crisp lines.
 const F = d => `<path d="${d}" fill="currentColor" fill-opacity=".22" stroke="none"/>`;
 const ICON_PATHS = {
+  shirt: F('M8 3l4 2 4-2 5 3.5-2.5 4-2.5-1.3V21H8V9.2L5.5 10.5 3 6.5z') + '<path d="M8 3l4 2 4-2 5 3.5-2.5 4-2.5-1.3V21H8V9.2L5.5 10.5 3 6.5z"/><path d="M9.5 3.7c.5 1.6 1.4 2.4 2.5 2.4s2-.8 2.5-2.4"/>',
+  music: F('M6 18a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0zM15 16a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0z') + '<circle cx="8.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/><path d="M11 18V5.5l9-2V16"/><path d="M11 9l9-2"/>',
+  musicOff: F('M6 18a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0z') + '<circle cx="8.5" cy="18" r="2.5"/><path d="M11 18V5.5l9-2V13"/><path d="M11 9l9-2"/><path d="M3 3l18 18"/>',
+  coin: F('M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z') + '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/>',
+  quest: F('M6 3h10l3 3v15H6z') + '<path d="M6 3h10l3 3v15H6z"/><path d="M9 9h7M9 13h7M9 17h4"/>',
   chat: F('M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z') + '<path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><circle cx="8" cy="10.5" r=".9" fill="currentColor"/><circle cx="12" cy="10.5" r=".9" fill="currentColor"/><circle cx="16" cy="10.5" r=".9" fill="currentColor"/>',
   bag: F('M5 8h14l1.2 12.5a1.5 1.5 0 0 1-1.5 1.5H5.3a1.5 1.5 0 0 1-1.5-1.5z') + '<path d="M5 8h14l1.2 12.5a1.5 1.5 0 0 1-1.5 1.5H5.3a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M8.5 10V6.5a3.5 3.5 0 0 1 7 0V10"/><path d="M9 14.5h6"/>',
   spawn: F('M6 4h11l-2.5 4.5L17 13H6z') + '<path d="M6 21V3"/><path d="M6 4h11l-2.5 4.5L17 13H6"/><path d="M3.5 21h5"/>',

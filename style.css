@@ -19,34 +19,56 @@ input:focus{border-color:var(--accent)}
 .live.off{background:#9aa3b5;box-shadow:none}
 
 /* ---------- menu ---------- */
-.screen{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:20;
-  background:radial-gradient(circle at 50% 25%,#1d4a5c 0%,#122241 50%,#0a1124 100%);overflow:auto;touch-action:pan-y}
-.panel{width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px;text-align:center;margin:auto}
-.logo{width:88px;height:88px;margin:0 auto;border-radius:22px;box-shadow:0 10px 40px rgba(72,214,172,.3)}
-h1{margin:0;font-size:32px;letter-spacing:.5px}
-.sub{margin:0;opacity:.8}
+.screen{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:16px calc(16px + var(--sr)) 16px calc(16px + var(--sl));z-index:20;
+  background:radial-gradient(ellipse at 30% 20%,#2a6a7a 0%,#173257 42%,#0b1430 80%),#0b1430;overflow:auto;touch-action:pan-y}
+.screen::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(1.5px 1.5px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 72% 12%,#fff,transparent),radial-gradient(1.5px 1.5px at 88% 40%,#cfe,transparent),radial-gradient(1px 1px at 35% 70%,#fff,transparent),radial-gradient(1px 1px at 55% 30%,#fff,transparent),radial-gradient(1.5px 1.5px at 20% 85%,#bdf,transparent),radial-gradient(1px 1px at 92% 82%,#fff,transparent)}
+.menuWrap{position:relative;display:flex;gap:18px;align-items:stretch;justify-content:center;margin:auto;width:100%;max-width:880px;flex-wrap:wrap}
+.panel{flex:1 1 300px;max-width:360px;display:flex;flex-direction:column;gap:10px;text-align:center}
+.brand{display:flex;align-items:center;gap:12px;text-align:left}
+.logo{width:58px;height:58px;border-radius:16px;box-shadow:0 8px 30px rgba(72,214,172,.35);flex:none}
+h1{margin:0;font-size:28px;letter-spacing:.3px}
+.sub{margin:2px 0 0;opacity:.75;font-size:13px;line-height:1.35}
+.stage{position:relative;border-radius:22px;background:radial-gradient(ellipse at 50% 80%,rgba(120,220,255,.28),rgba(255,255,255,.04) 60%),linear-gradient(rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.1)}
+#avatarPreview{width:100%;max-width:300px;aspect-ratio:4/3;height:auto;margin:0 auto;display:block}
+.lookName{position:absolute;left:0;right:0;bottom:8px;font-size:13px;opacity:.8}
 label{display:flex;flex-direction:column;gap:6px;text-align:left;font-size:14px;opacity:.95}
-.badge{align-self:center;background:rgba(255,255,255,.1);padding:6px 12px;border-radius:99px;font-size:14px}
-#avatarPreview{width:160px;height:120px;margin:0 auto;display:block;border-radius:18px}
-.pickLabel{font-size:13px;opacity:.75;margin-bottom:-6px}
-.colors{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.colors button{width:32px;height:32px;padding:0;border-radius:50%;border:3px solid transparent}
-.colors button.on{border-color:#fff}
-.hats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
-.hats button{padding:6px 10px;font-size:13px;background:rgba(255,255,255,.1);color:#fff;border:2px solid transparent}
-.hats button.on{border-color:#fff;background:rgba(255,255,255,.2)}
-.big{font-size:18px;padding:14px}
-.msg{min-height:20px;margin:0;color:var(--warm)}
+.badge{align-self:center;background:rgba(255,255,255,.1);padding:5px 12px;border-radius:99px;font-size:13px}
+.big{font-size:18px;padding:14px;box-shadow:0 8px 24px rgba(72,214,172,.3)}
+.msg{min-height:18px;margin:0;color:var(--warm);font-size:14px}
 .hint{margin:0;font-size:13px;opacity:.75}
 .ver{margin:0;font-size:12px;opacity:.45}
-/* on a phone in landscape the menu is shorter so Play is easy to reach */
+.coins{display:inline-flex;align-items:center;gap:5px;background:rgba(255,196,90,.16);color:#ffd27a;font-weight:800;padding:4px 10px;border-radius:99px;font-size:14px;white-space:nowrap}
+.coins::before{content:"";width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff3b0,#ffc22a 55%,#d98a00);box-shadow:0 0 6px rgba(255,200,60,.6)}
+/* wardrobe */
+.wardrobe{flex:1 1 360px;max-width:480px;display:flex;flex-direction:column;gap:10px;background:rgba(10,16,34,.55);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);min-height:0}
+.wHead{display:flex;align-items:center;gap:10px}.wHead b{font-size:18px;flex:1;text-align:left}
+.wTabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.wTabs button{background:rgba(255,255,255,.08);color:#fff;padding:7px 12px;font-size:14px;border-radius:99px;white-space:nowrap}
+.wTabs button.on{background:#fff;color:#122241}
+.wInfo{font-size:13px;opacity:.8;min-height:18px;text-align:left}
+.wGrid{display:grid;grid-template-columns:repeat(auto-fill,70px);grid-auto-rows:70px;justify-content:center;gap:8px;overflow-y:auto;max-height:52vh;padding:2px;touch-action:pan-y;flex:0 1 auto;min-height:80px}
+.wGrid button{position:relative;width:70px;height:70px;padding:0;border-radius:16px;background:rgba(255,255,255,.07);border:2px solid transparent;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-weight:600;font-size:11px}
+.wGrid button img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+.wGrid button.on{border-color:#fff;background:rgba(255,255,255,.18);box-shadow:0 0 0 3px rgba(72,214,172,.45)}
+.wGrid button.locked img{filter:saturate(.35) brightness(.7)}
+.wGrid button .lk{position:absolute;left:4px;right:4px;bottom:4px;font-size:10px;font-weight:800;background:rgba(10,16,34,.82);border-radius:8px;padding:2px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wGrid button .lk.c{color:#ffd27a}.wGrid button .lk.q{color:#b8e8ff}
+.wGrid button.sw{border-radius:50%}
+.wGrid .trailDots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;padding:6px}.trailDots i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:0 0 6px currentColor}
+.wGrid button .nm{position:absolute;top:4px;left:4px;right:4px;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* in the game the wardrobe floats over everything */
+#hud .wardrobe{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--solid);z-index:30;pointer-events:auto}
+#hud .wardrobe .wGrid{max-height:calc(100vh - 170px)}
 @media (orientation:landscape) and (max-height:520px){
-  .panel{max-width:560px;gap:8px}
-  .panel .logo{width:48px;height:48px}
-  .panel h1{font-size:22px}
-  .panel .sub{display:none}
-  #avatarPreview{width:120px;height:90px}
+  .menuWrap{flex-wrap:nowrap;gap:12px}
+  .panel{gap:6px;max-width:300px}
+  .logo{width:40px;height:40px}h1{font-size:20px}.sub{display:none}
+  #avatarPreview{max-width:190px}
+  .big{padding:10px}
+  .wGrid{max-height:calc(100vh - 150px)}
 }
+@media (max-width:700px) and (orientation:portrait){.wGrid{max-height:40vh}}
 
 /* ---------- heads-up display ---------- */
 #hud{position:fixed;inset:0;pointer-events:none}
@@ -164,3 +186,19 @@ body.touch #sideBtns{flex-direction:row}
 .rotIcon{width:54px;height:90px;border:4px solid var(--accent);border-radius:12px;animation:turn 2s ease-in-out infinite}
 @keyframes turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
 @media (orientation:portrait){body.touch #rotate{display:flex}}
+
+/* soft dark corners make the world look more like a picture */
+#vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 58%,rgba(5,10,30,.28) 100%)}
+#wardBtn{display:flex;align-items:center;justify-content:center}
+/* big banner when you finish a quest or discover a place */
+#banner{position:absolute;left:50%;top:22%;transform:translateX(-50%);text-align:center;pointer-events:none;animation:bannerIn .5s cubic-bezier(.2,1.4,.4,1)}
+#banner .t1{font-size:13px;letter-spacing:2px;color:#ffd27a;font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+#banner .t2{font-size:30px;font-weight:900;text-shadow:0 3px 16px rgba(0,0,0,.6),0 0 30px rgba(120,220,255,.35)}
+#banner .t3{font-size:14px;opacity:.9;text-shadow:0 2px 8px rgba(0,0,0,.7);margin-top:2px}
+@keyframes bannerIn{from{opacity:0;transform:translate(-50%,12px) scale(.9)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+body.touch #banner .t2{font-size:22px}
+.qRow{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.06);margin-bottom:6px;text-align:left}
+.qRow b{font-size:14px}.qRow small{opacity:.75;font-size:12px}.qRow .rw{grid-row:span 2;align-self:center;color:#ffd27a;font-weight:800;font-size:13px}
+.qRow .bar{grid-column:1/-1;height:6px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden}.qRow .bar i{display:block;height:100%;background:linear-gradient(90deg,#48d6ac,#8af0ff);border-radius:9px}
+.qRow.done{opacity:.55}.qRow.done .bar i{background:#ffd27a}
+#musicBtn.off{opacity:.55}

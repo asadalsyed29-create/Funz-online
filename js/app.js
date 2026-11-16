@@ -2,7 +2,6 @@
 // the world-keeper rules, items, the ring race, saving, and admin tools.
 (() => {
   const $ = id => document.getElementById(id);
-  const COLORS = ['#48d6ac', '#5aa9ff', '#ff7a8a', '#ffc45a', '#b48cff', '#ff9f5a', '#e8eef7', '#7be36b'];
   const EMOTES = ['👋', '❤️', '😂', '🔥', '✨', '👍'];
   const SEED = 20261115;
   const MAX_PLAYERS = 30, MAX_EDITS = 60000, MAX_WIRES = 4000, REACH = 9, DAY_MS = 14 * 60 * 1000, ITEM_RESPAWN = 4 * 60 * 1000;
@@ -20,56 +19,138 @@
   $('deviceBadge').innerHTML = icon(Device.type, 16) + ' '; $('deviceBadge').appendChild(document.createTextNode('You are on: ' + Device.short));
   const nameInput = $('nameInput');
   nameInput.value = store.get('name', '');
-  let myColor = store.get('color', COLORS[Math.floor(Math.random() * COLORS.length)]);
-  let myHat = store.get('hat', 'none'); if (!HATS[myHat]) myHat = 'none';
-
-  // The crown and the name Outernautica belong only to the owner (unlocked once
-  // with a secret link). Whoever has them is the admin.
-  const RESERVED_HATS = ['crown'];
+  // ---------- your look: skin, two colours, hat and trail ----------
+  // The crown and the name Outernautica belong only to the owner (unlocked once with a secret link).
   const reservedName = n => n.toLowerCase().replace(/[^a-z]/g, '').includes('outernautica');
-  const owned = new Set();
-  const grantOwner = () => { owned.add('hat:crown'); owned.add('name:outernautica'); };
-  if (store.get('pass', '')) grantOwner();
-  const ownsHat = h => !RESERVED_HATS.includes(h) || owned.has('hat:' + h);
-  if (!ownsHat(myHat)) myHat = 'none';
-
-  function picker(box, items, current, onPick, style) {
-    for (const [val, label] of items) {
-      const b = document.createElement('button');
-      style(b, val, label); if (val === current) b.classList.add('on');
-      b.onclick = () => { onPick(val); [...box.children].forEach(x => x.classList.toggle('on', x === b)); drawPreview(); };
-      box.appendChild(b);
-    }
+  const isOwner = () => !!store.get('pass', '');
+  const prog = new Progress(store);
+  const pickOne = a => a[Math.floor(Math.random() * a.length)];
+  const look = {
+    color: store.get('color', pickOne(COLORS.slice(0, 8))), color2: store.get('color2', '#e8eef7'),
+    skin: store.get('skin', 'band'), hat: store.get('hat', 'none'), trail: store.get('trail', 'dust'),
+  };
+  const LOOK_KINDS = { skin: SKINS, color: COLORS, color2: COLORS, hat: HATS, trail: TRAILS };
+  const validLook = (k, v) => k === 'color' || k === 'color2' ? COLORS.includes(v) : !!LOOK_KINDS[k][v];
+  function myLook() {
+    const o = {};
+    for (const k in look) o[k] = validLook(k, look[k]) && prog.owns(k, look[k], isOwner()) ? look[k] : ({ color: COLORS[0], color2: '#e8eef7', skin: 'plain', hat: 'none', trail: 'none' })[k];
+    return o;
   }
-  picker($('colors'), COLORS.map(c => [c, c]), myColor, v => { myColor = v; store.set('color', v); }, (b, v) => { b.style.background = v; b.setAttribute('aria-label', 'Color'); });
-  const buildHats = () => picker($('hats'), Object.entries(HATS).filter(([h]) => ownsHat(h)).map(([h, l]) => [h, RESERVED_HATS.includes(h) ? l + ' ★' : l]), myHat, v => { myHat = v; store.set('hat', v); }, (b, v, l) => { b.textContent = l; });
-  buildHats();
+
+  // wardrobe: pick what to wear; locked things show their price or the quest that unlocks them
+  let wTab = 'skin', thumbs = null;
+  const W_TABS = [['skin', 'Skins'], ['color', 'Color'], ['color2', 'Second color'], ['hat', 'Hats'], ['trail', 'Trails']];
+  function thumbMaker() {
+    if (thumbs !== null) return thumbs;
+    try { const c = document.createElement('canvas'); c.width = c.height = 128; thumbs = { c, gfx: new GL(c, true), hats: {}, cache: new Map() }; thumbs.gfx.gl.viewport(0, 0, 128, 128); }
+    catch (e) { thumbs = false; }
+    return thumbs;
+  }
+  // a little picture of a ball with a skin and hat
+  function thumb(skin, hat, A, B) {
+    const T = thumbMaker(); if (!T) return '';
+    const key = skin + '|' + hat + '|' + A + '|' + B; if (T.cache.has(key)) return T.cache.get(key);
+    const G2 = T.gfx, gl = G2.gl, eye = hat !== 'none' ? [0, 0.75, 2.2] : [0, 0.35, 2.2];
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND);
+    const vp = M4.mul(M4.persp(hat !== 'none' ? 0.62 : 0.5, 1, 0.1, 50), M4.lookAt(eye, [0, hat !== 'none' ? 0.18 : 0, 0], [0, 1, 0]));
+    G2.begin({ vp, eye, sun: [0.45, 0.75, 0.5], sunC: [0.75, 0.72, 0.64], sky: [0.5, 0.55, 0.68], ground: [0.28, 0.26, 0.3], fog: [0, 0, 0], fogD: 0, time: 1, horizon: [0.6, 0.75, 0.95], lp: new Float32Array(32), lc: new Float32Array(24) });
+    const M = M4.model([0, 0, 0], M4.mul3(M4.rotY(0.5), M4.rotX(0.25)), 0.45), sk = (SKINS[skin] || SKINS.plain).n;
+    const a = new Float32Array(hex(A).slice(0, 3)), b = new Float32Array(hex(B).slice(0, 3));
+    if (CLEAR_SKINS.includes(sk)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); }
+    G2.ball(M, sk, a, b); G2.ball(M, sk, a, b, 1, 0.045); gl.disable(gl.BLEND);
+    if (hat !== 'none') { const h = T.hats[hat] || (T.hats[hat] = hatModel(G2, hat)); G2.mat(1, 0.35, 0.7); const HM = M4.model([0, 0, 0], M4.rotY(-0.9), 1); G2.draw(h, HM); G2.outline(h, HM, 0.016); }
+    const url = T.c.toDataURL(); T.cache.set(key, url); return url;
+  }
+  const lockText = (kind, id) => {
+    const l = prog.lockOf(kind, id); if (!l) return null;
+    if (l.owner) return { t: '★ Owner', c: 'c' };
+    if (l.quest) { const q = QUESTS.find(q => q.id === l.quest); return { t: 'Quest', c: 'q', q }; }
+    return { t: l.coins + ' coins', c: 'c', coins: l.coins };
+  };
+  function renderWardrobe() {
+    $('coinCount').textContent = prog.coins;
+    const tabs = $('wTabs'); tabs.textContent = '';
+    for (const [k, n] of W_TABS) { const b = document.createElement('button'); b.textContent = n; if (k === wTab) b.className = 'on'; b.onclick = () => { wTab = k; renderWardrobe(); }; tabs.appendChild(b); }
+    const grid = $('wGrid'); grid.textContent = ''; const L = myLook();
+    const ids = wTab === 'color' || wTab === 'color2' ? COLORS : Object.keys(LOOK_KINDS[wTab]);
+    const owner = isOwner();
+    const sorted = ids.filter(id => { const l = prog.lockOf(wTab, id); return !(l && l.owner && !owner); });
+    sorted.sort((a, b) => (prog.owns(wTab, b, owner) - prog.owns(wTab, a, owner)));
+    for (const id of sorted) {
+      const b = document.createElement('button'), owns = prog.owns(wTab, id, owner), lk = owns ? null : lockText(wTab, id);
+      if (L[wTab] === id) b.classList.add('on'); if (!owns) b.classList.add('locked');
+      if (wTab === 'color' || wTab === 'color2') { b.classList.add('sw'); b.style.background = 'radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),transparent 45%),' + id; }
+      else if (wTab === 'trail') {
+        const T = TRAIL_FX[id]; b.innerHTML = '<span class="nm"></span><div class="trailDots"></div>'; b.querySelector('.nm').textContent = TRAILS[id].name;
+        const dots = b.querySelector('.trailDots'); (T ? (T.cols || ['#ff5f5f', '#ffd24a', '#7be36b', '#5aa9ff', '#b48cff']) : ['#555']).slice(0, 5).forEach(c => { const i = document.createElement('i'); i.style.background = c; i.style.color = c; dots.appendChild(i); });
+      } else {
+        const img = document.createElement('img'); img.alt = ''; img.src = wTab === 'skin' ? thumb(id, 'none', L.color, L.color2) : thumb(L.skin, id, L.color, L.color2); b.appendChild(img);
+      }
+      const name = wTab === 'skin' ? SKINS[id].name : wTab === 'hat' ? HATS[id].name : wTab === 'trail' ? TRAILS[id].name : 'Color';
+      b.title = name;
+      if (lk) { const t = document.createElement('span'); t.className = 'lk ' + lk.c; t.textContent = lk.t; b.appendChild(t); }
+      b.onclick = () => {
+        if (!owns) {
+          if (lk.coins) {
+            if (prog.coins >= lk.coins) { if (confirm('Buy ' + name + ' for ' + lk.coins + ' coins?')) { prog.buy(wTab, id); wear(wTab, id); } }
+            else wInfo('You need ' + lk.coins + ' coins for ' + name + '. You have ' + prog.coins + '. Find coins and finish quests to get more!');
+          } else if (lk.q) wInfo(name + ' unlocks when you finish the quest "' + lk.q.name + '": ' + lk.q.desc + '.');
+          return;
+        }
+        wear(wTab, id);
+      };
+      grid.appendChild(b);
+    }
+    wInfo(null);
+  }
+  // in the game the wardrobe opens over the world
+  function openWardrobe(on) {
+    const w = $('wardrobe');
+    if (on) { $('hud').appendChild(w); w.classList.remove('hidden'); $('wardClose').classList.remove('hidden'); renderWardrobe(); }
+    else if (G) w.classList.add('hidden');
+  }
+  function wardrobeToMenu() { const w = $('wardrobe'); document.querySelector('.menuWrap').appendChild(w); w.classList.remove('hidden'); $('wardClose').classList.add('hidden'); renderWardrobe(); }
+  $('wardClose').onclick = () => openWardrobe(false);
+  $('wardBtn').onclick = () => { if ($('wardrobe').classList.contains('hidden') || $('wardrobe').parentElement.id !== 'hud') openWardrobe(true); else openWardrobe(false); };
+  function wInfo(t) { const L = myLook(); $('wInfo').textContent = t || ('Wearing: ' + SKINS[L.skin].name + ' skin · ' + HATS[L.hat].name + (L.hat === 'none' ? ' hat' : '') + ' · ' + TRAILS[L.trail].name + (L.trail === 'none' ? ' trail' : ' trail')); }
+  function wear(kind, id) {
+    look[kind] = id; store.set(kind, id); renderWardrobe(); drawPreview();
+    if (G) { const L = myLook(); Object.assign(G.me, L); Object.assign(G.profile, L); if (G.role === 'guest') Net.toKeeper({ t: 'look', ...L }); else renderPeople(); }
+  }
 
   // spinning 3D preview of your ball on the menu
   let preview = null;
   function drawPreview() {
     try {
-      if (!preview) { const c = $('avatarPreview'); c.width = 320; c.height = 240; preview = { gfx: new GL(c), c }; }
-      preview.m = ballModel(preview.gfx, myColor, myHat);
+      if (!preview) { const c = $('avatarPreview'); c.width = 360; c.height = 270; preview = { gfx: new GL(c, true), c, hats: {} }; preview.gfx.gl.viewport(0, 0, 360, 270); }
       if (!preview.loop) { preview.loop = true; requestAnimationFrame(spin); }
     } catch (e) { $('avatarPreview').classList.add('hidden'); }
   }
   function spin(t) {
     if (!preview || $('menu').classList.contains('hidden')) { if (preview) preview.loop = false; return; }
-    const { gfx } = preview, gl = gfx.gl, u = gfx.u;
-    gl.clearColor(0.07, 0.13, 0.22, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gfx.scene({ vp: M4.mul(M4.persp(0.6, 4 / 3, 0.1, 50), M4.lookAt([0, 0.7, 2.1], [0, 0.12, 0], [0, 1, 0])), sun: [0.45, 0.75, 0.5], sunC: [0.62, 0.6, 0.56], sky: [0.52, 0.55, 0.62], ground: [0.25, 0.25, 0.3], fog: [0.07, 0.13, 0.22], fogD: 0, eye: [0, 0.7, 2.1] });
-    gfx.draw(preview.m, M4.model([0, 0, 0], M4.rotY(t / 1200)), 1);
+    const G2 = preview.gfx, gl = G2.gl, look = myLook(), eye = [0, 0.55, 2.3];
+    const hat = look.hat !== 'none' ? (preview.hats[look.hat] || (preview.hats[look.hat] = hatModel(G2, look.hat))) : null;
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const vp = M4.mul(M4.persp(0.55, 4 / 3, 0.1, 50), M4.lookAt(eye, [0, 0.14, 0], [0, 1, 0]));
+    G2.begin({ vp, eye, sun: [0.45, 0.75, 0.5], sunC: [0.75, 0.72, 0.64], sky: [0.5, 0.55, 0.68], ground: [0.28, 0.26, 0.3], fog: [0.07, 0.13, 0.22], fogD: 0, time: t / 1000, horizon: [0.6, 0.75, 0.95], lp: new Float32Array(32), lc: new Float32Array(24) });
+    const a = t / 1400, bob = Math.abs(Math.sin(t / 380)) * 0.08, hd = 0.6 + Math.sin(t / 2400) * 0.9;
+    const M = M4.model([0, bob, 0], M4.mul3(M4.rotY(hd), M4.rotZ(-a)), 0.45);
+    const A = new Float32Array(hex(look.color).slice(0, 3)), B = new Float32Array(hex(look.color2).slice(0, 3)), sk = (SKINS[look.skin] || SKINS.plain).n;
+    gl.disable(gl.BLEND);
+    if (!CLEAR_SKINS.includes(sk)) G2.ball(M, sk, A, B);
+    G2.ball(M, sk, A, B, 1, 0.045);
+    if (hat) { G2.mat(1, 0.35, 0.7); const HM = M4.model([0, bob, 0], M4.rotY(-hd + Math.PI / 2 - Math.PI / 2), 1); G2.draw(hat, HM); G2.outline(hat, HM, 0.016); }
+    if (CLEAR_SKINS.includes(sk)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); G2.ball(M, sk, A, B); gl.disable(gl.BLEND); }
     requestAnimationFrame(spin);
   }
-  drawPreview();
+  drawPreview(); renderWardrobe();
 
   // secret unlock link: ?unlock=...
   const unlock = new URLSearchParams(location.search).get('unlock');
   if (unlock) {
     history.replaceState(null, '', location.pathname);
     setTimeout(() => adminSign(unlock, 'test').then(ok => {
-      if (ok) { store.set('pass', unlock); grantOwner(); $('hats').textContent = ''; buildHats(); menuMsg('★ The crown and the name Outernautica are now in your wardrobe forever!'); }
+      if (ok) { store.set('pass', unlock); renderWardrobe(); drawPreview(); menuMsg('★ The crown and the name Outernautica are now in your wardrobe forever!'); }
       else menuMsg('That unlock link is not right.');
     }), 0);
   }
@@ -79,7 +160,9 @@
   const menuMsg = t => { $('menuMsg').textContent = t || ''; };
   const myName = () => {
     const n = cleanName(nameInput.value) || 'Explorer' + Math.floor(Math.random() * 900 + 100);
-    if (reservedName(n) && !owned.has('name:outernautica')) { menuMsg('That name is special and can\'t be used. Pick another one!'); return null; }
+    if (reservedName(n) && !isOwner()) { menuMsg('That name is special and can\'t be used. Pick another one!'); return null; }
+    const owner = (saved().names || []).find(e => Array.isArray(e) && e[0] === nameKey(n));
+    if (owner && idKey && owner[1] !== idKey.fp) { menuMsg('Someone else already took the name "' + n + '". Pick another one!'); return null; }
     nameInput.value = n; store.set('name', n); return n;
   };
 
@@ -89,6 +172,11 @@
   $('leaveBtn').innerHTML = icon('leave', 15) + ' Leave';
   $('adminBtn').innerHTML = icon('star', 15) + ' Admin';
   $('bagBtn').innerHTML = icon('bag', 22);
+  $('wardBtn').innerHTML = icon('shirt', 22);
+  const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
+  try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}
+  musicIcon();
+  $('musicBtn').onclick = () => { Sound.start(); Sound.setMusic(!Sound.on); musicIcon(); showToast(Sound.on ? 'Music on' : 'Music off', 1000); };
   $('jumpBtn').innerHTML = icon('up', 26);
   $('respawnBtn').innerHTML = icon('spawn', 18);
   $('playBtn').onclick = () => play();
@@ -145,11 +233,33 @@
     } catch (e) { return false; }
   }
 
+  // ---------- names: once someone takes a name, nobody else can use it ----------
+  // Every device makes its own secret key. A name belongs to the key that used it first.
+  const nameKey = n => (n || '').toLowerCase().replace(/\s+/g, '');
+  const randomName = () => 'Explorer' + Math.floor(Math.random() * 9000 + 1000);
+  const isRandomName = n => /^explorer\d+$/i.test(n || '');
+  let idKey = null;
+  async function fingerprint(pub) { const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pub.x + '.' + pub.y))); return [...h.slice(0, 8)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  async function myIdentity() {
+    if (idKey) return idKey;
+    try {
+      let j = store.json('idkey', null);
+      if (!j || !j.d) { const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']); const e = await crypto.subtle.exportKey('jwk', kp.privateKey); j = { d: e.d, x: e.x, y: e.y }; store.set('idkey', JSON.stringify(j)); }
+      const priv = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', d: j.d, x: j.x, y: j.y }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+      idKey = { priv, pub: { x: j.x, y: j.y }, fp: await fingerprint(j) };
+    } catch (e) { idKey = { priv: null, pub: null, fp: '' }; }
+    return idKey;
+  }
+  myIdentity();
+  async function idSign(nonce) { try { const k = await myIdentity(); if (!k.priv) return null; return b64u(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, k.priv, new TextEncoder().encode(nonce))); } catch (e) { return null; } }
+  async function idVerify(pub, nonce, sig) { try { const k = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: pub.x, y: pub.y }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']); return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, k, unb64u(sig), new TextEncoder().encode(nonce)); } catch (e) { return false; } }
+  function addNames(list) { let n = 0; for (const e of list || []) if (Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'string' && e[0].length <= 20 && e[1].length <= 20 && !G.names.has(e[0]) && G.names.size < 6000) { G.names.set(e[0], e[1]); n++; } if (n) G.dirty = true; }
+
   // ---------- game state ----------
   let G = null;
   const saveKey = 'world5';
   function saved() { return store.json(saveKey, {}); }
-  function saveWorld() { if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), parts: G.B.list(), wires: [...G.B.wires], levers: [...G.circ.levers], bans: [...G.bans], board: G.board })); }
+  function saveWorld() { if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), parts: G.B.list(), wires: [...G.B.wires], levers: [...G.circ.levers], bans: [...G.bans], board: G.board, names: [...G.names] })); }
   setInterval(saveWorld, 8000);
   addEventListener('pagehide', saveWorld);
   const defaultSpawn = () => [0, SPAWN_H + 1.5, 7];
@@ -164,14 +274,16 @@
 
   async function play() {
     const name = myName(); if (!name) return;
+    Sound.start();
     $('playBtn').disabled = true; menuMsg('Entering the world…');
     if (Device.useTouch) { try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) {} }
     const s = saved(), B = new Builds(); B.load(s.parts, s.wires);
     let game;
     try { game = new Game($('game'), $('ov'), SEED, B); }
     catch (e) { console.error(e); $('playBtn').disabled = false; menuMsg('Your device can\'t show 3D graphics (WebGL). Try another browser.'); return; }
-    game.radius = Device.type === 'phone' ? 4 : Device.type === 'tablet' ? 5 : 6;
+    game.radius = Device.type === 'phone' ? 4 : Device.type === 'tablet' ? 5 : 6; game.near = Device.type === 'phone' ? 1.3 : 2.3;
     game.allPartsChanged();
+    game.onTouch = () => { prog.add('touched'); questCheck(); };
     const circ = new Circuits(B); for (const l of s.levers || []) circ.levers.add(l);
     const spawn = safeSpawn(game, store.json('spawn5', null)) || defaultSpawn();
     const body = game.newBody([spawn[0] + (Math.random() - .5), spawn[1] + 1, spawn[2] + (Math.random() - .5)]);
@@ -182,7 +294,8 @@
       muted: new Set(), kicked: new Map(), bans: new Set(s.bans || []), nonces: new Map(), reconnecting: false,
       taken: new Map(), frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
       board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '', wireFrom: null,
-      profile: { name, color: myColor, hat: myHat, dev: Device.short, devType: Device.type },
+      profile: { name, ...myLook(), dev: Device.short, devType: Device.type },
+      names: new Map((s.names || []).filter(e => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'string')), pending: new Set(),
     };
     G.me = { id: 'me', ...G.profile, p: body.p, R: body.R, r: body.r };
     await connectWorld(true);
@@ -193,10 +306,13 @@
     try { role = await Net.connect(); } catch (e) { role = 'offline'; }
     if (!G) { Net.leave(); return; }
     G.role = role; G.lastHeard = performance.now();
-    if (role === 'guest') { Net.toKeeper({ t: 'hello', ...G.profile, p: G.body.p.map(v => +v.toFixed(2)) }); return; }
+    if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)) }); return; }
     G.myId = 'keeper'; G.me.id = 'keeper';
     G.players.clear(); G.players.set('keeper', G.me);
     G.me.admin = !!(await adminSign(store.get('pass', ''), 'self-' + Math.random()));
+    { const k = await myIdentity(), key = nameKey(G.me.name), owner = G.names.get(key);
+      if (!G.me.admin && owner && owner !== k.fp) { const was = G.me.name; G.me.name = G.profile.name = randomName(); setTimeout(() => sys('The name "' + was + '" already belongs to another player, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1500); }
+      else if (!owner && !isRandomName(G.me.name) && k.fp && !reservedName(G.me.name)) { G.names.set(key, k.fp); G.dirty = true; } }
     if (first) enterGame();
     G.reconnecting = false; renderPeople();
     if (role === 'offline') { $('roomLabel').innerHTML = '<i class="live off"></i>Offline'; sys('Could not reach the world, so you are exploring offline. Your builds are saved on this device.'); }
@@ -211,6 +327,7 @@
 
   function enterGame() {
     $('menu').classList.add('hidden'); $('playBtn').disabled = false; menuMsg('');
+    $('hud').appendChild($('wardrobe')); $('wardrobe').classList.add('hidden');
     $('hud').classList.remove('hidden'); $('chat').classList.remove('hidden'); $('toast').classList.add('hidden');
     if (Device.useTouch) { $('touch').classList.remove('hidden'); $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
@@ -227,7 +344,7 @@
     document.body.classList.remove('building', 'showPeople');
     $('chatLog').textContent = '';
     const o = $('ov').getContext('2d'); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, 9999, 9999);
-    $('menu').classList.remove('hidden'); $('playBtn').disabled = false; menuMsg(msg || '');
+    $('menu').classList.remove('hidden'); $('playBtn').disabled = false; menuMsg(msg || ''); wardrobeToMenu();
     if (preview && !preview.loop) { preview.loop = true; requestAnimationFrame(spin); }
     if (updateWaiting && !msg) applyUpdate(updateWaiting);
   }
@@ -268,7 +385,8 @@
     if (list.length >= per) { G.rate.set(k, list); return false; }
     list.push(now); G.rate.set(k, list); return true;
   }
-  const publicP = p => ({ id: p.id, name: p.name, color: p.color, hat: p.hat, dev: p.dev, devType: p.devType, admin: !!p.admin, p: p.p.map(v => +v.toFixed(2)) });
+  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, dev: p.dev, devType: p.devType, admin: !!p.admin, p: p.p.map(v => +v.toFixed(2)) });
+  const cleanLook = (m, admin) => ({ color: COLORS.includes(m.color) ? m.color : COLORS[0], color2: COLORS.includes(m.color2) ? m.color2 : '#e8eef7', skin: SKINS[m.skin] ? m.skin : 'plain', hat: HATS[m.hat] && !(HATS[m.hat].lock && HATS[m.hat].lock.owner && !admin) ? m.hat : 'none', trail: TRAILS[m.trail] ? m.trail : 'none' });
   const roster = () => [...G.players.values()].map(publicP);
   const dayPhase = () => ((performance.now() - G.dayStart) / DAY_MS) % 1;
   const findPlayer = name => { name = (name || '').toLowerCase().replace(/^@/, ''); if (!name) return null; return [...G.players.values()].find(p => p.name.toLowerCase() === name) || [...G.players.values()].find(p => p.name.toLowerCase().startsWith(name)); };
@@ -281,33 +399,35 @@
   function keeperGot(id, m) {
     const p = G.players.get(id);
     if (m.t === 'hello') {
-      if (p) return;
-      const wantName = cleanName(m.name) || 'Explorer';
-      const name = reservedName(wantName) ? 'Explorer' + Math.floor(Math.random() * 900 + 100) : wantName;
-      const ban = G.kicked.get(wantName.toLowerCase());
-      if (G.bans.has(wantName.toLowerCase())) { Net.toOne(id, { t: 'banned' }); Net.drop(id); return; }
-      if (ban && ban > Date.now()) { Net.toOne(id, { t: 'kicked' }); Net.drop(id); return; }
-      if (G.players.size >= MAX_PLAYERS) { Net.toOne(id, { t: 'full' }); Net.drop(id); return; }
-      const pos = vec(m.p);
-      const np = addPlayer({ id, name, wantName, color: COLORS.includes(m.color) ? m.color : COLORS[0],
-        hat: HATS[m.hat] && !RESERVED_HATS.includes(m.hat) ? m.hat : 'none', wantHat: HATS[m.hat] ? m.hat : 'none',
-        dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
-        p: okVec(pos) ? pos : defaultSpawn() });
-      const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce);
-      Net.toOne(id, { t: 'welcome', id, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce });
-      renderPeople();
-      if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
+      if (p || G.pending.has(id)) return;
+      G.pending.add(id);
+      const pub = m.pub && typeof m.pub.x === 'string' && typeof m.pub.y === 'string' && m.pub.x.length < 60 && m.pub.y.length < 60 ? { x: m.pub.x, y: m.pub.y } : null;
+      (pub ? fingerprint(pub).catch(() => '') : Promise.resolve('')).then(fp => { if (!G) return; G.pending.delete(id); if (!G.players.get(id)) welcome(id, m, pub, fp); });
       return;
     }
     if (!p) return;
-    if (m.t === 'pos') {
+    if (m.t === 'idsig') {
+      const nonce = G.nonces.get('id' + id); G.nonces.delete('id' + id);
+      if (!nonce || typeof m.sig !== 'string' || !p.pub) return;
+      idVerify(p.pub, 'id:' + nonce, m.sig).then(ok => {
+        if (!G || G.players.get(id) !== p) return;
+        if (ok) { p.idOk = true; const key = nameKey(p.name); if (!G.names.has(key) && !isRandomName(p.name) && !reservedName(p.name)) { G.names.set(key, p.fp); G.dirty = true; Net.toAll({ t: 'names', add: [[key, p.fp]] }); } }
+        else renamePlayer(p, 'The name check failed');
+      });
+      return;
+    }
+    if (!p) return;
+    if (m.t === 'look') {
+      if (!allow(id, 'l', 6, 5000)) return;
+      Object.assign(p, cleanLook(m, p.admin)); renderPeople();
+    } else if (m.t === 'pos') {
       const v = vec(m.p); if (!okVec(v)) return;
       p.tp = v; p.fly = !!m.fl && !!p.admin; p.big = !!m.big; p.glow = !!m.gl;
     } else if (m.t === 'admin') {
       const nonce = G.nonces.get(id); G.nonces.delete(id);
       if (nonce && typeof m.sig === 'string') adminVerify(nonce, m.sig).then(ok => {
         if (ok && G && G.players.get(id) === p) {
-          p.admin = true; p.name = p.wantName; p.hat = p.wantHat; renderPeople();
+          p.admin = true; p.name = p.wantName; p.hat = HATS[p.wantHat] ? p.wantHat : p.hat; renderPeople();
           const t = '★ ' + p.name + ' (the admin) joined'; sys(t); Net.toAll({ t: 'sys', text: t });
         }
       });
@@ -341,6 +461,32 @@
     }
   }
 
+  function welcome(id, m, pub, fp) {
+    const wantName = cleanName(m.name) || randomName();
+    const ban = G.kicked.get(wantName.toLowerCase());
+    if (G.bans.has(wantName.toLowerCase())) { Net.toOne(id, { t: 'banned' }); Net.drop(id); return; }
+    if (ban && ban > Date.now()) { Net.toOne(id, { t: 'kicked' }); Net.drop(id); return; }
+    if (G.players.size >= MAX_PLAYERS) { Net.toOne(id, { t: 'full' }); Net.drop(id); return; }
+    // the name: the owner's special name, a name someone else owns, or a name someone here is using right now
+    let name = reservedName(wantName) ? randomName() : wantName, renamed = null;
+    const key = nameKey(name), owner = G.names.get(key), online = [...G.players.values()].some(q => nameKey(q.name) === key);
+    if ((owner && owner !== fp) || online) { renamed = name; name = randomName(); }
+    const pos = vec(m.p);
+    const np = addPlayer({ id, name, wantName, ...cleanLook(m, false), wantHat: HATS[m.hat] ? m.hat : 'none', pub, fp,
+      dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
+      p: okVec(pos) ? pos : defaultSpawn() });
+    const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
+    Net.toOne(id, { t: 'welcome', id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce, names: [...G.names] });
+    renderPeople();
+    if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
+    // a name that belongs to someone has to be proven with that device's key
+    if (owner && !renamed) setTimeout(() => { if (G && G.players.get(id) === np && !np.idOk && !np.admin) renamePlayer(np, 'Could not check the name'); }, 15000);
+  }
+  function renamePlayer(p, why) {
+    const was = p.name; p.name = randomName(); renderPeople();
+    Net.toOne(p.id, { t: 'rename', name: p.name, was });
+  }
+
   function tryTake(p, itemId, claimType) {
     if (typeof itemId !== 'string' || itemId.length > 80 || itemId === 'trophy' || G.taken.has(itemId)) return;
     const it = G.game.findItem(itemId);
@@ -365,6 +511,10 @@
     if (m.t === 'welcome') {
       const first = !G.myId;
       G.myId = m.id; G.me.id = m.id;
+      if (typeof m.name === 'string') { G.me.name = G.profile.name = cleanName(m.name); }
+      if (m.renamed) setTimeout(() => sys('The name "' + cleanText(m.renamed) + '" is already taken, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1200);
+      addNames(m.names);
+      idSign('id:' + m.nonce).then(sig => { if (sig && G) Net.toKeeper({ t: 'idsig', sig }); });
       G.B.load(m.parts || [], m.wires || []); G.dirty = true; G.game.allPartsChanged(); G.game.setPower(new Set(m.power || []));
       G.bans = new Set((m.bans || []).filter(b => typeof b === 'string'));
       G.taken = new Map((m.taken || []).map(i => [i, 0]));
@@ -386,10 +536,12 @@
       if (m.t === 'banned') leave('You are banned from this world.');
       return;
     }
+    if (m.t === 'names') { addNames(m.add); return; }
+    if (m.t === 'rename') { if (typeof m.name === 'string') { G.me.name = G.profile.name = cleanName(m.name); sys('The name "' + cleanText(m.was) + '" belongs to another player, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'); renderPeople(); } return; }
     if (m.t === 'roster') {
       const ids = new Set(m.roster.map(r => r.id));
       for (const id of [...G.players.keys()]) if (!ids.has(id)) G.players.delete(id);
-      for (const r of m.roster) { const p = G.players.get(r.id); if (!p) addPlayer(r); else if (p !== G.me) Object.assign(p, { admin: r.admin, name: r.name, hat: r.hat }); else p.admin = r.admin; }
+      for (const r of m.roster) { const p = G.players.get(r.id); if (!p) addPlayer(r); else if (p !== G.me) Object.assign(p, { admin: r.admin, name: r.name, hat: r.hat, color: r.color, color2: r.color2, skin: r.skin, trail: r.trail }); else p.admin = r.admin; }
       renderPeople();
     } else if (m.t === 'state') {
       G.dayStart = performance.now() - m.phase * DAY_MS;
@@ -419,6 +571,9 @@
 
   // ---------- items & inventory ----------
   function gotItem(type) {
+    const b = G.body.p; G.game.fx.burst([b[0], b[1] + 0.3, b[2]], 18, { cols: type === 'coin' ? ['#ffd24a', '#fff2a8'] : ['#ffffff', ITEMS[type].color, '#fff2a8'], shape: 26, size: 0.18, speed: 3.5, life: 0.8, lift: 1.5 });
+    if (type === 'coin') { prog.give(5); Sound.play('coin'); showToast('+5 coins!', 1000); renderBag(); questCheck(); return; }
+    Sound.play('pickup'); prog.add('items'); if (type === 'star') prog.max('star', 1); if (type === 'trophy') prog.max('trophy', 1); questCheck();
     G.inv[type] = (G.inv[type] || 0) + 1; store.set('inv', JSON.stringify(G.inv));
     showToast('Found: ' + ITEMS[type].name + '!', 1500); renderBag();
     $('bagBtn').classList.add('pop'); setTimeout(() => $('bagBtn').classList.remove('pop'), 400);
@@ -442,6 +597,17 @@
       if (it.time) b.onclick = () => useItem(t);
       box.appendChild(b);
     }
+    $('bagCoins').textContent = prog.coins;
+    const qb = $('quests'); qb.textContent = '';
+    const qs = [...QUESTS].sort((a, b) => (!!prog.done[a.id] - !!prog.done[b.id]) || (prog.value(b) / b.goal - prog.value(a) / a.goal));
+    for (const q of qs) {
+      const done = !!prog.done[q.id], v = Math.min(q.goal, prog.value(q)), row = document.createElement('div'); row.className = 'qRow' + (done ? ' done' : '');
+      const un = prog.unlocks(q.id);
+      row.innerHTML = '<b></b><span class="rw"></span><small></small><div class="bar"><i></i></div>';
+      row.querySelector('b').textContent = (done ? '✓ ' : '') + q.name; row.querySelector('.rw').textContent = '+' + q.coins;
+      row.querySelector('small').textContent = q.desc + (un.length ? ' · unlocks ' + un.join(', ') : '') + (done ? '' : ' (' + (q.stat === 'dist' || q.stat === 'swim' ? Math.floor(v) + 'm' : Math.floor(v)) + '/' + q.goal + ')');
+      row.querySelector('.bar i').style.width = (v / q.goal * 100) + '%'; qb.appendChild(row);
+    }
     const bd = $('board'); bd.textContent = '';
     if (!G.board.length) { const e = document.createElement('p'); e.className = 'aEmpty'; e.textContent = 'No race records yet. Roll onto the gold ring at the plaza to start!'; bd.appendChild(e); }
     G.board.forEach((r, i) => { const row = document.createElement('div'); row.className = 'rec'; row.textContent = (i + 1) + '. ' + r.name + ' · ' + r.time.toFixed(2) + 's'; bd.appendChild(row); });
@@ -449,6 +615,22 @@
   $('bagBtn').onclick = () => { $('bag').classList.toggle('hidden'); renderBag(); };
   $('bagClose').onclick = () => $('bag').classList.add('hidden');
   $('respawnBtn').onclick = () => respawn();
+  // quests: finishing one gives coins and unlocks things in the wardrobe
+  function questCheck() {
+    for (const q of prog.check()) {
+      const un = prog.unlocks(q.id);
+      setTimeout(() => { banner('Quest complete!', q.name, '+' + q.coins + ' coins' + (un.length ? ' · unlocked: ' + un.join(', ') : '')); Sound.play('quest'); }, 300);
+      sys('Quest complete: ' + q.name + '! +' + q.coins + ' coins' + (un.length ? '. Unlocked: ' + un.join(', ') : ''));
+    }
+    renderBag(); if (!$('wardrobe').classList.contains('hidden') && $('wardrobe').parentElement.id === 'hud') renderWardrobe();
+  }
+  let bannerT = null;
+  function banner(t1, t2, t3, ms = 4200) {
+    const b = $('banner'); b.innerHTML = '<div class="t1"></div><div class="t2"></div><div class="t3"></div>';
+    b.querySelector('.t1').textContent = t1; b.querySelector('.t2').textContent = t2; b.querySelector('.t3').textContent = t3 || '';
+    b.classList.remove('hidden'); b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+    clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.add('hidden'), ms);
+  }
   function respawn() {
     if (!G) return;
     const s = safeSpawn(G.game, G.spawn) || defaultSpawn();
@@ -577,7 +759,7 @@
     const box = $('emotes'); box.textContent = '';
     for (const e of EMOTES) {
       const b = document.createElement('button'); b.textContent = e;
-      b.onclick = () => { if (!G || !G.myId) return; if (Device.useTouch) box.classList.add('hidden'); if (G.role === 'guest') Net.toKeeper({ t: 'emote', e }); else { emote(G.me, e); Net.toAll({ t: 'emote', id: G.myId, e }); } };
+      b.onclick = () => { if (!G || !G.myId) return; prog.add('emotes'); questCheck(); if (Device.useTouch) box.classList.add('hidden'); if (G.role === 'guest') Net.toKeeper({ t: 'emote', e }); else { emote(G.me, e); Net.toAll({ t: 'emote', id: G.myId, e }); } };
       box.appendChild(b);
     }
   }
@@ -675,12 +857,14 @@
       if (k === 'cut') { const list = G.B.wiresOf(key); for (const o of list) applyWire(key, o, false); if (G.role === 'guest') Net.toKeeper({ t: 'wire', a: key, add: false }); else for (const o of list) Net.toAll({ t: 'wire', a: key, b: o, add: false }); showToast('Wires cut', 900); return; }
       if (!G.wireFrom) { G.wireFrom = t.cell; showToast('Now tap the part to connect it to', 1500); return; }
       const a = pkey(...G.wireFrom); G.wireFrom = null; if (a === key) return;
+      prog.add('wired'); questCheck(); Sound.play('click');
       if (G.role === 'guest') Net.toKeeper({ t: 'wire', a, b: key, add: true }); else { applyWire(a, key, true); Net.toAll({ t: 'wire', a, b: key, add: true }); }
       showToast('Connected!', 900); return;
     }
     const t = target(sx, sy, k === 0 ? 'pick' : 'place'); if (!t) return;
     if (!t.ok) { if (t.why) showToast(t.why, 1500); return; }
     const r = facing();
+    if (k !== 0) { prog.add('built'); questCheck(); Sound.play('place'); } else Sound.play('break');
     if (G.role === 'guest') Net.toKeeper({ t: 'block', x: t.cell[0], y: t.cell[1], z: t.cell[2], k, r });
     else { applyBlock(...t.cell, k, r); Net.toAll({ t: 'block', x: t.cell[0], y: t.cell[1], z: t.cell[2], k, r }); }
     if (G.role === 'guest') applyBlock(...t.cell, k, r);
@@ -699,6 +883,8 @@
     if (k === 'tab') { e.preventDefault(); nextCat(); return; }
     if (k === 'i' || k === 'b') { $('bagBtn').click(); return; }
     if (k === 'r') { respawn(); return; }
+    if (k === 'o') { $('wardBtn').click(); return; }
+    if (k === 'm') { $('musicBtn').click(); return; }
     if (k === ' ') e.preventDefault();
     keys.add(k);
   });
@@ -748,6 +934,21 @@
   function onResize() { if (G && G.game) G.game.resize(); document.body.classList.toggle('small', innerWidth < 600); }
   addEventListener('resize', onResize);
 
+  // ---------- what you've done (for quests) and which music to play ----------
+  function track(now, dt) {
+    const b = G.body, lp = G.lastP || b.p, d = Math.hypot(b.p[0] - lp[0], b.p[2] - lp[2]); G.lastP = [...b.p];
+    if (d < 5 && !G.me.fly) { prog.add('dist', d); if (b.p[1] < SEA - 0.1 && !G.game.cave) { prog.add('swim', d); if (!G.wasWet) Sound.play('splash'); G.wasWet = true; } else G.wasWet = false; }
+    prog.max('high', Math.floor(b.p[1]));
+    if (now - (G.lastTrack || 0) < 1000) return; G.lastTrack = now;
+    const game = G.game, inSt = insideStation(b.p), cave = game.cave, info = game.T.info(b.p[0], b.p[2]);
+    if (!cave && !inSt && info.b >= 1 && info.b <= 8) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
+    if (inSt || nearStation(b.p[0], b.p[2], 70)) prog.max('station', 1);
+    const night = G.wasNight; if (night) G.sawNight = true; else if (G.sawNight) { G.sawNight = false; prog.add('nights'); }
+    questCheck();
+    Sound.setRain(game.rain || 0);
+    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station' }[info.b] || 'meadow'));
+  }
+
   // ---------- activities ----------
   function activities(now) {
     const b = G.body, game = G.game;
@@ -772,7 +973,7 @@
         G.race.next++;
         if (G.race.next >= game.rings.length) {
           const time = (now - G.race.start) / 1000; G.race = null; G.raceCool = now + 4000;
-          showToast('Finished in ' + time.toFixed(2) + 's!', 3500);
+          showToast('Finished in ' + time.toFixed(2) + 's!', 3500); prog.add('races'); questCheck(); Sound.play('quest');
           if (G.role === 'guest') Net.toKeeper({ t: 'race', time }); else recordRace(G.me.name, time);
         } else showToast('Ring ' + G.race.next + '/12', 700);
       }
@@ -791,8 +992,13 @@
     if (G.role !== 'guest') for (const [id, at] of G.taken) if (at && Date.now() > at) { G.taken.delete(id); Net.toAll({ t: 'back', id }); }
   }
   function fx(kind, arg) {
-    if (kind === 'jumped') return;
-    if (kind === 'boost') { showToast('Whoosh!', 600); return; }
+    const bp = G.body.p, P = G.game.fx;
+    if (kind === 'jumped') { prog.add('jumps'); Sound.play('jump'); P.burst([bp[0], bp[1] - 0.35, bp[2]], 8, { col: [0.92, 0.88, 0.8], shape: 0, size: 0.22, speed: 1.6, up: 0.3, life: 0.5, drag: 3 }); return; }
+    if (kind === 'boost') { showToast('Whoosh!', 600); Sound.play('boost'); P.burst(bp, 14, { cols: ['#8af0ff', '#ffffff'], shape: 29, size: 0.3, speed: 4, life: 0.4 }); return; }
+    if (kind === 'jump') { Sound.play('boost'); P.burst(bp, 12, { cols: ['#7be36b', '#ffffff'], shape: 26, size: 0.2, speed: 3, life: 0.6 }); }
+    if (kind === 'speed') Sound.play('boost');
+    if (kind === 'tp') { Sound.play('tp'); P.burst(bp, 24, { cols: ['#b48cff', '#8af0ff', '#ffffff'], shape: 26, size: 0.2, speed: 4, life: 0.8 }); }
+    if (kind === 'cave-in') { const c = G.game.cave; if (c) { prog.mark('cavesSeen', String(c.key)); prog.max('caves', prog.count('cavesSeen')); questCheck(); } }
     if (kind === 'tp') showToast('Whoosh! Teleported', 900);
     else if (kind === 'tp-alone') showToast('Use the wire tool (Circuits tab) to connect this teleporter to another one', 2500);
     else if (kind === 'cave-in') showToast('You found a cave! Look for gems and crystals. The gold ring takes you back up', 3500);
@@ -804,6 +1010,7 @@
   }
 
   if (new URLSearchParams(location.search).has('debug')) window.__funz = () => G;
+  const NO_RENDER = new URLSearchParams(location.search).has('norender'); // for tests
 
   // ---------- loop ----------
   let last = performance.now();
@@ -834,6 +1041,7 @@
       G.game.rollBy(p, p.p[0] - ox, p.p[2] - oz, p.r);
     }
     activities(now);
+    track(now, dt);
     // if someone keeps pushing but isn't getting anywhere, remind them about the flag button
     if (now - (G.stuckAt || 0) > 2500) {
       const sp = G.stuckP || b.p, moved = Math.hypot(b.p[0] - sp[0], b.p[1] - sp[1], b.p[2] - sp[2]);
@@ -858,7 +1066,7 @@
     }
 
     const ph = dayPhase(), sun = Math.cos(ph * Math.PI * 2);
-    const dark = Math.max(0, Math.min(0.72, (-sun + 0.15) * 0.85));
+    const dark = Math.max(0, Math.min(0.72, (-sun + 0.15) * 0.85)); G.dark = dark;
     const hrs = (ph * 24 + 12) % 24;
     const night = dark > 0.3; if (night !== G.wasNight) { G.wasNight = night; $('clockIc').innerHTML = icon(night ? 'moon' : 'sun', 15); }
     $('clockT').textContent = String(Math.floor(hrs)).padStart(2, '0') + ':' + String(Math.floor((hrs % 1) * 60)).padStart(2, '0');
@@ -872,7 +1080,7 @@
     let cursor = null;
     if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
     const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
-    G.game.render([...G.players.values()], m, { now, dark, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
+    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();

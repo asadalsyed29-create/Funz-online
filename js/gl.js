@@ -53,8 +53,51 @@ const PREC = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\n
 const WORLD_VS = `attribute vec3 aP;attribute vec3 aN;attribute vec4 aC;
 uniform mat4 uVP;uniform mat4 uM;uniform vec3 uEye;uniform float uOutline;
 varying vec3 vN;varying vec4 vC;varying vec3 vR;
-void main(){vec4 w=uM*vec4(aP+aN*uOutline,1.0);vR=w.xyz-uEye;vN=mat3(uM)*aN;vC=aC;gl_Position=uVP*w;}`;
-const WORLD_FS = PREC + `varying vec3 vN;varying vec4 vC;varying vec3 vR;
+varying vec3 vW;
+void main(){vec4 w=uM*vec4(aP+aN*uOutline,1.0);vW=w.xyz;vR=w.xyz-uEye;vN=mat3(uM)*aN;vC=aC;gl_Position=uVP*w;}`;
+const WORLD_FS = PREC + `varying vec3 vN;varying vec4 vC;varying vec3 vR;varying vec3 vW;uniform float uTex;
+float h2(vec2 p){vec3 q=fract(vec3(p.xyx)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h2(i),h2(i+vec2(1.0,0.0)),f.x),mix(h2(i+vec2(0.0,1.0)),h2(i+vec2(1.0,1.0)),f.x),f.y);}
+// painted-on detail so surfaces look textured: 1 = ground, 2 = stone and wood, 3 = built blocks
+vec3 detail(vec3 c,vec3 n,float dist){
+  vec3 W=vW;float fade=1.0-smoothstep(50.0,220.0,dist);
+  if(uTex<1.5){
+    // which kind of ground this is, worked out from its colour (so biomes blend smoothly)
+    vec2 q=W.xz;float slope=1.0-n.y;
+    float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b)),sat=(mx-mn)/(mx+0.001);
+    float wSnow=smoothstep(0.8,0.9,mn);
+    float wSand=smoothstep(0.1,0.22,c.r-c.b)*smoothstep(0.6,0.75,c.r)*(1.0-wSnow);
+    float wGrass=smoothstep(0.04,0.14,c.g-max(c.r,c.b))*(1.0-wSand);
+    float wRock=clamp(1.0-wSnow-wSand-wGrass,0.0,1.0);
+    float big=n2(q*0.035)-0.5,clump=n2(q*0.21),fine=n2(q*2.6)-0.5;
+    float k=1.0+big*0.16;
+    // grass: clumps, little blades and lighter patches
+    float bl=n2(vec2(q.x*7.0+q.y*2.0,q.y*1.3-q.x*0.4))*n2(vec2(q.x*1.5,q.y*7.5+q.x*1.7));
+    vec3 g=c*(0.88+clump*0.22+(bl-0.25)*0.2*fade+fine*0.07*fade);
+    g=mix(g,g*vec3(1.12,1.1,0.72),smoothstep(0.55,0.8,n2(q*0.09+7.0))*0.45);
+    g=mix(g,g*vec3(0.78,0.9,0.8),smoothstep(0.6,0.85,n2(q*0.4+3.0))*0.35);
+    // sand: wind ripples
+    float rp=sin(q.x*1.9+q.y*0.7+n2(q*0.25)*7.0);
+    vec3 sd=c*(1.0+rp*0.045*fade+fine*0.08*fade+(clump-0.5)*0.08);
+    // snow: soft bumps and sparkles
+    float sp=step(0.992,h2(floor(q*5.0)))*fade;
+    vec3 sn=c*(0.95+clump*0.08)+vec3(sp*0.55);sn=mix(sn,sn*vec3(0.86,0.92,1.04),smoothstep(0.4,0.8,n2(q*0.15)));
+    // rock: layers and cracks
+    float st=n2(vec2(W.y*1.8+n2(q*0.2)*2.5,(q.x-q.y)*0.06));float cr=smoothstep(0.03,0.0,abs(n2(q*0.8+W.y*0.5)-0.5));
+    vec3 rk=c*(0.8+st*0.38+fine*0.12*fade)*(1.0-cr*0.25*fade);
+    c=(g*wGrass+sd*wSand+sn*wSnow+rk*wRock)*k;
+    c*=mix(0.8,1.0,smoothstep(-1.5,1.0,W.y));
+  }else if(uTex<2.5){
+    vec3 a=abs(n);vec2 q=a.y>0.6?W.xz:(a.x>a.z?W.zy:W.xy);
+    float g=n2(q*vec2(1.3,4.0))-0.5,b=n2(q*0.35)-0.5,f=n2(q*7.0)-0.5;
+    c*=1.0+g*0.16+b*0.16+f*0.12*fade;
+  }else{
+    vec3 a=abs(n);vec2 q=a.y>0.6?W.xz:(a.x>a.z?W.zy:W.xy);
+    vec2 e=abs(fract(q+0.0005)-0.5)*2.0;float edge=smoothstep(0.86,0.98,max(e.x,e.y));
+    float g=n2(q*6.0)-0.5,b=n2(q*1.7)-0.5;
+    c*=(1.0+g*0.12*fade+b*0.08)*(1.0-edge*0.22*fade)+edge*0.05*(1.0-fade);
+  }
+  return c;}
 uniform vec3 uSun;uniform vec3 uSunC;uniform vec3 uSky;uniform vec3 uGround;uniform vec3 uFog;uniform float uFogD;
 uniform float uAlpha;uniform vec3 uTint;uniform float uGlow;uniform float uToon;uniform float uRim;uniform float uSpec;uniform float uOutline;uniform vec3 uOutCol;
 uniform vec4 uL[8];uniform vec3 uLC[8];
@@ -66,6 +109,7 @@ void main(){
   vec3 light=mix(uGround,uSky,n.y*0.5+0.5)+uSunC*d;
   for(int i=0;i<8;i++){vec3 dv=uL[i].xyz-vR;float r=uL[i].w;if(r>0.0){float k=max(0.0,1.0-length(dv)/r);light+=uLC[i]*k*k*(0.35+0.65*max(dot(n,normalize(dv)),0.0));}}
   vec3 c=vC.rgb*uTint;vec3 vd=normalize(-vR);
+  if(uTex>0.5)c=detail(c,n,length(vR));
   float sp=pow(max(dot(reflect(-uSun,n),vd),0.0),24.0)*uSpec*length(uSunC);
   float rim=pow(1.0-max(dot(n,vd),0.0),3.0)*uRim;
   float glow=(vC.a<0.99&&vC.a>0.5)?1.0:uGlow;
@@ -148,7 +192,7 @@ uniform mat4 uVP;uniform vec3 uRight;uniform vec3 uUp;uniform vec3 uEye;uniform 
 varying vec2 vUV;varying vec4 vC;varying float vS;varying float vF;
 void main(){vec3 w=aP+(uRight*aO.x+uUp*aO.y)*aO.z;vUV=aO.xy;vC=aC;vS=aS;vF=clamp(1.0-exp(-pow(length(w-uEye)*uFogD,2.0)),0.0,1.0);gl_Position=uVP*vec4(w,1.0);}`;
 const PART_FS = PREC + `varying vec2 vUV;varying vec4 vC;varying float vS;varying float vF;uniform vec3 uFog;
-void main(){vec2 p=vUV;float r=length(p),a=0.0,s=vS,add=0.0;
+void main(){vec2 p=vUV;float r=length(p),a=0.0,s=vS,add=0.0;vec3 col=vC.rgb;
   if(s>19.5){add=1.0;s-=20.0;}
   if(s<0.5)a=smoothstep(1.0,0.0,r);
   else if(s<1.5)a=step(r,0.9);
@@ -160,9 +204,10 @@ void main(){vec2 p=vUV;float r=length(p),a=0.0,s=vS,add=0.0;
   else if(s<7.5){float an=atan(p.y,p.x);a=step(r,0.3+0.65*pow(abs(cos(an*3.0)),10.0));}
   else if(s<8.5)a=step(p.x*p.x*2.6+p.y*p.y,0.8);
   else if(s<9.5)a=step(abs(p.x),0.13)*smoothstep(1.0,0.4,abs(p.y));
-  else a=smoothstep(1.0,0.5,r)*0.5+step(abs(r-0.8),0.1)*0.5;
-  a*=vC.a*(1.0-vF);if(a<0.01)discard;
-  gl_FragColor=vec4(vC.rgb*a,a*(1.0-add));}`;
+  else if(s<10.5)a=smoothstep(1.0,0.5,r)*0.5+step(abs(r-0.8),0.1)*0.5;
+  else{a=pow(max(0.0,1.0-r*r),1.7);col*=0.8+0.3*(p.y*0.5+0.5);col=mix(col,uFog,vF*0.85);a*=1.0/(1.0-vF*0.999);}
+  a*=vC.a*(1.0-vF);if(a<0.004)discard;
+  gl_FragColor=vec4(col*a,a*(1.0-add));}`;
 
 // The sky: a soft gradient, the sun, the moon and stars at night.
 const SKY_VS = `attribute vec3 aP;varying vec2 vP;void main(){vP=aP.xy;gl_Position=vec4(aP.xy,0.9999,1.0);}`;
@@ -180,9 +225,9 @@ void main(){vec3 d=normalize(uFwd+uRight*vP.x*uTan.x+uUp*vP.y*uTan.y);
   gl_FragColor=vec4(c,1.0);}`;
 
 // Water: gentle moving waves with flat low-poly facets.
-const WATER_VS = `attribute vec3 aP;attribute vec4 aC;uniform mat4 uVP;uniform vec3 uEye;uniform float uTime;
+const WATER_VS = `attribute vec3 aP;attribute vec3 aN;attribute vec4 aC;uniform mat4 uVP;uniform vec3 uEye;uniform float uTime;uniform vec3 uOff;
 varying vec3 vR;varying vec4 vC;varying vec3 vW;
-void main(){vec3 w=aP;w.y+=sin(w.x*0.31+uTime*1.3)*0.11+sin(w.z*0.27+uTime*1.05)*0.1+sin((w.x+w.z)*0.13+uTime*0.7)*0.12;vW=w;vR=w-uEye;vC=aC;gl_Position=uVP*vec4(w,1.0);}`;
+void main(){vec3 w=aP+uOff;w.y+=sin(w.x*0.31+uTime*1.3)*0.11+sin(w.z*0.27+uTime*1.05)*0.1+sin((w.x+w.z)*0.13+uTime*0.7)*0.12;vW=w;vR=w-uEye;vC=aC;gl_Position=uVP*vec4(w,1.0);}`;
 const WATER_FS = (deriv) => (deriv ? '#extension GL_OES_standard_derivatives : enable\n' : '') + PREC + `varying vec3 vR;varying vec4 vC;varying vec3 vW;
 uniform vec3 uSun;uniform vec3 uSunC;uniform vec3 uSky;uniform vec3 uFog;uniform float uFogD;uniform vec3 uHor;
 void main(){
@@ -196,17 +241,17 @@ void main(){
   gl_FragColor=vec4(mix(c,uFog,f),min(1.0,vC.a+fr*0.3));}`;
 
 class GL {
-  constructor(canvas) {
-    const gl = canvas.getContext('webgl', { antialias: true, alpha: false, powerPreference: 'high-performance' }) || canvas.getContext('experimental-webgl');
+  constructor(canvas, see) {
+    const gl = canvas.getContext('webgl', { antialias: true, alpha: !!see, premultipliedAlpha: false, preserveDrawingBuffer: !!see, powerPreference: 'high-performance' }) || canvas.getContext('experimental-webgl');
     if (!gl || !gl.getExtension('OES_element_index_uint')) throw new Error('webgl');
     this.gl = gl; this.canvas = canvas;
     this.deriv = !!gl.getExtension('OES_standard_derivatives');
     const scene = ['uVP', 'uEye', 'uSun', 'uSunC', 'uSky', 'uGround', 'uFog', 'uFogD'];
-    this.pw = this.program(WORLD_VS, WORLD_FS, ['aP', 'aN', 'aC'], [...scene, 'uM', 'uAlpha', 'uTint', 'uGlow', 'uToon', 'uRim', 'uSpec', 'uOutline', 'uOutCol', 'uL', 'uLC']);
+    this.pw = this.program(WORLD_VS, WORLD_FS, ['aP', 'aN', 'aC'], [...scene, 'uM', 'uAlpha', 'uTint', 'uGlow', 'uToon', 'uRim', 'uSpec', 'uOutline', 'uOutCol', 'uL', 'uLC', 'uTex']);
     this.pb = this.program(BALL_VS, BALL_FS, ['aP'], [...scene, 'uM', 'uA', 'uB', 'uSkin', 'uTime', 'uOutline', 'uOutCol', 'uAlpha', 'uR3']);
     this.pp = this.program(PART_VS, PART_FS, ['aP', 'aO', 'aC', 'aS'], ['uVP', 'uRight', 'uUp', 'uEye', 'uFogD', 'uFog']);
     this.ps = this.program(SKY_VS, SKY_FS, ['aP'], ['uRight', 'uUp', 'uFwd', 'uTan', 'uSun', 'uZen', 'uHor', 'uSunC', 'uNight', 'uTime']);
-    this.pwt = this.program(WATER_VS, WATER_FS(this.deriv), ['aP', 'aN', 'aC'], ['uVP', 'uEye', 'uTime', 'uSun', 'uSunC', 'uSky', 'uFog', 'uFogD', 'uHor']);
+    this.pwt = this.program(WATER_VS, WATER_FS(this.deriv), ['aP', 'aN', 'aC'], ['uVP', 'uEye', 'uTime', 'uSun', 'uSunC', 'uSky', 'uFog', 'uFogD', 'uHor', 'uOff']);
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
     // a smooth ball, a full-screen triangle for the sky, and a buffer for particles
     const sv = [], si = [], rings = 20, segs = 32;
@@ -214,7 +259,7 @@ class GL {
     for (let i = 0; i < rings; i++) for (let j = 0; j < segs; j++) { const a = i * (segs + 1) + j, d = a + segs + 1; si.push(a, a + 1, d, a + 1, d + 1, d); }
     this.sphere = { vb: this.buf(gl.ARRAY_BUFFER, new Float32Array(sv)), ib: this.buf(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(si)), n: si.length };
     this.tri = this.buf(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]));
-    this.MAXP = 1600; this.pdata = new Float32Array(this.MAXP * 4 * 11);
+    this.MAXP = 6000; this.pdata = new Float32Array(this.MAXP * 4 * 11);
     this.pvb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.pvb); gl.bufferData(gl.ARRAY_BUFFER, this.pdata.byteLength, gl.DYNAMIC_DRAW);
     const pi = new Uint16Array(this.MAXP * 6); for (let k = 0; k < this.MAXP; k++) pi.set([k * 4, k * 4 + 1, k * 4 + 2, k * 4, k * 4 + 2, k * 4 + 3], k * 6);
     this.pib = this.buf(gl.ELEMENT_ARRAY_BUFFER, pi);
@@ -230,7 +275,7 @@ class GL {
     return { p, n: attrs.length, u, frame: -1 };
   }
   // start a frame: S holds the camera and the light for everything drawn this frame
-  begin(S) { this.S = S; this.frameId++; this.cur = null; this.matState = ''; }
+  begin(S) { this.S = S; this.frameId++; this.cur = null; this.matState = ''; this.lastTris = this.tris; this.tris = 0; this.calls = 0; }
   use(pr) {
     const gl = this.gl;
     if (this.cur !== pr) { gl.useProgram(pr.p); for (let i = 0; i < 4; i++) { if (i < pr.n) gl.enableVertexAttribArray(i); else gl.disableVertexAttribArray(i); } this.cur = pr; }
@@ -249,7 +294,7 @@ class GL {
       if (u.uRight) { gl.uniform3fv(u.uRight, S.right); gl.uniform3fv(u.uUp, S.up); }
       if (pr === this.pw) {
         gl.uniform4fv(u.uL, S.lp); gl.uniform3fv(u.uLC, S.lc);
-        gl.uniform1f(u.uToon, 0); gl.uniform1f(u.uRim, 0); gl.uniform1f(u.uSpec, 0.18); gl.uniform1f(u.uOutline, 0); gl.uniform3f(u.uOutCol, 0.1, 0.1, 0.16);
+        gl.uniform1f(u.uToon, 0); gl.uniform1f(u.uRim, 0); gl.uniform1f(u.uSpec, 0.18); gl.uniform1f(u.uOutline, 0); gl.uniform3f(u.uOutCol, 0.1, 0.1, 0.16); gl.uniform1f(u.uTex, 0); this.texState = 0;
         this.matState = '0|0|0.18';
       }
       if (pr === this.pb) { gl.uniform1f(u.uOutline, 0); gl.uniform3f(u.uOutCol, 0.1, 0.1, 0.16); }
@@ -267,13 +312,15 @@ class GL {
     const k = toon + '|' + rim + '|' + spec; this.use(this.pw); if (k === this.matState) return; this.matState = k;
     const gl = this.gl, u = this.pw.u; gl.uniform1f(u.uToon, toon); gl.uniform1f(u.uRim, rim); gl.uniform1f(u.uSpec, spec);
   }
+  // texture detail for the next things drawn (0 none, 1 ground, 2 stone/wood, 3 blocks)
+  tex(t) { this.use(this.pw); if (this.texState === t) return; this.texState = t; this.gl.uniform1f(this.pw.u.uTex, t); }
   fog(d) { this.use(this.pw); this.gl.uniform1f(this.pw.u.uFogD, d === undefined ? this.S.fogD : d); }
   draw(m, model, alpha = 1, tint, glow = 0) {
     if (!m || !m.n || !m.vb) return;
     const gl = this.gl, u = this.pw.u; this.use(this.pw); this.bind(m);
     gl.uniformMatrix4fv(u.uM, false, model || IDENT);
     gl.uniform1f(u.uAlpha, alpha); gl.uniform3fv(u.uTint, tint || ONE3); gl.uniform1f(u.uGlow, glow);
-    gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0);
+    gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); this.tris += m.n / 3; this.calls++;
   }
   // a dark edge around a smooth model (draw after the model itself)
   outline(m, model, w = 0.03, col) {
@@ -281,7 +328,7 @@ class GL {
     const gl = this.gl, u = this.pw.u; this.use(this.pw); this.bind(m);
     gl.cullFace(gl.FRONT); gl.uniform1f(u.uOutline, w); gl.uniform3fv(u.uOutCol, col || OUTLINE);
     gl.uniformMatrix4fv(u.uM, false, model || IDENT);
-    gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0);
+    gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); this.tris += m.n / 3; this.calls++;
     gl.uniform1f(u.uOutline, 0); gl.cullFace(gl.BACK);
   }
   // a player ball: model = position + roll + size; skin is the pattern number, A and B its two colours
@@ -302,15 +349,15 @@ class GL {
     gl.uniform3fv(u.uSun, S.sunDisc || S.sun); gl.uniform3fv(u.uSunC, S.sunCol || S.sunC); gl.uniform1f(u.uNight, S.night);
     gl.disable(gl.DEPTH_TEST); gl.depthMask(false); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
   }
-  water(m, model) {
+  water(m, off) {
     if (!m || !m.n || !m.vb) return;
-    const gl = this.gl; this.use(this.pwt); this.bind(m);
+    const gl = this.gl; this.use(this.pwt); this.bind(m); gl.uniform3fv(this.pwt.u.uOff, off);
     gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0);
   }
   // data: 11 numbers per corner, 4 corners per particle (see Particles in fx.js)
-  particles(data, count) {
+  particles(data, count, fogD) {
     if (!count) return;
-    const gl = this.gl; this.use(this.pp);
+    const gl = this.gl; this.use(this.pp); gl.uniform1f(this.pp.u.uFogD, fogD === undefined ? this.S.fogD : fogD);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.pvb); gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.subarray(0, count * 44)); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.pib);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 44, 0); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 44, 12); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 44, 24); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 44, 40);
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
@@ -334,12 +381,13 @@ class MeshBuilder {
   reset() { this.stack.length = 0; this._set(null, null); return this; }
   collect() { this.tris = []; return this; }
   tf(q) { if (!this.A) return q; const r = M4.apply3(this.A, q); return [r[0] + this.P[0], r[1] + this.P[1], r[2] + this.P[2]]; }
-  tn(n) { if (!this.A) return n; const r = M4.apply3(this.NA, n), l = Math.hypot(r[0], r[1], r[2]) || 1; return [r[0] / l, r[1] / l, r[2] / l]; }
+  tn(n) { const r = this.A ? M4.apply3(this.NA, n) : n, l = Math.hypot(r[0], r[1], r[2]) || 1; return [r[0] / l, r[1] / l, r[2] / l]; }
   // ----- flat (low-poly) pieces -----
   tri(a, b, c, col, noCollide) {
     a = this.tf(a); b = this.tf(b); c = this.tf(c);
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    if (this.up) { nx = nx * 0.25; ny = 1; nz = nz * 0.25; const k = Math.hypot(nx, ny, nz); nx /= k; ny /= k; nz /= k; } // thin plants: lit from above on both sides
     const base = this.v.length / 10;
     for (const p of [a, b, c]) this.v.push(p[0], p[1], p[2], nx, ny, nz, col[0], col[1], col[2], col[3] ?? 1);
     this.i.push(base, base + 1, base + 2);
@@ -401,6 +449,7 @@ class MeshBuilder {
   vert(p, n, c) { p = this.tf(p); n = this.tn(n); this.v.push(p[0], p[1], p[2], n[0], n[1], n[2], c[0], c[1], c[2], c[3] ?? 1); return this.v.length / 10 - 1; }
   // smooth ball or egg. r: one number or [x,y,z]. col: colour or fn(nx,ny,nz). grad darkens the underside a little
   sph(c, r, seg, col, grad = 0.2) {
+    if (this.segK) seg = Math.max(4, Math.round(seg * this.segK));
     const rx = r.length ? r[0] : r, ry = r.length ? r[1] : r, rz = r.length ? r[2] : r, rings = seg, segs = seg * 2, base = this.v.length / 10;
     for (let i = 0; i <= rings; i++) {
       const th = i / rings * Math.PI, st = Math.sin(th), y = Math.cos(th);

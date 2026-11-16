@@ -13,34 +13,35 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=3.2">
+<link rel="stylesheet" href="style.css?v=4.0">
 </head>
 <body>
 <canvas id="game"></canvas>
 <canvas id="ov"></canvas>
+<div id="vignette"></div>
 <div id="rotate"><div class="rotIcon"></div><b>Turn your device sideways</b><span>Funz Online plays in landscape mode</span></div>
 
 <div id="menu" class="screen">
-  <div class="panel">
-    <img src="icons/icon-192.png" alt="" class="logo">
-    <h1>Funz Online</h1>
-    <p class="sub">A massive peaceful world. Roll around, explore biomes, caves and an abandoned station, build machines and hang out with everyone.</p>
-    <div id="deviceBadge" class="badge"></div>
-
-    <canvas id="avatarPreview" width="160" height="120"></canvas>
-    <label>Your name
-      <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
-    </label>
-    <div class="pickLabel">Color</div>
-    <div class="colors" id="colors"></div>
-    <div class="pickLabel">Hat</div>
-    <div class="hats" id="hats"></div>
-
-    <button id="playBtn" class="big">Play</button>
-    <button id="installBtn" class="ghost hidden">Install Funz Online</button>
-    <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
-    <p id="menuMsg" class="msg"></p>
-    <p class="ver" id="verLabel">Version 3.2</p>
+  <div class="menuWrap">
+    <div class="panel">
+      <div class="brand"><img src="icons/icon-192.png" alt="" class="logo"><div><h1>Funz Online</h1><p class="sub">A massive peaceful world to roll around, explore, build and hang out in.</p></div></div>
+      <div class="stage"><canvas id="avatarPreview" width="360" height="270"></canvas><div id="lookName" class="lookName"></div></div>
+      <div id="deviceBadge" class="badge"></div>
+      <label class="nameLbl">Your name
+        <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
+      </label>
+      <button id="playBtn" class="big">Play</button>
+      <button id="installBtn" class="ghost hidden">Install Funz Online</button>
+      <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
+      <p id="menuMsg" class="msg"></p>
+      <p class="ver" id="verLabel">Version 4.0</p>
+    </div>
+    <div id="wardrobe" class="wardrobe">
+      <div class="wHead"><b>Wardrobe</b><span id="coinCount" class="coins"></span><button id="wardClose" class="iconBtn hidden">✕</button></div>
+      <div id="wTabs" class="wTabs"></div>
+      <div id="wInfo" class="wInfo"></div>
+      <div id="wGrid" class="wGrid"></div>
+    </div>
   </div>
 </div>
 
@@ -53,12 +54,15 @@
   <div id="clock"><span id="clockIc"></span><span id="clockT"></span><span id="placeT"></span></div>
   <div id="adminPanel" class="hidden"></div>
   <div id="toast" class="hidden"></div>
+  <div id="banner" class="hidden"></div>
   <div id="effects" class="hidden"></div>
   <div id="emotes"></div>
-  <div id="sideBtns"><button id="bagBtn" title="Inventory (I)"></button><button id="respawnBtn" title="Back to spawn (R)"></button></div>
+  <div id="sideBtns"><button id="wardBtn" title="Wardrobe (O)"></button><button id="bagBtn" title="Inventory and quests (I)"></button><button id="respawnBtn" title="Back to spawn (R)"></button><button id="musicBtn" title="Music on or off (M)"></button></div>
   <div id="bag" class="hidden">
-    <div class="aHead"><b>Inventory</b><button id="bagClose" class="iconBtn">✕</button></div>
+    <div class="aHead"><b>Inventory</b><span id="bagCoins" class="coins"></span><button id="bagClose" class="iconBtn">✕</button></div>
     <div id="bagItems"></div>
+    <div class="aTitle">Quests</div>
+    <div id="quests"></div>
     <div class="aTitle">Ring race records</div>
     <div id="board"></div>
   </div>
@@ -84,17 +88,21 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
-<script>window.FUNZ_VERSION = '3.2';</script>
+<script>window.FUNZ_VERSION = '4.0';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js?v=3.2"></script>
-<script src="js/device.js?v=3.2"></script>
-<script src="js/gl.js?v=3.2"></script>
-<script src="js/terrain.js?v=3.2"></script>
-<script src="js/structures.js?v=3.2"></script>
-<script src="js/parts.js?v=3.2"></script>
-<script src="js/models.js?v=3.2"></script>
-<script src="js/game.js?v=3.2"></script>
-<script src="js/net.js?v=3.2"></script>
-<script src="js/app.js?v=3.2"></script>
+<script src="js/icons.js?v=4.0"></script>
+<script src="js/device.js?v=4.0"></script>
+<script src="js/gl.js?v=4.0"></script>
+<script src="js/terrain.js?v=4.0"></script>
+<script src="js/structures.js?v=4.0"></script>
+<script src="js/sky.js?v=4.0"></script>
+<script src="js/parts.js?v=4.0"></script>
+<script src="js/custom.js?v=4.0"></script>
+<script src="js/models.js?v=4.0"></script>
+<script src="js/fx.js?v=4.0"></script>
+<script src="js/sound.js?v=4.0"></script>
+<script src="js/game.js?v=4.0"></script>
+<script src="js/net.js?v=4.0"></script>
+<script src="js/app.js?v=4.0"></script>
 </body>
 </html>
