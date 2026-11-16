@@ -21,8 +21,11 @@
   nameInput.value = store.get('name', '');
   // ---------- your look: skin, two colours, hat and trail ----------
   // The crown and the name Outernautica belong only to the owner (unlocked once with a secret link).
-  const reservedName = n => n.toLowerCase().replace(/[^a-z]/g, '').includes('outernautica');
-  const isOwner = () => !!store.get('pass', '');
+  const LOOKALIKE = { 'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'u', 'υ': 'u', 'х': 'x', 'і': 'i', 'ı': 'i', 'т': 't', 'п': 'n', 'н': 'h', 'к': 'k', 'ο': 'o', 'α': 'a', 'ε': 'e', 'τ': 't', 'ν': 'n', 'ρ': 'p', 'ι': 'i', 'κ': 'k', '0': 'o', '1': 'i', '!': 'i', '|': 'l', '3': 'e', '4': 'a', '@': 'a', '7': 't', '5': 's', '$': 's', 'µ': 'u', 'ü': 'u' };
+  const reservedName = n => { const s = String(n || '').normalize('NFKD').toLowerCase().replace(/./gu, c => LOOKALIKE[c] || c).replace(/[^a-z]/g, ''); return s.includes('outernautica') || s.includes('outernautic') || s.includes('outrnautica') || s.includes('outernatica'); };
+  // only a pass that really signs with the owner key counts (checked once when the game opens)
+  let OWNER = false;
+  const isOwner = () => OWNER;
   const prog = new Progress(store);
   const pickOne = a => a[Math.floor(Math.random() * a.length)];
   const look = {
@@ -192,13 +195,18 @@
     requestAnimationFrame(spin);
   }
   drawPreview(); renderWardrobe();
+  setTimeout(() => adminSign(store.get('pass', ''), 'owner-' + Math.random()).then(sig => {
+    OWNER = !!sig; if (!sig && store.get('pass', '')) store.del('pass');
+    if (!OWNER && reservedName(nameInput.value)) nameInput.value = '';
+    renderWardrobe(); drawPreview();
+  }), 0);
 
   // secret unlock link: ?unlock=...
   const unlock = new URLSearchParams(location.search).get('unlock');
   if (unlock) {
     history.replaceState(null, '', location.pathname);
     setTimeout(() => adminSign(unlock, 'test').then(ok => {
-      if (ok) { store.set('pass', unlock); renderWardrobe(); drawPreview(); menuMsg('★ The crown and the name Outernautica are now in your wardrobe forever!'); }
+      if (ok) { store.set('pass', unlock); OWNER = true; renderWardrobe(); drawPreview(); menuMsg('★ The crown and the name Outernautica are now in your wardrobe forever!'); }
       else menuMsg('That unlock link is not right.');
     }), 0);
   }
@@ -362,6 +370,7 @@
     G.myId = 'keeper'; G.me.id = 'keeper';
     G.players.clear(); G.players.set('keeper', G.me);
     G.me.admin = !!(await adminSign(store.get('pass', ''), 'self-' + Math.random()));
+    if (G.me.admin) await refreshProof(); else { G.me.proof = null; if (reservedName(G.me.name)) G.me.name = G.profile.name = randomName(); }
     { const k = await myIdentity(), key = nameKey(G.me.name), owner = G.names.get(key);
       if (!G.me.admin && owner && owner !== k.fp) { const was = G.me.name; G.me.name = G.profile.name = randomName(); setTimeout(() => sys('The name "' + was + '" already belongs to another player, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1500); }
       else if (!owner && !isRandomName(G.me.name) && k.fp && !reservedName(G.me.name)) { G.names.set(key, k.fp); G.dirty = true; } }
@@ -438,7 +447,7 @@
     if (list.length >= per) { G.rate.set(k, list); return false; }
     list.push(now); G.rate.set(k, list); return true;
   }
-  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, gadget: p.gadget, og: p.og || [], dev: p.dev, devType: p.devType, admin: !!p.admin, p: p.p.map(v => +v.toFixed(2)) });
+  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, gadget: p.gadget, og: p.og || [], dev: p.dev, devType: p.devType, admin: !!p.admin, proof: p.admin ? p.proof || null : null, pt: p.admin ? p.pt || 0 : 0, p: p.p.map(v => +v.toFixed(2)) });
   const okLook = (kind, v, admin) => (kind === 'color' || kind === 'color2' ? COLORS.includes(v) : !!LOOK_KINDS[kind][v]) && (admin || !ownerOnly(kind, v));
   const cleanLook = (m, admin) => ({ color: okLook('color', m.color, admin) ? m.color : COLORS[0], color2: okLook('color2', m.color2, admin) ? m.color2 : '#e8eef7', skin: okLook('skin', m.skin, admin) ? m.skin : 'plain', hat: okLook('hat', m.hat, admin) ? m.hat : 'none', trail: okLook('trail', m.trail, admin) ? m.trail : 'none', gadget: GADGETS[m.gadget] ? m.gadget : 'none', og: admin && Array.isArray(m.og) ? m.og.filter(k => OWNER_GADGETS[k]).slice(0, 5) : [] });
   const roster = () => [...G.players.values()].map(publicP);
@@ -449,6 +458,30 @@
   const inSpawn = (x, z) => Math.hypot(x + 0.5, z + 0.5) < 50 || Math.hypot(x + 0.5 - 44, z + 0.5 - 38) < 16;
   const canBuildHere = (x, y, z, p) => !nearStation(x + 0.5, z + 0.5) && Math.abs(x) < LIMIT && Math.abs(z) < LIMIT && y > -760 && y < 600 && (!inSpawn(x, z) || !!(p && p.admin));
   const sendPower = () => Net.toAll({ t: 'pw', on: [...G.circ.on] });
+
+  // ---------- nobody can pretend to be the owner ----------
+  // The owner's device signs "admin:<id>" with the owner key. Every player checks that
+  // signature for themselves, so even a changed game can't show anyone else as the owner.
+  async function refreshProof() {
+    const t = Date.now(), proof = await adminSign(store.get('pass', ''), 'admin:keeper:' + t);
+    if (G && proof) { G.me.proof = proof; G.me.pt = t; }
+  }
+  setInterval(() => { if (G && G.role === 'keeper' && G.me.admin) refreshProof().then(() => { if (G && G.role === 'keeper') Net.toAll({ t: 'roster', roster: roster() }); }); }, 90 * 1000);
+  const proofOk = new Map();
+  const proofMsg = r => r.id === 'keeper' ? 'admin:keeper:' + (+r.pt || 0) : 'admin:' + r.id;
+  const fakeName = id => 'Explorer' + (1000 + [...String(id)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 9000, 7));
+  function applyRoster(p, r) {
+    const claim = !!r.admin && typeof r.proof === 'string' && r.proof.length < 200;
+    const fresh = r.id !== 'keeper' || Math.abs(Date.now() - (+r.pt || 0)) < 15 * 60 * 1000;
+    const vk = claim ? proofMsg(r) + '|' + r.proof : '', ok = claim && fresh && proofOk.get(vk) === true;
+    const name = cleanName(r.name) || fakeName(r.id);
+    Object.assign(p, cleanLook(r, ok), { admin: ok, name: !ok && reservedName(name) ? fakeName(r.id) : name, dev: cleanText(r.dev).slice(0, 40), devType: r.devType });
+    if (claim && fresh && !proofOk.has(vk)) {
+      proofOk.set(vk, 'wait');
+      adminVerify(proofMsg(r), r.proof).then(v => { proofOk.set(vk, v); const q = G && G.players.get(r.id); if (v && q && q !== G.me) { applyRoster(q, r); renderPeople(); } });
+    }
+    return p;
+  }
 
   function keeperGot(id, m) {
     const p = G.players.get(id);
@@ -479,9 +512,9 @@
       p.tp = v; p.fly = !!m.fl && !!p.admin; p.big = !!m.big; p.glow = !!m.gl; p.ship = !!m.sh && !!p.admin;
     } else if (m.t === 'admin') {
       const nonce = G.nonces.get(id); G.nonces.delete(id);
-      if (nonce && typeof m.sig === 'string') adminVerify(nonce, m.sig).then(ok => {
+      if (nonce && typeof m.sig === 'string') Promise.all([adminVerify(nonce, m.sig), typeof m.proof === 'string' ? adminVerify('admin:' + id, m.proof) : false]).then(([ok, pok]) => {
         if (ok && G && G.players.get(id) === p) {
-          p.admin = true; p.name = p.wantName; if (p.wantLook) Object.assign(p, p.wantLook); renderPeople();
+          p.admin = true; p.proof = pok ? m.proof : null; p.pt = 0; p.name = p.wantName; if (p.wantLook) Object.assign(p, p.wantLook); renderPeople();
           const t = '★ ' + p.name + ' (the admin) joined'; sys(t); Net.toAll({ t: 'sys', text: t });
         }
       });
@@ -576,9 +609,9 @@
       G.board = Array.isArray(m.board) ? m.board.slice(0, 5) : [];
       G.dayStart = performance.now() - m.phase * DAY_MS;
       G.players.clear(); G.players.set(m.id, G.me);
-      for (const r of m.roster) if (r.id !== m.id) addPlayer(r);
+      for (const r of m.roster) if (r.id !== m.id) applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r);
       G.me.admin = false;
-      adminSign(store.get('pass', ''), m.nonce).then(sig => { if (sig) Net.toKeeper({ t: 'admin', sig }); });
+      Promise.all([adminSign(store.get('pass', ''), m.nonce), adminSign(store.get('pass', ''), 'admin:' + m.id)]).then(([sig, proof]) => { if (sig && G) Net.toKeeper({ t: 'admin', sig, proof }); });
       $('roomLabel').innerHTML = '<i class="live"></i>Online';
       if (first) { enterGame(); sys('Welcome to Funz Online! ' + (m.roster.length - 1) + ' other ' + (m.roster.length === 2 ? 'player is' : 'players are') + ' here.'); }
       else showToast('Back online!', 1500);
@@ -600,11 +633,11 @@
     if (m.t === 'roster') {
       const ids = new Set(m.roster.map(r => r.id));
       for (const id of [...G.players.keys()]) if (!ids.has(id)) G.players.delete(id);
-      for (const r of m.roster) { const p = G.players.get(r.id); if (!p) addPlayer(r); else if (p !== G.me) Object.assign(p, { admin: r.admin, name: r.name, hat: r.hat, color: r.color, color2: r.color2, skin: r.skin, trail: r.trail, gadget: r.gadget, og: Array.isArray(r.og) ? r.og.filter(k => OWNER_GADGETS[k]) : [] }); else p.admin = r.admin; }
+      for (const r of m.roster) { if (!r || typeof r.id !== 'string') continue; const p = G.players.get(r.id); if (!p) applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r); else if (p !== G.me) applyRoster(p, r); else { p.admin = !!r.admin && OWNER; if (p.admin && cleanName(r.name) && p.name !== cleanName(r.name)) { p.name = G.profile.name = cleanName(r.name); } } }
       renderPeople();
     } else if (m.t === 'state') {
       G.dayStart = performance.now() - m.phase * DAY_MS;
-      for (const [id, x, y, z, fl, big, gl, sh] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = fl; p.big = big; p.glow = gl; p.ship = !!sh; } }
+      for (const [id, x, y, z, fl, big, gl, sh] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = !!fl && !!p.admin; p.big = big; p.glow = gl; p.ship = !!sh && !!p.admin; } }
     } else if (m.t === 'bye') { const p = G.players.get(m.id); if (p) { sys(p.name + ' left'); G.players.delete(m.id); renderPeople(); } }
     else if (m.t === 'chat') { const p = G.players.get(m.id); if (p) say(p, cleanText(m.text)); }
     else if (m.t === 'emote') { const p = G.players.get(m.id); if (p && EMOTES.includes(m.e)) emote(p, m.e); }

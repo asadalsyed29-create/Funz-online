@@ -463,10 +463,23 @@ class Game {
     let sunC = L3([0.78, 0.72, 0.6], [0.04, 0.05, 0.1], k); sunC = L3(sunC, [0.95, 0.55, 0.32], dusk * 0.6);
     let fog = hor, fogD = 1 / (this.radius * CHUNK * 0.66), night = Math.max(0, (k - 0.55) / 0.45);
     // weather here: rain darkens the light and thickens the haze; storms flash with lightning
-    const wHere = this.cave || inSt ? 0 : this.wxForce != null ? this.wxForce : weatherAt(this.T.N, c.target[0], c.target[2]), rainK = Math.max(0, Math.min(1, (wHere - 0.7) / 0.2)) * (c.target[1] < 150 ? 1 : 0);
-    this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = wHere;
+    // clouds near you (they drift with the wind); rain only falls under rain clouds, lightning only near storm clouds
+    const W = windShift(), near = [], CC = CLOUD_CELL, ci = Math.floor((c.target[0] - W) / CC), cj = Math.floor(c.target[2] / CC);
+    if (!this.under && !inSt) {
+      for (let i = ci - 2; i <= ci + 2; i++) for (let j = cj - 2; j <= cj + 2; j++) {
+        const key = i + ',' + j; let list = this.cloudCells.get(key);
+        if (!list) { list = cloudsInCell(this.T.N, this.T, i, j, this.wxForce); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
+        for (const cl of list) near.push({ ...cl, x: cl.x + W + Math.sin(t * 0.012 + cl.ph) * 40 });
+      }
+      for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < 2200 && Math.abs(cl.z - c.target[2]) < 2200) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
+    }
+    let rainK = 0, stormNear = false;
+    for (const cl of near) { if (cl.kind !== 'nimbo' && cl.kind !== 'cb') continue; const d = Math.hypot(cl.x - c.target[0], cl.z - c.target[2]), R = (cl.kind === 'cb' ? 230 : 400) * cl.s; rainK = Math.max(rainK, Math.min(1, (1 - d / R) * 1.8)); if (cl.kind === 'cb' && d < 1000) stormNear = true; }
+    if (this.wxForce != null && this.wxForce >= 0.7 && !this.under && !inSt) { rainK = Math.max(rainK, this.wxForce >= 0.9 ? 1 : 0.6); if (this.wxForce >= 0.9) stormNear = true; } // the admin made it rain
+    if (c.target[1] > 220) rainK = 0;
+    this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = this.rain > 0.15 ? (stormNear ? 'Stormy' : 'Rainy') : stormNear ? 'Storm nearby' : null;
     if (this.rain > 0.01) { const r = this.rain; sunC = sunC.map(v => v * (1 - r * 0.55)); zen = L3(zen, L3([0.36, 0.4, 0.48], [0.03, 0.04, 0.08], k), r * 0.75); hor = L3(hor, L3([0.58, 0.61, 0.67], [0.06, 0.07, 0.12], k), r * 0.75); fog = hor; fogD *= 1 + r * 0.9; amb = amb.map(v => v * (1 - r * 0.2)); }
-    if (wHere > 0.78 && Math.random() < (o.dt || 0.016) * 0.12) { this.flash = 1; const d = 0.4 + Math.random() * 1.8; setTimeout(() => Sound.play('thunder'), d * 1000); }
+    if (stormNear && Math.random() < (o.dt || 0.016) * 0.1) { this.flash = 1; const d = 0.4 + Math.random() * 1.8; setTimeout(() => Sound.play('thunder'), d * 1000); }
     if (this.flash > 0) { const f = this.flash; amb = amb.map(v => v + f * 0.7); zen = L3(zen, [0.85, 0.88, 1], f * 0.5); hor = L3(hor, [0.8, 0.82, 0.95], f * 0.4); fog = hor; this.flash = Math.max(0, f - (o.dt || 0.016) * 6); }
     if (!this.under && c.eye[1] < SEA - 0.2) { fog = [0.08, 0.3, 0.42]; fogD = 1 / 38; amb = [0.25, 0.42, 0.5]; sunC = sunC.map(v => v * 0.5); } // under the water
     if (RL) { zen = RL.zen; hor = RL.hor; fog = RL.fog; fogD = RL.fogD; amb = RL.amb; gnd = RL.amb.map(v => v * 0.5); sunC = RL.sunC; night = RL.stars ? 1 : 0; }
@@ -635,14 +648,7 @@ class Game {
     }
     if (!this.under && !inSt) {
       gl.depthMask(true); G.water(this.water, [Math.round(c.target[0] / 10) * 10, SEA - 0.1, Math.round(c.target[2] / 10) * 10]); gl.depthMask(false);
-      // clouds: every weather cell has its own kinds of cloud, made of soft puffs (see sky.js)
-      const CC = CLOUD_CELL, ci = Math.floor(c.target[0] / CC), cj = Math.floor(c.target[2] / CC), near = [];
-      for (let i = ci - 2; i <= ci + 2; i++) for (let j = cj - 2; j <= cj + 2; j++) {
-        const key = i + ',' + j; let list = this.cloudCells.get(key);
-        if (!list) { list = cloudsInCell(this.T.N, this.T, i, j, this.wxForce); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
-        for (const cl of list) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
-      }
-      for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < 2200 && Math.abs(cl.z - c.target[2]) < 2200) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
+      // clouds: soft puffs (see sky.js); 'near' was worked out above
       const top = L3(L3([1, 1, 1], [1, 0.84, 0.72], dusk), [0.28, 0.31, 0.42], Math.max(0, (k - 0.35) / 0.65)), bot = L3(L3([0.6, 0.64, 0.75], [0.55, 0.42, 0.5], dusk), [0.1, 0.11, 0.18], Math.max(0, (k - 0.35) / 0.65));
       if (!this.cloudData) this.cloudData = new Float32Array(6000 * 44);
       const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, this.maxClouds || 2600);
@@ -788,6 +794,6 @@ class Game {
       for (const q of this.places(me.p[0], me.p[2], MAPSPAN * 0.75)) { if (Math.hypot(q.x - me.p[0], q.z - me.p[2]) * sc > size / 2 - 8) continue; const k = known.has(q.key) || q.always; mark(q.x, q.z, k ? q.col : 'rgba(200,204,216,.8)', Math.hypot(q.x - me.p[0], q.z - me.p[2]) < MAPSPAN * 0.35 ? (k ? q.name : '?') : ''); }
       mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', '');
     }
-    this.place = this.realm ? this.realm.name : this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name + ((this.weather || 0) >= 0.64 ? ' · ' + WEATHER_NAMES(this.weather) : '');
+    this.place = this.realm ? this.realm.name : this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name + (this.weather ? ' · ' + this.weather : '');
   }
 }

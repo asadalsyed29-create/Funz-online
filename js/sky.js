@@ -6,7 +6,9 @@ const CLOUD_KINDS = {
   alto: 'Altocumulus', cirrus: 'Cirrus', nimbo: 'Nimbostratus', lens: 'Lenticular',
 };
 // 0 = clear ... 1 = stormy
-function weatherAt(N, x, z) { const v = N.fbm(x / 2600 + 3.1, z / 2600 - 1.7, 950, 2), d2 = (x * x + z * z) / 360000; return Math.max(0, Math.min(1, (v - 0.5) * 2.1 + 0.48 - 0.32 * Math.exp(-d2))); } // calmer near the plaza
+function weatherAt(N, x, z) { const v = N.fbm(x / 2600 + 3.1, z / 2600 - 1.7, 950, 2); return Math.max(0, Math.min(1, (v - 0.5) * 2.1 + 0.46)); }
+// the weather and the clouds slowly blow east, the same for every player (uses the real clock)
+function windShift() { return ((Date.now() / 1000) % 2592000) * 3; }
 const WEATHER_NAMES = w => w < 0.32 ? 'Clear' : w < 0.5 ? 'Fair' : w < 0.64 ? 'Cloudy' : w < 0.78 ? 'Overcast' : 'Stormy';
 
 // Each kind of cloud is a cluster of soft see-through puffs: [x, y, z, radius, brightness 0..1, alpha].

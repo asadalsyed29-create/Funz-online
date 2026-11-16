@@ -111,10 +111,18 @@ class Progress {
     this.store = store;
     const d = store.json('progress', {});
     this.coins = d.coins | 0; this.stats = d.stats || {}; this.sets = d.sets || {}; this.done = d.done || {}; this.own = d.own || {};
-    this.dirty = false; this.onQuest = null;
+    // coins and bought things carry a check, so editing the saved numbers by hand doesn't work
+    if (d.k == null) { if (d.coins != null) { this.coins = Math.max(0, Math.min(this.coins, 3000)); this.dirty = true; } }
+    else if (d.k !== Progress.sum(this.coins, this.own, this.done)) { this.coins = 0; this.own = {}; this.dirty = true; }
+    this.onQuest = null; if (!this.dirty) this.dirty = false;
     setInterval(() => this.save(), 5000);
   }
-  save() { if (!this.dirty) return; this.dirty = false; this.store.set('progress', JSON.stringify({ coins: this.coins, stats: this.stats, sets: this.sets, done: this.done, own: this.own })); }
+  static sum(coins, own, done) {
+    const t = 'fz|' + (coins | 0) + '|' + JSON.stringify(own || {}) + '|' + Object.keys(done || {}).sort().join(',');
+    let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; h ^= h >>> 13; }
+    return h.toString(36);
+  }
+  save() { if (!this.dirty) return; this.dirty = false; this.store.set('progress', JSON.stringify({ coins: this.coins, stats: this.stats, sets: this.sets, done: this.done, own: this.own, k: Progress.sum(this.coins, this.own, this.done) })); }
   add(stat, n = 1) { this.stats[stat] = (this.stats[stat] || 0) + n; this.dirty = true; }
   max(stat, v) { if (v > (this.stats[stat] || 0)) { this.stats[stat] = v; this.dirty = true; } }
   // remember something found once (a place, a chest...). true if it is new
