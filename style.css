@@ -225,3 +225,5 @@ body.touch #banner .t2{font-size:22px}
 .gMsg{margin:0;font-size:14px;opacity:.8;min-height:20px}
 .gLink{background:none;color:#9fd4ff;font-size:13px;text-decoration:underline;padding:6px;box-shadow:none}
 .gLink.hidden{display:none}
+
+body.noBuild #buildBar,body.noBuild #buildToggle{display:none!important}

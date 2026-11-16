@@ -288,6 +288,10 @@
   }
   checkUpdate(); setInterval(checkUpdate, 4 * 60 * 1000);
 
+  // building is switched off: the world is for exploring (the code stays for the owner base later)
+  const BUILDING = false;
+  if (!BUILDING) document.body.classList.add('noBuild');
+
   // ---------- owner signature ----------
   const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
@@ -351,7 +355,7 @@
     Sound.start();
     $('playBtn').disabled = true; menuMsg('Entering the world…');
     if (Device.useTouch) { try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) {} }
-    const s = saved(), B = new Builds(); B.load(s.parts, s.wires);
+    const s = saved(), B = new Builds(); if (BUILDING) B.load(s.parts, s.wires);
     let game;
     try { game = new Game($('game'), $('ov'), SEED, B); }
     catch (e) { console.error(e); $('playBtn').disabled = false; menuMsg('Your device can\'t show 3D graphics (WebGL). Try another browser.'); return; }
@@ -365,7 +369,7 @@
     const body = game.newBody([spawn[0] + (Math.random() - .5), spawn[1] + 1, spawn[2] + (Math.random() - .5)]);
     G = {
       role: null, myId: null, players: new Map(), B, game, circ, body,
-      tool: 0, cat: 'blocks', building: !Device.useTouch, dayStart: performance.now() - DAY_MS * 0.875,
+      tool: 0, cat: 'blocks', building: false, dayStart: performance.now() - DAY_MS * 0.875,
       lastSend: 0, lastState: 0, lastCirc: 0, lastHeard: performance.now(), rate: new Map(), running: true, dirty: false,
       muted: new Set(), kicked: new Map(), bans: new Set(s.bans || []), nonces: new Map(), reconnecting: false,
       taken: new Map(), drops: new Map(), wx: 'auto', frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
@@ -406,7 +410,7 @@
     $('menu').classList.add('hidden'); $('playBtn').disabled = false; menuMsg('');
     $('hud').appendChild($('wardrobe')); $('wardrobe').classList.add('hidden');
     $('hud').classList.remove('hidden'); $('chat').classList.remove('hidden'); $('toast').classList.add('hidden');
-    if (Device.useTouch) { $('touch').classList.remove('hidden'); $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
+    if (Device.useTouch) { $('touch').classList.remove('hidden'); if (BUILDING) $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
     $('adminBtn').classList.toggle('hidden', !G.me.admin);
     $('shipBtn').classList.toggle('hidden', !myLook().og.includes('ship'));
@@ -544,6 +548,7 @@
       if (!EMOTES.includes(m.e) || !allow(id, 'e', 4, 3000)) return;
       emote(p, m.e); Net.toAll({ t: 'emote', id, e: m.e });
     } else if (m.t === 'block') {
+      if (!BUILDING) return;
       const { x, y, z, k } = m, r = (m.r | 0) & 3;
       if (![x, y, z].every(Number.isInteger) || !(k === 0 || PARTS[k])) return;
       if (!allow(id, 'b', 15, 1000) || !canBuildHere(x, y, z, p)) return;
@@ -551,6 +556,7 @@
       if (k !== 0 && G.B.parts.size >= MAX_EDITS && !G.B.parts.has(pkey(x, y, z))) return;
       applyBlock(x, y, z, k, r); Net.toAll({ t: 'block', x, y, z, k, r });
     } else if (m.t === 'wire') {
+      if (!BUILDING) return;
       const okKey = s => typeof s === 'string' && /^-?\d+,-?\d+,-?\d+$/.test(s) && G.B.parts.has(s);
       if (!okKey(m.a) || !allow(id, 'w', 10, 1000) || !canBuildHere(...unkey(m.a), p)) return;
       if (m.add) { if (!okKey(m.b) || m.a === m.b || G.B.wires.size >= MAX_WIRES) return; const A = unkey(m.a), Bv = unkey(m.b); if (Math.hypot(A[0] - Bv[0], A[1] - Bv[1], A[2] - Bv[2]) > 40) return; applyWire(m.a, m.b, true); Net.toAll({ t: 'wire', a: m.a, b: m.b, add: true }); }
@@ -619,7 +625,7 @@
       addNames(m.names);
       G.drops = new Map((Array.isArray(m.drops) ? m.drops : []).filter(d => d && ITEMS[d.type] && okVec(vec(d.p))).map(d => [String(d.id), { id: String(d.id), type: d.type, p: vec(d.p) }])); syncDrops(); setWeather(m.wx); if (Array.isArray(m.clouds)) G.game.addClouds(m.clouds);
       idSign('id:' + m.nonce).then(sig => { if (sig && G) Net.toKeeper({ t: 'idsig', sig }); });
-      G.B.load(m.parts || [], m.wires || []); G.dirty = true; G.game.allPartsChanged(); G.game.setPower(new Set(m.power || []));
+      if (BUILDING) G.B.load(m.parts || [], m.wires || []); G.dirty = true; G.game.allPartsChanged(); G.game.setPower(new Set(m.power || []));
       G.bans = new Set((m.bans || []).filter(b => typeof b === 'string'));
       G.taken = new Map((m.taken || []).map(i => [i, 0]));
       G.board = Array.isArray(m.board) ? m.board.slice(0, 5) : [];
@@ -657,8 +663,8 @@
     } else if (m.t === 'bye') { const p = G.players.get(m.id); if (p) { sys(p.name + ' left'); G.players.delete(m.id); renderPeople(); } }
     else if (m.t === 'chat') { const p = G.players.get(m.id); if (p) say(p, cleanText(m.text)); }
     else if (m.t === 'emote') { const p = G.players.get(m.id); if (p && EMOTES.includes(m.e)) emote(p, m.e); }
-    else if (m.t === 'block') { if ([m.x, m.y, m.z].every(Number.isInteger) && (m.k === 0 || PARTS[m.k])) applyBlock(m.x, m.y, m.z, m.k, m.r | 0); }
-    else if (m.t === 'wire') { if (typeof m.a === 'string' && typeof m.b === 'string') applyWire(m.a, m.b, !!m.add); }
+    else if (m.t === 'block') { if (BUILDING && [m.x, m.y, m.z].every(Number.isInteger) && (m.k === 0 || PARTS[m.k])) applyBlock(m.x, m.y, m.z, m.k, m.r | 0); }
+    else if (m.t === 'wire') { if (BUILDING && typeof m.a === 'string' && typeof m.b === 'string') applyWire(m.a, m.b, !!m.add); }
     else if (m.t === 'pw') { if (Array.isArray(m.on)) G.game.setPower(new Set(m.on.filter(k => typeof k === 'string'))); }
     else if (m.t === 'taken') G.taken.set(m.id, 0);
     else if (m.t === 'back') G.taken.delete(m.id);
@@ -1012,7 +1018,7 @@
   }
   const send = msg => { if (G.role === 'guest') Net.toKeeper(msg); else Net.toAll(msg); };
   function edit(sx, sy, breaking) {
-    if (!G.myId) return;
+    if (!G.myId || !BUILDING) return;
     const k = breaking ? 0 : curTool();
     if (k === 'wire' || k === 'cut') {
       const t = target(sx, sy, 'pick'); if (!t) { G.wireFrom = null; return; }
@@ -1039,11 +1045,11 @@
     if (!G || !G.myId) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Escape') document.activeElement.blur(); return; }
     if (e.key === 'Enter' || e.key === '/') { e.preventDefault(); $('chat').classList.remove('hidden'); $('chatInput').focus(); if (e.key === '/') $('chatInput').value = '/'; return; }
-    if (/^[0-9]$/.test(e.key)) { const i = (+e.key + 9) % 10; if (i < toolList().length) selectTool(i); return; }
-    if (e.key === '-' || e.key === '=') { const n = toolList().length; selectTool((G.tool + (e.key === '=' ? 1 : n - 1)) % n); return; }
+    if (BUILDING && /^[0-9]$/.test(e.key)) { const i = (+e.key + 9) % 10; if (i < toolList().length) selectTool(i); return; }
+    if (BUILDING && (e.key === '-' || e.key === '=')) { const n = toolList().length; selectTool((G.tool + (e.key === '=' ? 1 : n - 1)) % n); return; }
     const k = e.key.toLowerCase();
     if (k === 'f' && G.me.admin) { setFly(!G.me.fly); return; }
-    if (k === 'tab') { e.preventDefault(); nextCat(); return; }
+    if (k === 'tab') { e.preventDefault(); if (BUILDING) nextCat(); return; }
     if (k === 'i' || k === 'b') { $('bagBtn').click(); return; }
     if (k === 'r') { respawn(); return; }
     if (k === 'o') { $('wardBtn').click(); return; }

@@ -18,7 +18,7 @@ const SKINS = {
   galaxy: { n: 22, name: 'Galaxy', lock: { quest: 'crystal' } }, moon: { n: 24, name: 'Moon', lock: { quest: 'caves' } },
   lava: { n: 21, name: 'Lava', lock: { quest: 'volcano' } }, circuit: { n: 26, name: 'Circuit', lock: { quest: 'station' } },
   chrome: { n: 19, name: 'Chrome', lock: { quest: 'stationTop' } }, gold: { n: 18, name: 'Gold', lock: { quest: 'trophy' } },
-  disco: { n: 25, name: 'Disco ball', lock: { quest: 'race' } }, pixel: { n: 17, name: 'Pixels', lock: { quest: 'builder' } },
+  disco: { n: 25, name: 'Disco ball', lock: { quest: 'race' } }, pixel: { n: 17, name: 'Pixels', lock: { quest: 'friends' } },
   bubble: { n: 29, name: 'Bubble', lock: { quest: 'sea' } }, planet: { n: 23, name: 'Planet', lock: { quest: 'space' } },
   rainbow: { n: 14, name: 'Rainbow', lock: { quest: 'biomes' } }, flow: { n: 35, name: 'Aurora', lock: { quest: 'explorer' } },
   royal: { n: 36, name: 'Royal', lock: { coins: 300 } }, thunder: { n: 37, name: 'Thunderstorm', lock: { coins: 250 } }, cosmos: { n: 38, name: 'Rainbow cosmos', lock: { coins: 350 } },
@@ -34,7 +34,7 @@ const HATS = {
   sprout: { name: 'Sprout', lock: { quest: 'forest' } }, cowboy: { name: 'Cowboy hat', lock: { quest: 'desert' } }, winter: { name: 'Winter hat', lock: { quest: 'snow' } },
   viking: { name: 'Viking helmet', lock: { quest: 'mountain' } }, mushroom: { name: 'Mushroom cap', lock: { quest: 'swamp' } }, pirate: { name: 'Pirate hat', lock: { quest: 'chests' } },
   miner: { name: 'Miner helmet', lock: { quest: 'cave' } }, antenna: { name: 'Antenna', lock: { quest: 'station' } }, bunny: { name: 'Bunny ears', lock: { quest: 'friends' } },
-  cone: { name: 'Traffic cone', lock: { quest: 'builder' } }, grad: { name: 'Scholar cap', lock: { quest: 'ways' } },
+  cone: { name: 'Traffic cone', lock: { quest: 'night' } }, grad: { name: 'Scholar cap', lock: { quest: 'ways' } },
   crown: { name: 'Crown', lock: { owner: true } }, stormcloud: { name: 'Storm cloud', lock: { coins: 250 } }, starcrown: { name: 'Star crown', lock: { coins: 300 } },
 };
 
@@ -92,8 +92,6 @@ const QUESTS = [
   { id: 'ways', name: 'Pathfinder', desc: 'Wake up 5 waystones', stat: 'ways', goal: 5, coins: 60 },
   { id: 'trophy', name: 'Parkour champion', desc: 'Get the trophy at the top of the parkour climb', stat: 'trophy', goal: 1, coins: 80 },
   { id: 'race', name: 'Ring racer', desc: 'Finish the ring race', stat: 'races', goal: 1, coins: 60 },
-  { id: 'builder', name: 'Builder', desc: 'Build 30 things', stat: 'built', goal: 30, coins: 40 },
-  { id: 'wired', name: 'Inventor', desc: 'Connect 5 wires', stat: 'wired', goal: 5, coins: 60 },
   { id: 'night', name: 'Night owl', desc: 'Stay out for a whole night', stat: 'nights', goal: 1, coins: 30 },
   { id: 'friends', name: 'Animal friend', desc: 'Get close enough to touch 5 creatures', stat: 'touched', goal: 5, coins: 40 },
   { id: 'space', name: 'Into space', desc: 'Ride the space elevator next to the station', stat: 'realm_space', goal: 1, coins: 80 },
