@@ -13,6 +13,9 @@ const TRAIL_FX = {
   stars: { shape: 22, cols: ['#fff2a8', '#ffd24a', '#ffffff'], size: 0.16, life: 1.0, rise: 0.4, every: 0.28 },
   fire: { shape: 20, cols: ['#ff7a1a', '#ffb02a', '#ff4a1a'], size: 0.3, life: 0.6, rise: 1.6, every: 0.12, shrink: true },
   rainbow: { shape: 20, cols: null, size: 0.22, life: 1.0, rise: 0, every: 0.12, rainbow: true },
+  royal: { shape: 22, cols: ['#ffd24a', '#b48cff', '#fff2a8', '#7a2cff'], size: 0.2, life: 1.2, rise: 0.6, every: 0.14 },
+  pastel: { shape: 22, cols: ['#a8d8ff', '#cdb4ff', '#ffffff', '#d8ecff'], size: 0.2, life: 1.3, rise: 0.5, every: 0.12 },
+  storm: { shape: 29, cols: ['#fffbe0', '#8af0ff', '#c8d0ff'], size: 0.34, life: 0.3, rise: 0, every: 0.12, rain: true },
 };
 const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
 const hsv3 = h => { const f = n => { const k = (n + h * 6) % 6; return 1 - Math.max(0, Math.min(k, 4 - k, 1)); }; return [f(5), f(3), f(1)]; };

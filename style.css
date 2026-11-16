@@ -202,3 +202,6 @@ body.touch #banner .t2{font-size:22px}
 .qRow .bar{grid-column:1/-1;height:6px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden}.qRow .bar i{display:block;height:100%;background:linear-gradient(90deg,#48d6ac,#8af0ff);border-radius:9px}
 .qRow.done{opacity:.55}.qRow.done .bar i{background:#ffd27a}
 #musicBtn.off{opacity:.55}
+.wSec{grid-column:1/-1;font-size:13px;font-weight:800;opacity:.75;text-align:left;padding:4px 2px 0;height:auto}
+.wTabs button.own{background:linear-gradient(90deg,#ffd27a,#ffb347);color:#3a2600}.wTabs button.own.on{background:#fff;color:#7a4a00}
+.wGrid{grid-auto-rows:auto}.wGrid button{height:70px}

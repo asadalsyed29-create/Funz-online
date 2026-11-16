@@ -67,40 +67,62 @@
     if (l.quest) { const q = QUESTS.find(q => q.id === l.quest); return { t: 'Quest', c: 'q', q }; }
     return { t: l.coins + ' coins', c: 'c', coins: l.coins };
   };
-  function renderWardrobe() {
-    $('coinCount').textContent = prog.coins;
-    const tabs = $('wTabs'); tabs.textContent = '';
-    for (const [k, n] of W_TABS) { const b = document.createElement('button'); b.textContent = n; if (k === wTab) b.className = 'on'; b.onclick = () => { wTab = k; renderWardrobe(); }; tabs.appendChild(b); }
-    const grid = $('wGrid'); grid.textContent = ''; const L = myLook();
-    const ids = wTab === 'color' || wTab === 'color2' ? COLORS : Object.keys(LOOK_KINDS[wTab]);
-    const owner = isOwner();
-    const sorted = ids.filter(id => { const l = prog.lockOf(wTab, id); return !(l && l.owner && !owner); });
-    sorted.sort((a, b) => (prog.owns(wTab, b, owner) - prog.owns(wTab, a, owner)));
-    for (const id of sorted) {
-      const b = document.createElement('button'), owns = prog.owns(wTab, id, owner), lk = owns ? null : lockText(wTab, id);
-      if (L[wTab] === id) b.classList.add('on'); if (!owns) b.classList.add('locked');
-      if (wTab === 'color' || wTab === 'color2') { b.classList.add('sw'); b.style.background = 'radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),transparent 45%),' + id; }
-      else if (wTab === 'trail') {
-        const T = TRAIL_FX[id]; b.innerHTML = '<span class="nm"></span><div class="trailDots"></div>'; b.querySelector('.nm').textContent = TRAILS[id].name;
-        const dots = b.querySelector('.trailDots'); (T ? (T.cols || ['#ff5f5f', '#ffd24a', '#7be36b', '#5aa9ff', '#b48cff']) : ['#555']).slice(0, 5).forEach(c => { const i = document.createElement('i'); i.style.background = c; i.style.color = c; dots.appendChild(i); });
-      } else {
-        const img = document.createElement('img'); img.alt = ''; img.src = wTab === 'skin' ? thumb(id, 'none', L.color, L.color2) : thumb(L.skin, id, L.color, L.color2); b.appendChild(img);
+  const KIND_NAME = { skin: 'Skin', color: 'Color', color2: 'Second color', hat: 'Hat', trail: 'Trail' };
+  const nameOf = (kind, id) => kind === 'skin' ? SKINS[id].name : kind === 'hat' ? HATS[id].name : kind === 'trail' ? TRAILS[id].name : kind === 'color2' ? 'Second color' : 'Color';
+  function wTile(kind, id, L, owner, tag) {
+    const b = document.createElement('button'), owns = prog.owns(kind, id, owner), lk = owns ? null : lockText(kind, id), name = nameOf(kind, id);
+    if (L[kind] === id) b.classList.add('on'); if (!owns) b.classList.add('locked');
+    if (kind === 'color' || kind === 'color2') { b.classList.add('sw'); b.style.background = 'radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),transparent 45%),' + id; }
+    else if (kind === 'trail') {
+      const T = TRAIL_FX[id]; b.innerHTML = '<span class="nm"></span><div class="trailDots"></div>'; b.querySelector('.nm').textContent = name;
+      const dots = b.querySelector('.trailDots'); (T ? (T.cols || ['#ff5f5f', '#ffd24a', '#7be36b', '#5aa9ff', '#b48cff']) : ['#555']).slice(0, 5).forEach(c => { const i = document.createElement('i'); i.style.background = c; i.style.color = c; dots.appendChild(i); });
+    } else { const img = document.createElement('img'); img.alt = ''; img.src = kind === 'skin' ? thumb(id, 'none', L.color, L.color2) : thumb(L.skin, id, L.color, L.color2); b.appendChild(img); }
+    b.title = name;
+    if (tag || lk) { const t = document.createElement('span'); t.className = 'lk ' + (tag ? 'c' : lk.c); t.textContent = tag || lk.t; b.appendChild(t); }
+    b.onclick = () => {
+      if (!owns) {
+        if (lk.coins) {
+          if (prog.coins >= lk.coins) { if (confirm('Buy ' + name + ' for ' + lk.coins + ' coins?')) { prog.buy(kind, id); Sound.play('chest'); wear(kind, id); } }
+          else wInfo('You need ' + lk.coins + ' coins for ' + name + '. You have ' + prog.coins + '. Find coins and finish quests to get more!');
+        } else if (lk.q) wInfo(name + ' unlocks when you finish the quest "' + lk.q.name + '": ' + lk.q.desc + '.');
+        return;
       }
-      const name = wTab === 'skin' ? SKINS[id].name : wTab === 'hat' ? HATS[id].name : wTab === 'trail' ? TRAILS[id].name : 'Color';
-      b.title = name;
-      if (lk) { const t = document.createElement('span'); t.className = 'lk ' + lk.c; t.textContent = lk.t; b.appendChild(t); }
-      b.onclick = () => {
-        if (!owns) {
-          if (lk.coins) {
-            if (prog.coins >= lk.coins) { if (confirm('Buy ' + name + ' for ' + lk.coins + ' coins?')) { prog.buy(wTab, id); wear(wTab, id); } }
-            else wInfo('You need ' + lk.coins + ' coins for ' + name + '. You have ' + prog.coins + '. Find coins and finish quests to get more!');
-          } else if (lk.q) wInfo(name + ' unlocks when you finish the quest "' + lk.q.name + '": ' + lk.q.desc + '.');
-          return;
-        }
-        wear(wTab, id);
-      };
-      grid.appendChild(b);
+      wear(kind, id);
+    };
+    return b;
+  }
+  function renderWardrobe() {
+    const owner = isOwner();
+    $('coinCount').textContent = owner ? '∞' : prog.coins;
+    const tabs = $('wTabs'); tabs.textContent = '';
+    const T = [...W_TABS, ['shop', 'Shop']]; if (owner) T.push(['owner', '★ Owner']);
+    if (!T.some(t => t[0] === wTab)) wTab = 'skin';
+    for (const [k, n] of T) { const b = document.createElement('button'); b.textContent = n; if (k === wTab) b.className = 'on'; if (k === 'owner') b.classList.add('own'); b.onclick = () => { wTab = k; renderWardrobe(); }; tabs.appendChild(b); }
+    const grid = $('wGrid'); grid.textContent = ''; const L = myLook();
+    const idsOf = kind => kind === 'color' || kind === 'color2' ? COLORS : Object.keys(LOOK_KINDS[kind]);
+    const head = t => { const h = document.createElement('div'); h.className = 'wSec'; h.textContent = t; grid.appendChild(h); };
+    if (wTab === 'shop') {
+      // everything you can buy with coins
+      let n = 0;
+      for (const kind of ['skin', 'hat', 'trail', 'color']) {
+        const list = idsOf(kind).filter(id => { const l = prog.lockOf(kind, id); return l && l.coins; }); if (!list.length) continue;
+        head(KIND_NAME[kind] + 's');
+        for (const id of list) { const owns = prog.owns(kind, id, owner); grid.appendChild(wTile(kind, id, L, owner, owns ? (owner ? 'Yours ★' : 'Yours') : null)); n++; }
+      }
+      wInfo(owner ? 'You own everything in the shop already!' : 'Buy things with coins. You get coins from coins lying around, treasure and quests.');
+      return;
     }
+    if (wTab === 'owner') {
+      head('Skins'); for (const id of Object.keys(SKINS).filter(id => ownerOnly('skin', id))) grid.appendChild(wTile('skin', id, L, owner));
+      head('Hats'); for (const id of Object.keys(HATS).filter(id => ownerOnly('hat', id))) grid.appendChild(wTile('hat', id, L, owner));
+      head('Trails'); for (const id of Object.keys(TRAILS).filter(id => ownerOnly('trail', id))) grid.appendChild(wTile('trail', id, L, owner));
+      head('Colors'); for (const id of COLORS.filter(id => ownerOnly('color', id))) grid.appendChild(wTile('color', id, L, owner)); for (const id of COLORS.filter(id => ownerOnly('color', id))) grid.appendChild(wTile('color2', id, L, owner, '2nd'));
+      wInfo('★ Special things only the owner can wear.');
+      return;
+    }
+    const sorted = idsOf(wTab).filter(id => !ownerOnly(wTab, id));
+    sorted.sort((a, b) => (prog.owns(wTab, b, owner) - prog.owns(wTab, a, owner)));
+    for (const id of sorted) grid.appendChild(wTile(wTab, id, L, owner));
     wInfo(null);
   }
   // in the game the wardrobe opens over the world
@@ -282,6 +304,8 @@
     try { game = new Game($('game'), $('ov'), SEED, B); }
     catch (e) { console.error(e); $('playBtn').disabled = false; menuMsg('Your device can\'t show 3D graphics (WebGL). Try another browser.'); return; }
     game.radius = Device.type === 'phone' ? 4 : Device.type === 'tablet' ? 5 : 6; game.near = Device.type === 'phone' ? 1.3 : 2.3;
+    if (Device.type !== 'computer') { game.maxDpr = 1.35; game.maxClouds = 1400; game.maxLights = 5; } else game.maxDpr = 1.25;
+    game.resize();
     game.allPartsChanged();
     game.onTouch = () => { prog.add('touched'); questCheck(); };
     const circ = new Circuits(B); for (const l of s.levers || []) circ.levers.add(l);
@@ -386,7 +410,8 @@
     list.push(now); G.rate.set(k, list); return true;
   }
   const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, dev: p.dev, devType: p.devType, admin: !!p.admin, p: p.p.map(v => +v.toFixed(2)) });
-  const cleanLook = (m, admin) => ({ color: COLORS.includes(m.color) ? m.color : COLORS[0], color2: COLORS.includes(m.color2) ? m.color2 : '#e8eef7', skin: SKINS[m.skin] ? m.skin : 'plain', hat: HATS[m.hat] && !(HATS[m.hat].lock && HATS[m.hat].lock.owner && !admin) ? m.hat : 'none', trail: TRAILS[m.trail] ? m.trail : 'none' });
+  const okLook = (kind, v, admin) => (kind === 'color' || kind === 'color2' ? COLORS.includes(v) : !!LOOK_KINDS[kind][v]) && (admin || !ownerOnly(kind, v));
+  const cleanLook = (m, admin) => ({ color: okLook('color', m.color, admin) ? m.color : COLORS[0], color2: okLook('color2', m.color2, admin) ? m.color2 : '#e8eef7', skin: okLook('skin', m.skin, admin) ? m.skin : 'plain', hat: okLook('hat', m.hat, admin) ? m.hat : 'none', trail: okLook('trail', m.trail, admin) ? m.trail : 'none' });
   const roster = () => [...G.players.values()].map(publicP);
   const dayPhase = () => ((performance.now() - G.dayStart) / DAY_MS) % 1;
   const findPlayer = name => { name = (name || '').toLowerCase().replace(/^@/, ''); if (!name) return null; return [...G.players.values()].find(p => p.name.toLowerCase() === name) || [...G.players.values()].find(p => p.name.toLowerCase().startsWith(name)); };
@@ -427,7 +452,7 @@
       const nonce = G.nonces.get(id); G.nonces.delete(id);
       if (nonce && typeof m.sig === 'string') adminVerify(nonce, m.sig).then(ok => {
         if (ok && G && G.players.get(id) === p) {
-          p.admin = true; p.name = p.wantName; p.hat = HATS[p.wantHat] ? p.wantHat : p.hat; renderPeople();
+          p.admin = true; p.name = p.wantName; if (p.wantLook) Object.assign(p, p.wantLook); renderPeople();
           const t = '★ ' + p.name + ' (the admin) joined'; sys(t); Net.toAll({ t: 'sys', text: t });
         }
       });
@@ -472,7 +497,7 @@
     const key = nameKey(name), owner = G.names.get(key), online = [...G.players.values()].some(q => nameKey(q.name) === key);
     if ((owner && owner !== fp) || online) { renamed = name; name = randomName(); }
     const pos = vec(m.p);
-    const np = addPlayer({ id, name, wantName, ...cleanLook(m, false), wantHat: HATS[m.hat] ? m.hat : 'none', pub, fp,
+    const np = addPlayer({ id, name, wantName, ...cleanLook(m, false), wantLook: cleanLook(m, true), pub, fp,
       dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
       p: okVec(pos) ? pos : defaultSpawn() });
     const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
@@ -1017,6 +1042,11 @@
   function loop(now) {
     if (!G || !G.running) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    // keep it smooth: draw the 3D a bit smaller when frames are slow, sharper again when there's room
+    { const P = G.perf || (G.perf = { t: 0, n: 0, sum: 0, good: 0 }); P.sum += (now - (P.last || now)) / 1000; P.last = now; P.n++;
+      if (P.n >= 40 && !NO_RENDER) { const avg = P.sum / P.n, g = G.game; P.n = 0; P.sum = 0;
+        if (avg > 1 / 40 && (g.scale || 1) > 0.6) { g.scale = Math.max(0.6, (g.scale || 1) - 0.1); g.resize(); P.good = 0; }
+        else if (avg < 1 / 56 && (g.scale || 1) < 1) { if (++P.good >= 3) { g.scale = Math.min(1, (g.scale || 1) + 0.1); g.resize(); P.good = 0; } } else P.good = 0; } }
     const m = G.me, b = G.body, cam = G.game.cam;
     for (const k in G.effects) if (G.effects[k] < now) delete G.effects[k];
     let ix = 0, iy = 0;

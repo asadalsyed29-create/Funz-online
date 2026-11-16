@@ -2,7 +2,8 @@
 // lock: nothing = free, { coins: n } = buy it, { quest: id } = finish that quest, { owner: true } = only the owner.
 const COLORS = ['#48d6ac', '#5aa9ff', '#ff7a8a', '#ffc45a', '#b48cff', '#ff9f5a', '#e8eef7', '#7be36b',
   '#e0404a', '#2f55d8', '#ff8fd0', '#1fb5b5', '#9a6a42', '#7a3ad6', '#f2e15a', '#8a93a8', '#22262e', '#ffd24a', '#ff3fa8', '#bfeaff'];
-const COLOR_LOCK = { '#22262e': { coins: 60 }, '#ffd24a': { coins: 60 }, '#ff3fa8': { coins: 60 }, '#bfeaff': { coins: 60 } };
+COLORS.push('#7a2cff', '#ffe27a', '#a8d8ff', '#cdb4ff');
+const COLOR_LOCK = { '#22262e': { coins: 60 }, '#ffd24a': { coins: 60 }, '#ff3fa8': { coins: 60 }, '#bfeaff': { coins: 60 }, '#7a2cff': { coins: 80 }, '#ffe27a': { coins: 80 }, '#a8d8ff': { owner: true }, '#cdb4ff': { owner: true } };
 
 const SKINS = {
   plain: { n: 0, name: 'Plain' }, band: { n: 1, name: 'Band' }, stripes: { n: 2, name: 'Stripes' }, dots: { n: 3, name: 'Dots' },
@@ -20,6 +21,8 @@ const SKINS = {
   disco: { n: 25, name: 'Disco ball', lock: { quest: 'race' } }, pixel: { n: 17, name: 'Pixels', lock: { quest: 'builder' } },
   bubble: { n: 29, name: 'Bubble', lock: { quest: 'swim' } }, planet: { n: 23, name: 'Planet', lock: { quest: 'far' } },
   rainbow: { n: 14, name: 'Rainbow', lock: { quest: 'biomes' } }, flow: { n: 35, name: 'Aurora', lock: { quest: 'explorer' } },
+  royal: { n: 36, name: 'Royal', lock: { coins: 300 } }, thunder: { n: 37, name: 'Thunderstorm', lock: { coins: 250 } }, cosmos: { n: 38, name: 'Rainbow cosmos', lock: { coins: 350 } },
+  outernautica: { n: 39, name: 'Outernautica dream', lock: { owner: true } },
 };
 const CLEAR_SKINS = [29]; // drawn with the see-through things
 
@@ -32,7 +35,7 @@ const HATS = {
   viking: { name: 'Viking helmet', lock: { quest: 'mountain' } }, mushroom: { name: 'Mushroom cap', lock: { quest: 'swamp' } }, pirate: { name: 'Pirate hat', lock: { quest: 'chests' } },
   miner: { name: 'Miner helmet', lock: { quest: 'cave' } }, antenna: { name: 'Antenna', lock: { quest: 'station' } }, bunny: { name: 'Bunny ears', lock: { quest: 'friends' } },
   cone: { name: 'Traffic cone', lock: { quest: 'builder' } }, grad: { name: 'Scholar cap', lock: { quest: 'ways' } },
-  crown: { name: 'Crown', lock: { owner: true } },
+  crown: { name: 'Crown', lock: { owner: true } }, stormcloud: { name: 'Storm cloud', lock: { coins: 250 } }, starcrown: { name: 'Star crown', lock: { coins: 300 } },
 };
 
 // trail: [shape, colours, size, glow?]  (see Particles for the shapes)
@@ -41,6 +44,8 @@ const TRAILS = {
   sparkle: { name: 'Sparkles', lock: { coins: 50 } }, hearts: { name: 'Hearts', lock: { coins: 80 } }, notes: { name: 'Confetti', lock: { coins: 100 } }, bolt: { name: 'Lightning', lock: { coins: 150 } },
   bubbles: { name: 'Bubbles', lock: { quest: 'swim' } }, leaves: { name: 'Leaves', lock: { quest: 'forest' } }, snow: { name: 'Snowflakes', lock: { quest: 'snow' } },
   stars: { name: 'Stars', lock: { quest: 'night' } }, fire: { name: 'Fire', lock: { quest: 'volcano' } }, rainbow: { name: 'Rainbow', lock: { quest: 'race' } },
+  royal: { name: 'Royal sparkle', lock: { coins: 200 } }, storm: { name: 'Lightning storm', lock: { coins: 250 } },
+  pastel: { name: 'Pastel dream', lock: { owner: true } },
 };
 
 // Quests: stat is counted by the game; when it reaches goal you get the coins and anything locked behind the quest.
@@ -112,7 +117,7 @@ class Progress {
   lockOf(kind, id) { return kind === 'color' || kind === 'color2' ? COLOR_LOCK[id] : ((kind === 'skin' ? SKINS : kind === 'hat' ? HATS : TRAILS)[id] || {}).lock; }
   // can this be worn? owner = has the owner pass
   owns(kind, id, owner) {
-    const lock = this.lockOf(kind, id); if (!lock) return true;
+    const lock = this.lockOf(kind, id); if (!lock || owner) return true; // the owner has everything
     if (lock.owner) return !!owner;
     if (lock.quest) return !!this.done[lock.quest];
     return !!(this.own[kind === 'color2' ? 'color' : kind] || {})[id];
@@ -122,3 +127,6 @@ class Progress {
     this.coins -= lock.coins; (this.own[k] || (this.own[k] = {}))[id] = 1; this.dirty = true; this.save(); return true;
   }
 }
+
+// is this one of the special owner-only things?
+const ownerOnly = (kind, id) => { const l = kind === 'color' || kind === 'color2' ? COLOR_LOCK[id] : ((kind === 'skin' ? SKINS : kind === 'hat' ? HATS : TRAILS)[id] || {}).lock; return !!(l && l.owner); };

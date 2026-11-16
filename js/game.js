@@ -41,9 +41,11 @@ class Game {
     this.resize();
   }
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, innerWidth > 1400 ? 1.5 : 2);
+    // the 3D picture is drawn a bit smaller than the screen when the device is slow (this.scale), the labels stay sharp
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), gdpr = Math.min(dpr, this.maxDpr || 1.5) * (this.scale || 1);
     this.dpr = dpr; this.w = innerWidth; this.h = innerHeight;
-    for (const c of [this.canvas, this.ov]) { c.width = Math.round(this.w * dpr); c.height = Math.round(this.h * dpr); }
+    this.canvas.width = Math.round(this.w * gdpr); this.canvas.height = Math.round(this.h * gdpr);
+    this.ov.width = Math.round(this.w * dpr); this.ov.height = Math.round(this.h * dpr);
     this.gfx.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     // room for notches on phones
     let pr = document.getElementById('safeProbe');
@@ -442,7 +444,7 @@ class Game {
     if (this.cave) addL([me.p[0], me.p[1] + 1.2, me.p[2]], 10, [0.6, 0.55, 0.45]);
     L.sort((a, b) => a[3] - b[3]);
     const lp = new Float32Array(32), lc = new Float32Array(24), lk = this.cave || inSt ? 1 : Math.min(1, o.dark / 0.45) * 0.85 + 0.15;
-    L.slice(0, 8).forEach((l, i) => { lp.set([l[0][0] - c.eye[0], l[0][1] - c.eye[1], l[0][2] - c.eye[2], l[1]], i * 4); lc.set(l[2].map(v => v * lk), i * 3); });
+    L.slice(0, this.maxLights || 8).forEach((l, i) => { lp.set([l[0][0] - c.eye[0], l[0][1] - c.eye[1], l[0][2] - c.eye[2], l[1]], i * 4); lc.set(l[2].map(v => v * lk), i * 3); });
     const tanY = Math.tan(this.fov / 2);
     G.begin({ vp: this.vp, eye: c.eye, sun: sun.map(v => v / sl), sunC, sky: amb, ground: gnd, fog, fogD, time: t, horizon: hor, zenith: zen, right: rt, up, fwd: f, tanX: tanY * this.w / this.h, tanY, lp, lc, night, sunDisc: sd.map(v => v / sdl), sunCol: L3([1, 0.95, 0.8], [1, 0.55, 0.3], dusk) });
     gl.clearColor(fog[0], fog[1], fog[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -476,7 +478,7 @@ class Game {
     const far = RAD * CHUNK + 40;
     // the ground
     G.mat(0, 0, 0.06); G.tex(1);
-    const chunkVis = (x, z) => Math.hypot(x - ccx, z - ccz) <= RAD + 0.5 && inView(x * CHUNK + 32, z * CHUNK + 32, 48);
+    const chunkVis = (x, z) => Math.hypot(x - ccx, z - ccz) <= (inSt ? 1.6 : RAD + 0.5) && inView(x * CHUNK + 32, z * CHUNK + 32, 48);
     if (!this.cave) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (chunkVis(x, z)) G.draw(ch.mesh); }
     this.stat('ground');
     // trees, plants and rocks: cartoon shading
@@ -553,7 +555,7 @@ class Game {
       if (hgt < 0 || hgt > 24 || insideStation(p.p)) continue;
       G.draw(this.shadow, M4.model([p.p[0], gy + 0.06, p.p[2]], null, (p.r || 0.45) * 1.2 * (1 - Math.min(0.6, hgt / 12))), Math.max(0.2, 1 - hgt / 14));
     }
-    if (!this.cave) {
+    if (!this.cave && !inSt) {
       gl.depthMask(true); G.water(this.water, [Math.round(c.target[0] / 10) * 10, SEA - 0.1, Math.round(c.target[2] / 10) * 10]); gl.depthMask(false);
       // clouds: every weather cell has its own kinds of cloud, made of soft puffs (see sky.js)
       const CC = CLOUD_CELL, ci = Math.floor(c.target[0] / CC), cj = Math.floor(c.target[2] / CC), near = [];
@@ -564,7 +566,7 @@ class Game {
       }
       const top = L3(L3([1, 1, 1], [1, 0.84, 0.72], dusk), [0.28, 0.31, 0.42], Math.max(0, (k - 0.35) / 0.65)), bot = L3(L3([0.6, 0.64, 0.75], [0.55, 0.42, 0.5], dusk), [0.1, 0.11, 0.18], Math.max(0, (k - 0.35) / 0.65));
       if (!this.cloudData) this.cloudData = new Float32Array(6000 * 44);
-      const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, 5000);
+      const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, this.maxClouds || 2600);
       gl.depthMask(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 3000)); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.enable(gl.BLEND);
       G.fog();
     }

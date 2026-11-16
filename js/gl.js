@@ -60,7 +60,7 @@ float h2(vec2 p){vec3 q=fract(vec3(p.xyx)*0.1031);q+=dot(q,q.yzx+33.33);return f
 float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h2(i),h2(i+vec2(1.0,0.0)),f.x),mix(h2(i+vec2(0.0,1.0)),h2(i+vec2(1.0,1.0)),f.x),f.y);}
 // painted-on detail so surfaces look textured: 1 = ground, 2 = stone and wood, 3 = built blocks
 vec3 detail(vec3 c,vec3 n,float dist){
-  vec3 W=vW;float fade=1.0-smoothstep(50.0,220.0,dist);
+  vec3 W=vW;float fade=1.0-smoothstep(50.0,220.0,dist);if(dist>520.0)return c*(1.0+(n2(W.xz*0.035)-0.5)*0.16);
   if(uTex<1.5){
     // which kind of ground this is, worked out from its colour (so biomes blend smoothly)
     vec2 q=W.xz;float slope=1.0-n.y;
@@ -107,7 +107,7 @@ void main(){
   vec3 n=normalize(vN);float d=max(dot(n,uSun),0.0);
   if(uToon>0.5)d=smoothstep(0.02,0.12,d)*0.55+smoothstep(0.48,0.6,d)*0.45;
   vec3 light=mix(uGround,uSky,n.y*0.5+0.5)+uSunC*d;
-  for(int i=0;i<8;i++){vec3 dv=uL[i].xyz-vR;float r=uL[i].w;if(r>0.0){float k=max(0.0,1.0-length(dv)/r);light+=uLC[i]*k*k*(0.35+0.65*max(dot(n,normalize(dv)),0.0));}}
+  for(int i=0;i<8;i++){float r=uL[i].w;if(r<=0.0)break;vec3 dv=uL[i].xyz-vR;{float k=max(0.0,1.0-length(dv)/r);light+=uLC[i]*k*k*(0.35+0.65*max(dot(n,normalize(dv)),0.0));}}
   vec3 c=vC.rgb*uTint;vec3 vd=normalize(-vR);
   if(uTex>0.5)c=detail(c,n,length(vR));
   float sp=pow(max(dot(reflect(-uSun,n),vd),0.0),24.0)*uSpec*length(uSunC);
@@ -176,7 +176,11 @@ void main(){
   else if(s<32.5){vec2 q=pz*2.3;q.y+=0.25;float x=abs(q.x),y=q.y;float h=pow(x*x+y*y-0.5,3.0)-x*x*y*y*y;col=h<0.0?B:A;}
   else if(s<33.5){vec2 q=pz;float d=min(length(q-vec2(0.0,-0.12))-0.2,min(min(length(q-vec2(-0.26,0.12))-0.1,length(q-vec2(0.26,0.12))-0.1),min(length(q-vec2(-0.1,0.28))-0.1,length(q-vec2(0.1,0.28))-0.1)));col=d<0.0?B:A;}
   else if(s<34.5){vec2 q=pz;float z=abs(q.x-0.16*sign(q.y)+q.y*0.5);col=(z<0.11&&abs(q.y)<0.44)?B:A;}
-  else{float t=fbm(p*3.0+vec3(0.0,uTime*0.2,0.0));col=mix(A,B,smoothstep(0.3,0.7,t+p.y*0.4));glow=0.35;}
+  else if(s<35.5){float t=fbm(p*3.0+vec3(0.0,uTime*0.2,0.0));col=mix(A,B,smoothstep(0.3,0.7,t+p.y*0.4));glow=0.35;}
+  else if(s<36.5){float sw=sin(lon*2.0+lat*3.0+uTime*0.6);col=mix(vec3(0.32,0.08,0.55),vec3(0.55,0.2,0.85),sw*0.5+0.5);float band=smoothstep(0.03,0.0,abs(abs(p.y)-0.32)-0.05);col=mix(col,vec3(1.0,0.82,0.3),band);float st=star5(pz,0.33,0.45);col=mix(col,vec3(1.0,0.86,0.35),step(st,0.0));float sp=step(0.985,h3(floor(p*30.0)))*(0.5+0.5*sin(uTime*4.0+h3(floor(p*30.0))*30.0));col+=sp;glow=clamp(band*0.6+sp+step(st,0.0)*0.4,0.0,1.0);gloss=1.2;}
+  else if(s<37.5){float c=fbm(p*2.6+vec3(uTime*0.15,0.0,uTime*0.1));col=mix(vec3(0.08,0.09,0.15),vec3(0.36,0.4,0.52),c);float fl=step(1.2,sin(uTime*2.3)+sin(uTime*3.7+1.0)+sin(uTime*0.9));float bolt=step(abs(fbm(p*6.0+floor(uTime*2.0))-0.5),0.02);col=mix(col,vec3(0.85,0.95,1.0),bolt*(0.4+0.6*fl));col+=vec3(0.5,0.6,0.9)*fl*0.25;glow=bolt*(0.4+0.6*fl)+fl*0.3;}
+  else if(s<38.5){float nb=fbm(p*2.2+vec3(uTime*0.03));col=hsv(nb*1.5+lon*0.16+uTime*0.05)*nb*1.4;col=mix(vec3(0.03,0.02,0.1),col,smoothstep(0.25,0.7,nb));float st=step(0.988,h3(floor(p*40.0)));col+=st;glow=clamp(0.3+st,0.0,1.0);}
+  else{vec3 pb=vec3(0.66,0.85,1.0),pp=vec3(0.8,0.71,1.0);float w=sin(lat*5.0+sin(lon*2.0+uTime*0.5)*1.4+uTime*0.4);col=mix(pb,pp,smoothstep(-0.6,0.6,w));col=mix(col,vec3(1.0),smoothstep(0.92,1.0,w)*0.6);float h=h3(floor(p*22.0)),sp=step(0.965,h)*(0.5+0.5*sin(uTime*3.0+h*50.0));float st=star5(pz,0.3,0.45);col=mix(col,vec3(1.0,0.97,1.0),step(st,0.0)*0.85);col+=sp*0.8;glow=clamp(0.25+sp+step(st,0.0)*0.3,0.0,1.0);gloss=1.1;}
   float d=max(dot(n,uSun),0.0);float td=smoothstep(0.0,0.12,d)*0.5+smoothstep(0.45,0.6,d)*0.5;
   vec3 light=mix(uGround,uSky,n.y*0.5+0.5)*1.15+uSunC*td;
   vec3 c=metal>0.5?col*(0.5+0.65*td*length(uSunC)+0.25*length(uSky)):col*light;

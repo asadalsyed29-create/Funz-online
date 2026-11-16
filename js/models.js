@@ -188,10 +188,24 @@ function hatModel(gl, hat) {
       mb.sph([0.3, 0.42, 0.3], [0.025, 0.05, 0.025], 6, C('#ffd24a'));
       break;
     }
+    case 'stormcloud': {
+      // a little thundercloud floating over your head, with a lightning bolt
+      const top = C('#e8ecf6'), base = C('#5a6070');
+      for (const [x, y, z, r] of [[0, 0.82, 0, 0.17], [0.15, 0.78, 0.06, 0.13], [-0.15, 0.79, -0.04, 0.13], [0.05, 0.94, -0.03, 0.12], [-0.06, 0.78, 0.13, 0.11]]) mb.sph([x, y, z], [r, r * 0.85, r], 10, (nx, ny) => ny < -0.2 ? base : mixC(base, top, (ny + 0.2) / 1.2), 0);
+      const g = glowC(C('#fff27a')); mb.tri([0.02, 0.68, 0], [-0.06, 0.55, 0], [0.03, 0.57, 0], g); mb.tri([0.02, 0.68, 0], [0.03, 0.57, 0], [-0.06, 0.55, 0], g); mb.tri([0.0, 0.59, 0], [-0.03, 0.44, 0], [0.07, 0.57, 0], g); mb.tri([0.0, 0.59, 0], [0.07, 0.57, 0], [-0.03, 0.44, 0], g);
+      for (const [x, z] of [[0.12, 0.05], [-0.1, -0.06], [0.04, -0.12]]) mb.caps([x, 0.68, z], [x - 0.01, 0.6, z], 0.008, 0.008, 4, C('#9ad0ff'));
+      break;
+    }
+    case 'starcrown': {
+      const g = C('#fff2a8');
+      mb.tor([0, 0.4, 0], 0.27, 0.03, 24, 6, C('#ffcf4a'));
+      for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283, x = Math.cos(a) * 0.27, z = Math.sin(a) * 0.27; mb.push([x, 0.5 + (k === 0 ? 0.05 : 0), z], M4.rotY(-a + Math.PI / 2)); for (let q = 0; q < 5; q++) { const b = q / 5 * 6.283 + Math.PI / 2, o = [Math.cos(b) * 0.09, Math.sin(b) * 0.09, 0], l = b + 0.628, r = b - 0.628, L = [Math.cos(l) * 0.04, Math.sin(l) * 0.04, 0], R = [Math.cos(r) * 0.04, Math.sin(r) * 0.04, 0]; mb.tri([0, 0, 0.02], R, o, glowC(g)); mb.tri([0, 0, 0.02], o, L, glowC(g)); mb.tri([0, 0, -0.02], o, R, glowC(g)); mb.tri([0, 0, -0.02], L, o, glowC(g)); } mb.pop(); }
+      break;
+    }
     case 'crown': {
       const g = C('#ffcf4a');
       mb.lathe([[0.3, 0.3], [0.31, 0.34], [0.3, 0.46], [0.28, 0.48], [0.27, 0.47], [0.27, 0.32], [0, 0.32]], 24, g, 0.1);
-      for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; mb.caps([Math.cos(a) * 0.28, 0.46, Math.sin(a) * 0.28], [Math.cos(a) * 0.3, 0.62, Math.sin(a) * 0.3], 0.06, 0.012, 8, g); mb.sph([Math.cos(a) * 0.3, 0.64, Math.sin(a) * 0.3], 0.03, 6, g); mb.sph([Math.cos(a + 0.63) * 0.31, 0.39, Math.sin(a + 0.63) * 0.31], 0.04, 8, G(k % 2 ? '#ff5a6e' : '#5aa9ff'), 0); }
+      for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; mb.caps([Math.cos(a) * 0.28, 0.46, Math.sin(a) * 0.28], [Math.cos(a) * 0.3, 0.62, Math.sin(a) * 0.3], 0.06, 0.012, 8, g); mb.sph([Math.cos(a) * 0.3, 0.64, Math.sin(a) * 0.3], 0.03, 6, g); mb.sph([Math.cos(a + 0.63) * 0.31, 0.39, Math.sin(a + 0.63) * 0.31], 0.04, 8, G(k % 2 ? '#cdb4ff' : '#a8d8ff'), 0); }
       break;
     }
   }
