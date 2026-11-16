@@ -55,7 +55,7 @@ uniform mat4 uVP;uniform mat4 uM;uniform vec3 uEye;uniform float uOutline;
 varying vec3 vN;varying vec4 vC;varying vec3 vR;
 varying vec3 vW;
 void main(){vec4 w=uM*vec4(aP+aN*uOutline,1.0);vW=w.xyz;vR=w.xyz-uEye;vN=mat3(uM)*aN;vC=aC;gl_Position=uVP*w;}`;
-const WORLD_FS = PREC + `varying vec3 vN;varying vec4 vC;varying vec3 vR;varying vec3 vW;uniform float uTex;
+const WORLD_FS = (deriv) => (deriv ? '#extension GL_OES_standard_derivatives : enable\n#define FLAT 1\n' : '') + PREC + `varying vec3 vN;varying vec4 vC;varying vec3 vR;varying vec3 vW;uniform float uTex;uniform float uFlat;
 float h2(vec2 p){vec3 q=fract(vec3(p.xyx)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
 float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h2(i),h2(i+vec2(1.0,0.0)),f.x),mix(h2(i+vec2(0.0,1.0)),h2(i+vec2(1.0,1.0)),f.x),f.y);}
 // painted-on detail so surfaces look textured: 1 = ground, 2 = stone and wood, 3 = built blocks
@@ -104,7 +104,11 @@ uniform vec4 uL[8];uniform vec3 uLC[8];
 void main(){
   float f=clamp(1.0-exp(-pow(length(vR)*uFogD,2.0)),0.0,1.0);
   if(uOutline>0.0){gl_FragColor=vec4(mix(uOutCol,uFog,f),1.0);return;}
-  vec3 n=normalize(vN);float d=max(dot(n,uSun),0.0);
+  vec3 n=normalize(vN);
+#ifdef FLAT
+  if(uFlat>0.5){vec3 fn=normalize(cross(dFdx(vR),dFdy(vR)));if(dot(fn,vR)>0.0)fn=-fn;n=fn;} // clean low-poly: every face lit flat
+#endif
+  float d=max(dot(n,uSun),0.0);
   if(uToon>0.5)d=smoothstep(0.02,0.12,d)*0.55+smoothstep(0.48,0.6,d)*0.45;
   vec3 light=mix(uGround,uSky,n.y*0.5+0.5)+uSunC*d;
   for(int i=0;i<8;i++){float r=uL[i].w;if(r<=0.0)break;vec3 dv=uL[i].xyz-vR;{float k=max(0.0,1.0-length(dv)/r);light+=uLC[i]*k*k*(0.35+0.65*max(dot(n,normalize(dv)),0.0));}}
@@ -251,7 +255,7 @@ class GL {
     this.gl = gl; this.canvas = canvas;
     this.deriv = !!gl.getExtension('OES_standard_derivatives');
     const scene = ['uVP', 'uEye', 'uSun', 'uSunC', 'uSky', 'uGround', 'uFog', 'uFogD'];
-    this.pw = this.program(WORLD_VS, WORLD_FS, ['aP', 'aN', 'aC'], [...scene, 'uM', 'uAlpha', 'uTint', 'uGlow', 'uToon', 'uRim', 'uSpec', 'uOutline', 'uOutCol', 'uL', 'uLC', 'uTex']);
+    this.pw = this.program(WORLD_VS, WORLD_FS(this.deriv), ['aP', 'aN', 'aC'], [...scene, 'uM', 'uAlpha', 'uTint', 'uGlow', 'uToon', 'uRim', 'uSpec', 'uOutline', 'uOutCol', 'uL', 'uLC', 'uTex', 'uFlat']);
     this.pb = this.program(BALL_VS, BALL_FS, ['aP'], [...scene, 'uM', 'uA', 'uB', 'uSkin', 'uTime', 'uOutline', 'uOutCol', 'uAlpha', 'uR3']);
     this.pp = this.program(PART_VS, PART_FS, ['aP', 'aO', 'aC', 'aS'], ['uVP', 'uRight', 'uUp', 'uEye', 'uFogD', 'uFog']);
     this.ps = this.program(SKY_VS, SKY_FS, ['aP'], ['uRight', 'uUp', 'uFwd', 'uTan', 'uSun', 'uZen', 'uHor', 'uSunC', 'uNight', 'uTime']);
@@ -298,7 +302,7 @@ class GL {
       if (u.uRight) { gl.uniform3fv(u.uRight, S.right); gl.uniform3fv(u.uUp, S.up); }
       if (pr === this.pw) {
         gl.uniform4fv(u.uL, S.lp); gl.uniform3fv(u.uLC, S.lc);
-        gl.uniform1f(u.uToon, 0); gl.uniform1f(u.uRim, 0); gl.uniform1f(u.uSpec, 0.18); gl.uniform1f(u.uOutline, 0); gl.uniform3f(u.uOutCol, 0.1, 0.1, 0.16); gl.uniform1f(u.uTex, 0); this.texState = 0;
+        gl.uniform1f(u.uToon, 0); gl.uniform1f(u.uRim, 0); gl.uniform1f(u.uSpec, 0.18); gl.uniform1f(u.uOutline, 0); gl.uniform3f(u.uOutCol, 0.1, 0.1, 0.16); gl.uniform1f(u.uTex, 0); this.texState = 0; gl.uniform1f(u.uFlat, 1); this.flatState = 1;
         this.matState = '0|0|0.18';
       }
       if (pr === this.pb) { gl.uniform1f(u.uOutline, 0); gl.uniform3f(u.uOutCol, 0.1, 0.1, 0.16); }
@@ -317,6 +321,8 @@ class GL {
     const gl = this.gl, u = this.pw.u; gl.uniform1f(u.uToon, toon); gl.uniform1f(u.uRim, rim); gl.uniform1f(u.uSpec, spec);
   }
   // texture detail for the next things drawn (0 none, 1 ground, 2 stone/wood, 3 blocks)
+  // flat faces (clean low-poly look) for the next things drawn
+  flat(on) { this.use(this.pw); const v = on ? 1 : 0; if (this.flatState === v) return; this.flatState = v; this.gl.uniform1f(this.pw.u.uFlat, v); }
   tex(t) { this.use(this.pw); if (this.texState === t) return; this.texState = t; this.gl.uniform1f(this.pw.u.uTex, t); }
   fog(d) { this.use(this.pw); this.gl.uniform1f(this.pw.u.uFogD, d === undefined ? this.S.fogD : d); }
   draw(m, model, alpha = 1, tint, glow = 0) {
@@ -454,6 +460,7 @@ class MeshBuilder {
   // smooth ball or egg. r: one number or [x,y,z]. col: colour or fn(nx,ny,nz). grad darkens the underside a little
   sph(c, r, seg, col, grad = 0.2) {
     if (this.segK) seg = Math.max(4, Math.round(seg * this.segK));
+    if (this.lowpoly !== false) seg = Math.max(3, Math.round(seg * 0.62));
     const rx = r.length ? r[0] : r, ry = r.length ? r[1] : r, rz = r.length ? r[2] : r, rings = seg, segs = seg * 2, base = this.v.length / 10;
     for (let i = 0; i <= rings; i++) {
       const th = i / rings * Math.PI, st = Math.sin(th), y = Math.cos(th);
@@ -467,6 +474,7 @@ class MeshBuilder {
   }
   // a shape spun around the Y axis. profile: [[radius, y], ...] from the bottom up
   lathe(profile, seg, col, grad = 0) {
+    if (this.lowpoly !== false) seg = Math.max(5, Math.round(seg * 0.6));
     const base = this.v.length / 10, n = profile.length, y0 = profile[0][1], y1 = profile[n - 1][1];
     for (let k = 0; k < n; k++) {
       const a = profile[Math.max(0, k - 1)], b = profile[Math.min(n - 1, k + 1)];
@@ -490,6 +498,7 @@ class MeshBuilder {
   }
   // a ring (halo, life ring, hoop) lying flat around the Y axis
   tor(c, R, r, segR, segr, col) {
+    if (this.lowpoly !== false) { segR = Math.max(8, Math.round(segR * 0.55)); segr = Math.max(3, Math.round(segr * 0.6)); }
     const base = this.v.length / 10;
     for (let i = 0; i <= segR; i++) {
       const a = i / segR * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);

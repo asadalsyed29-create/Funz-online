@@ -339,7 +339,7 @@ class Game {
   // ---------- creatures ----------
   updateCreatures(dt, me, players, night) {
     const N = this.T.N, pcx = Math.floor(me.p[0] / CHUNK), pcz = Math.floor(me.p[2] / CHUNK), act = new Set();
-    if (!this.cave) for (let i = pcx - 3; i <= pcx + 3; i++) for (let j = pcz - 3; j <= pcz + 3; j++) {
+    if (!this.cave && !this.realm) for (let i = pcx - 3; i <= pcx + 3; i++) for (let j = pcz - 3; j <= pcz + 3; j++) {
       const k = i + ',' + j; act.add(k); if (this.creatureChunks.has(k)) continue;
       this.creatureChunks.add(k);
       const x = i * CHUNK + 32, z = j * CHUNK + 32, inf = this.T.info(x, z);
@@ -366,9 +366,9 @@ class Game {
       c.calm += ((near ? 0 : 1) - c.calm) * Math.min(1, dt * 3);
       if (near && nd < 1.3 && !c.touched && near === me) { c.touched = true; if (this.onTouch) this.onTouch(c); }
       const nx = c.p[0] + Math.cos(c.yaw) * sp * dt, nz = c.p[2] + Math.sin(c.yaw) * sp * dt;
-      const RL = this.realm, gnd = RL ? RL.floorAt(nx, nz) : this.cave ? this.cave.floor(nx, nz) : this.T.ground(nx, nz);
+      const RL = c.chunk.startsWith('realm:') ? this.realm : null, gnd = RL ? RL.floorAt(nx, nz) : this.cave ? this.cave.floor(nx, nz) : this.T.ground(nx, nz);
       const water = !this.cave && !RL && gnd < SEA - 0.3;
-      if (RL ? Math.abs(gnd - RL.o[1]) > 25 : C.swim ? (gnd > SEA - 1.2) : (water && !C.fly)) { c.yaw += Math.PI * 0.7; continue; }
+      if (RL ? (Math.abs(gnd - RL.o[1]) > 25 || (RL.kind === 'space' && Math.hypot(nx - RL.o[0], nz - RL.o[2]) > 38)) : C.swim ? (gnd > SEA - 1.2) : (water && !C.fly)) { c.yaw += Math.PI * 0.7; continue; }
       c.p[0] = nx; c.p[2] = nz;
       if (C.swim) c.p[1] = RL ? gnd + (c.type === 'jelly' ? 6 : 3) + Math.sin(c.t * 2 + c.seed) * 0.6 : SEA - 0.8 + Math.sin(c.t * 2) * 0.2;
       else if (C.fly) c.p[1] = gnd + 1.5 + Math.sin(performance.now() / 300 + c.yaw) * 0.6;
@@ -526,19 +526,19 @@ class Game {
     const vis = (x, z, r, rad = 30) => { const dx = x - c.target[0], dz = z - c.target[2]; return dx * dx + dz * dz < (r * r) && inView(x, z, rad); };
     const far = RAD * CHUNK + 40;
     // the ground
-    G.mat(0, 0, 0.06); G.tex(1);
+    G.mat(0, 0, 0.06); G.tex(1); G.flat(0);
     const chunkVis = (x, z) => Math.hypot(x - ccx, z - ccz) <= (inSt ? 1.6 : RAD + 0.5) && inView(x * CHUNK + 32, z * CHUNK + 32, 48);
     if (!this.under) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number); if (chunkVis(x, z)) G.draw(ch.mesh); }
     this.stat('ground');
-    // trees, plants and rocks: cartoon shading
-    G.mat(1, 0.18, 0.06); G.tex(2);
+    // trees, plants and rocks: clean low-poly faces
+    G.flat(1); G.mat(1, 0.18, 0.06); G.tex(2);
     if (!this.under) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number), d = Math.hypot(x - ccx, z - ccz); if (chunkVis(x, z)) G.draw(d <= (this.near || 2.3) ? ch.deco : ch.decoLo); }
     G.mat(0, 0, 0.06);
     if (this.cave) G.draw(this.cave.mesh);
     if (RL) {
-      for (const m of RL.meshes) { if (m.kind === 'deco') G.mat(1, 0.2, 0.1); else if (m.kind === 'glow') G.mat(1, 0.5, 0.8); else G.mat(0, 0.1, 0.1); G.tex(m.kind === 'world' ? 2 : 0); G.draw(m.mesh, null, 1, null, m.kind === 'glow' ? 0.6 : 0); }
+      for (const m of RL.meshes) { G.flat(m.kind !== 'world'); if (m.kind === 'deco') G.mat(1, 0.2, 0.1); else if (m.kind === 'glow') G.mat(1, 0.5, 0.8); else G.mat(0, 0.1, 0.1); G.tex(m.kind === 'world' ? 2 : 0); G.draw(m.mesh, null, 1, null, m.kind === 'glow' ? 0.6 : 0); }
       if (RL.planet) { G.mat(0, 0.3, 0.2); G.tex(0); G.fog(0); G.draw(RL.planet, null, 1, null, 0.15); G.fog(); }
-      G.mat(0, 0, 0.06); G.tex(2);
+      G.mat(0, 0, 0.06); G.tex(2); G.flat(1);
     }
     this.stat('deco');
     // big places and structures
@@ -711,9 +711,23 @@ class Game {
       g.fill();
       g.font = '700 10px system-ui'; g.fillText(name + ' ' + (d < 1000 ? Math.round(d / 5) * 5 + 'm' : (d / 1000).toFixed(1) + 'km'), Math.max(cx - W / 2 + 34, Math.min(cx + W / 2 - 34, x)), y + 26);
     };
+    // places ahead of you: their names once you've found them, a ? before that
+    const known = this.known || new Set(), near = this.places(me.p[0], me.p[2], 900).map(q => ({ ...q, d: Math.hypot(q.x - me.p[0], q.z - me.p[2]) })).filter(q => q.d > 15 && Math.abs(bearing(q.x - me.p[0], q.z - me.p[2])) < Math.PI * 0.45).sort((a, b) => a.d - b.d).slice(0, 3);
+    for (const q of near) mark(q.x, q.z, known.has(q.key) || q.always ? q.col : '#c8ccd8', known.has(q.key) || q.always ? q.name : '?');
     mark(0, 0, '#ffc45a', 'Plaza');
     mark(STATION.x, STATION.z, '#5ff0e0', 'Station');
     g.restore();
+  }
+  // places near you for the compass and the map: structures, portals and the parkour
+  places(x, z, rad = 900) {
+    const out = [], c = this.planCache || (this.planCache = new Map());
+    for (let rx = Math.floor((x - rad) / REG); rx <= Math.floor((x + rad) / REG); rx++) for (let rz = Math.floor((z - rad) / REG); rz <= Math.floor((z + rad) / REG); rz++) {
+      const k = rx + ',' + rz; let p = c.get(k); if (p === undefined) { p = this.St.plan(rx, rz); c.set(k, p); if (c.size > 3000) c.delete(c.keys().next().value); }
+      if (p) out.push({ x: p.x, z: p.z, key: 's:' + p.key, kind: p.type, name: STRUCT_TYPES[p.type], col: p.type === 'cave' ? '#b8a8ff' : '#ffffff' });
+    }
+    for (const pt of this.portals) out.push({ x: pt.p[0], z: pt.p[2], key: 'portal:' + pt.kind, kind: 'portal', name: pt.label, col: pt.col, always: true });
+    out.push({ x: 44, z: 38, key: 'parkour', kind: 'parkour', name: 'Parkour', col: '#ff9f5a', always: true });
+    return out;
   }
   label(g, x, y, p, now, dist) {
     const sc = Math.max(0.7, Math.min(1.1, 14 / dist)); g.save(); g.translate(x, y); g.scale(sc, sc);
@@ -769,7 +783,11 @@ class Game {
       g.fillStyle = col; g.beginPath(); g.arc(cx + px, cy + py, 4.5, 0, 7); g.fill(); g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.stroke();
       if (txt) { g.font = '700 10px system-ui'; g.textAlign = 'center'; g.fillStyle = col; g.fillText(txt, Math.max(x + 18, Math.min(x + size - 18, cx + px)), cy + py + (py > size / 2 - 22 ? -8 : 14)); }
     };
-    if (!this.cave && !this.realm) { mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', ''); }
+    if (!this.cave && !this.realm) {
+      const known = this.known || new Set();
+      for (const q of this.places(me.p[0], me.p[2], MAPSPAN * 0.75)) { if (Math.hypot(q.x - me.p[0], q.z - me.p[2]) * sc > size / 2 - 8) continue; const k = known.has(q.key) || q.always; mark(q.x, q.z, k ? q.col : 'rgba(200,204,216,.8)', Math.hypot(q.x - me.p[0], q.z - me.p[2]) < MAPSPAN * 0.35 ? (k ? q.name : '?') : ''); }
+      mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', '');
+    }
     this.place = this.realm ? this.realm.name : this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name + ((this.weather || 0) >= 0.64 ? ' · ' + WEATHER_NAMES(this.weather) : '');
   }
 }

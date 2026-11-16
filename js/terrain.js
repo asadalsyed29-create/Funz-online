@@ -240,7 +240,9 @@ function trunk(mb, x, y, z, s, h, col, lean = 0) {
 function puffs(mb, x, y, z, s, c, r2, list) {
   const base = hue(c, r2), top = mixC(base, [1, 1, 0.8, 1], 0.22), low = shadeC(base, 0.72);
   const col = (nx, ny) => ny > 0.2 ? mixC(base, top, (ny - 0.2) * 1.25) : mixC(low, base, (ny + 1) / 1.2);
-  for (const [dx, dy, dz, r] of mb.lod ? list.slice(0, 3) : list) mb.sph([x + dx * s, y + dy * s, z + dz * s], [r * s * (mb.lod ? 1.15 : 1), r * s * 0.9, r * s * (mb.lod ? 1.15 : 1)], mb.lod ? 3 : 4, col, 0);
+  // clean low-poly: each puff is a faceted ball, lighter on top
+  const icol = (a, b) => col(a, b);
+  for (const [dx, dy, dz, r] of mb.lod ? list.slice(0, 3) : list.slice(0, 5)) mb.ico(x + dx * s, y + dy * s, z + dz * s, [r * s * (mb.lod ? 1.15 : 1.05), r * s * 0.92, r * s * (mb.lod ? 1.15 : 1.05)], mb.lod ? 0 : 1, icol, false, null, (a, b, c) => 0.07 * Math.sin(a * 5 + r2 * 9) * Math.cos(c * 4 + r2 * 5));
 }
 function roundTree(mb, x, y, z, s, c, r2 = 0.5) {
   trunk(mb, x, y, z, s, 4 * s, '#7a5232', (r2 - 0.5) * 0.15);

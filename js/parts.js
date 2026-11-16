@@ -36,11 +36,25 @@ const PARTS = {
   61: { name: 'Door', color: '#7a8496', cat: 'circuits', output: true, tip: 'Opens (sinks down) when powered.' },
   62: { name: 'Lift', color: '#5aa9ff', cat: 'circuits', output: true, tip: 'Rises 4 blocks when powered, carrying balls.' },
   63: { name: 'Slider', color: '#b48cff', cat: 'circuits', output: true, rotates: true, tip: 'Slides 4 blocks the way the arrow points when powered.' },
+  // decorations for homes and bases
+  70: { name: 'Chair', color: '#c49a6c', cat: 'decor', h: 0.5, rotates: true },
+  71: { name: 'Table', color: '#9b6a3c', cat: 'decor', h: 0.8 },
+  72: { name: 'Sofa', color: '#cdb4ff', cat: 'decor', h: 0.55, rotates: true },
+  73: { name: 'Bed', color: '#a8d8ff', cat: 'decor', h: 0.5, rotates: true },
+  74: { name: 'Bookshelf', color: '#7a5232', cat: 'decor', rotates: true },
+  75: { name: 'Plant pot', color: '#c86a4a', cat: 'decor', h: 0.5 },
+  76: { name: 'Floor lamp', color: '#ffe08a', cat: 'decor', h: 0.3 },
+  77: { name: 'Rug', color: '#e0505a', cat: 'decor', h: 0.04 },
+  78: { name: 'TV', color: '#2c3140', cat: 'decor', h: 0.9, rotates: true },
+  79: { name: 'Painting', color: '#ffc45a', cat: 'decor', h: 0.05, rotates: true },
+  80: { name: 'Crate', color: '#b08a5a', cat: 'decor', h: 0.8 },
+  81: { name: 'Vase', color: '#5aa9ff', cat: 'decor', h: 0.5 },
 };
 const TOOL_CATS = {
   blocks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   machines: [40, 41, 42, 46, 47, 48],
   circuits: [50, 51, 52, 53, 54, 55, 56, 60, 61, 62, 63, 'wire', 'cut'],
+  decor: [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81],
 };
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const pkey = (x, y, z) => x + ',' + y + ',' + z;
@@ -123,6 +137,7 @@ function partModel(gl, id, rot, powered) {
     mb.quad([0.5, 0, -0.5], [-0.5, 0, -0.5], [-0.5, 1, -0.5], [0.5, 1, -0.5], s(0.9));
     mb.tri([0.5, 0, 0.5], [0.5, 0, -0.5], [0.5, 1, -0.5], s(0.85)); mb.tri([-0.5, 0, -0.5], [-0.5, 0, 0.5], [-0.5, 1, -0.5], s(0.85));
   } else if (id === 4) { mb.box(-0.5, 0, -0.5, 0.5, 1, 0.5, [c[0], c[1], c[2], 0.2], false); mb.box(-0.5, 0.94, -0.5, 0.5, 1, 0.5, hex('#d8f2ff')); }
+  else if (id >= 70) decorModel(mb, id, c, B);
   else if (P.slab && !P.top) B(0, 0, 0, 1, P.slab, 1, c);
   else if (id === 40) { B(0, 0, 0, 1, 0.2, 1, c); mb.cyl(0, 0.2, 0, 0.38, 0.3, 0.12, 8, glowIf(t, powered !== false)); mb.cyl(0, 0.32, 0, 0.18, 0.18, 0.02, 8, hex('#ffffff')); }
   else if (id === 41) { B(0, 0, 0, 1, 0.2, 1, c); const g = glowIf(t, powered !== false); for (let k = 0; k < 2; k++) { const z = 0.25 - k * 0.32; mb.tri([-0.3, 0.22, z], [0.3, 0.22, z], [0, 0.22, z - 0.28], g); } }
@@ -155,6 +170,26 @@ function partShape(part, x, y, z, off) {
   const o = off || [0, 0, 0];
   if (part.id === 62) return { box: [x + o[0], y + 0.6 + o[1], z + o[2], x + 1 + o[0], y + 1 + o[1], z + 1 + o[2]] };
   if (part.id === 63) return { box: [x + o[0], y + 0.5 + o[1], z + o[2], x + 1 + o[0], y + 1 + o[1], z + 1 + o[2]] };
-  const h = P.slab || 1;
+  const h = P.h || P.slab || 1;
+  if (part.id === 79) return { box: [x, y, z, x, y, z] };
   return { box: [x + o[0], y + o[1], z + o[2], x + 1 + o[0], y + h + o[1], z + 1 + o[2]] };
+}
+
+// furniture, in clean low-poly shapes (the block is 1 wide; facing -z is the front)
+function decorModel(mb, id, c, B) {
+  const C = hex, d = k => shadeC(c, k), G = col => glowC(hex(col));
+  switch (id) {
+    case 70: B(0.2, 0.42, 0.2, 0.8, 0.5, 0.8, c); for (const [x, z] of [[0.22, 0.22], [0.72, 0.22], [0.22, 0.72], [0.72, 0.72]]) B(x, 0, z, x + 0.06, 0.42, z + 0.06, d(0.75)); B(0.2, 0.5, 0.74, 0.8, 1.05, 0.8, d(0.9)); break;
+    case 71: B(0.02, 0.72, 0.02, 0.98, 0.8, 0.98, c); for (const [x, z] of [[0.08, 0.08], [0.84, 0.08], [0.08, 0.84], [0.84, 0.84]]) B(x, 0, z, x + 0.08, 0.72, z + 0.08, d(0.75)); break;
+    case 72: B(0, 0.1, 0.05, 1, 0.42, 0.95, c); B(0, 0.42, 0.7, 1, 0.9, 0.95, d(0.9)); B(0, 0.1, 0.05, 0.12, 0.62, 0.95, d(0.85)); B(0.88, 0.1, 0.05, 1, 0.62, 0.95, d(0.85)); B(0.05, 0, 0.1, 0.95, 0.1, 0.9, C('#5a4a3a')); break;
+    case 73: B(0, 0, 0, 1, 0.3, 1, C('#8a6a4a')); B(0.03, 0.3, 0.03, 0.97, 0.45, 0.97, C('#f4f6fb')); B(0.03, 0.3, 0.3, 0.97, 0.5, 0.97, c); B(0.15, 0.45, 0.05, 0.85, 0.58, 0.28, C('#ffffff')); B(0, 0, 0.92, 1, 0.9, 1, C('#8a6a4a')); break;
+    case 74: B(0, 0, 0.55, 1, 1, 1, c); for (let k = 0; k < 3; k++) { B(0.05, 0.05 + k * 0.32, 0.5, 0.95, 0.08 + k * 0.32, 0.55, d(0.8)); for (let q = 0; q < 7; q++) B(0.08 + q * 0.12, 0.08 + k * 0.32, 0.6, 0.17 + q * 0.12, 0.3 + k * 0.32 - (q % 3) * 0.03, 0.55, C(['#e0505a', '#4a8ae8', '#f2c64a', '#7be36b', '#b48cff'][(q + k) % 5])); } break;
+    case 75: mb.cyl(0, 0, 0, 0.28, 0.22, 0.45, 7, c); mb.cyl(0, 0.44, 0, 0.27, 0.27, 0.04, 7, C('#5a3a22')); mb.ico(0, 0.85, 0, 0.32, 1, (a, b) => b > 0.3 ? C('#6cc04a') : C('#3f9a4e')); mb.cyl(0, 0.45, 0, 0.04, 0.03, 0.3, 4, C('#5a4a32')); break;
+    case 76: mb.cyl(0, 0, 0, 0.22, 0.22, 0.05, 8, C('#3a3f55')); mb.cyl(0, 0.05, 0, 0.03, 0.03, 1.35, 5, C('#3a3f55')); mb.cyl(0, 1.3, 0, 0.3, 0.16, 0.35, 8, G('#ffe08a')); break;
+    case 77: B(0, 0, 0, 1, 0.04, 1, c); B(0.15, 0.04, 0.15, 0.85, 0.045, 0.85, d(1.15)); break;
+    case 78: B(0.1, 0, 0.3, 0.9, 0.3, 0.7, C('#5a4a3a')); B(0.45, 0.3, 0.45, 0.55, 0.38, 0.55, c); B(0, 0.38, 0.47, 1, 0.98, 0.53, c); B(0.04, 0.42, 0.46, 0.96, 0.94, 0.47, G('#5ff0e0')); break;
+    case 79: B(0.05, 0.25, 0.94, 0.95, 0.95, 1, C('#7a5232')); B(0.1, 0.3, 0.93, 0.9, 0.9, 0.94, G('#a8d8ff')); mb.tri([-0.3, 0.35, 0.425], [0.0, 0.75, 0.425], [0.3, 0.35, 0.425], C('#7be36b')); mb.ico(0.2, 0.75, 0.42, 0.08, 0, () => C('#ffe08a')); break;
+    case 80: B(0.05, 0, 0.05, 0.95, 0.8, 0.95, c); for (const y of [0.05, 0.7]) B(0, y, 0, 1, y + 0.06, 1, d(0.75)); B(0, 0, 0.47, 1, 0.8, 0.53, d(0.8)); break;
+    case 81: mb.cyl(0, 0, 0, 0.12, 0.2, 0.25, 8, c); mb.cyl(0, 0.25, 0, 0.2, 0.08, 0.2, 8, c); for (let k = 0; k < 3; k++) { mb.cyl(-0.05 + k * 0.05, 0.4, 0, 0.015, 0.015, 0.35, 3, C('#3f8a3a')); mb.ico(-0.05 + k * 0.05, 0.78, 0, 0.07, 0, () => C(['#ff8fb1', '#ffe066', '#ffffff'][k])); } break;
+  }
 }

@@ -899,7 +899,7 @@
   function showToast(t, ms) { $('toast').textContent = t; $('toast').classList.remove('hidden'); clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => $('toast').classList.add('hidden'), ms); }
 
   // ---------- build tab ----------
-  const CATS = ['blocks', 'machines', 'circuits'], CAT_NAMES = { blocks: 'Blocks', machines: 'Machines', circuits: 'Circuits' }, CAT_ICONS = { blocks: 'build', machines: 'gear', circuits: 'chip' };
+  const CATS = ['blocks', 'machines', 'circuits', 'decor'], CAT_NAMES = { blocks: 'Blocks', machines: 'Machines', circuits: 'Circuits', decor: 'Decor' }, CAT_ICONS = { blocks: 'build', machines: 'gear', circuits: 'chip', decor: 'star' };
   const toolList = () => [...TOOL_CATS[G.cat], 0];
   const curTool = () => toolList()[G.tool];
   function nextCat() { G.cat = CATS[(CATS.indexOf(G.cat) + 1) % CATS.length]; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); }
@@ -1058,6 +1058,9 @@
     const game = G.game, inSt = insideStation(b.p), cave = game.cave || game.realm, info = game.T.info(b.p[0], b.p[2]);
     if (!cave && !inSt && info.b >= 1 && info.b <= 8) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
     if (inSt || nearStation(b.p[0], b.p[2], 70)) prog.max('station', 1);
+    // discovering places (they get their names on the compass and map)
+    if (!cave) for (const q of game.places(b.p[0], b.p[2], 60)) if (Math.hypot(q.x - b.p[0], q.z - b.p[2]) < 28 && prog.mark('places', q.key)) { prog.mark('kinds', q.kind); banner('Discovered', q.name, 'It is on your map now', 3000); Sound.play('discover'); }
+    game.known = new Set(Object.keys(prog.sets.places || {}));
     const night = G.wasNight; if (night) G.sawNight = true; else if (G.sawNight) { G.sawNight = false; prog.add('nights'); }
     questCheck();
     Sound.setRain(game.rain || 0);
