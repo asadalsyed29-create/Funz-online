@@ -1133,8 +1133,12 @@
   // returns true while the ship is moving the ball (so normal rolling is skipped)
   function shipStep(dt, ix, iy, up, down) {
     const S = G.ship; if (!S) return false; S.t += dt; const b = G.body, cam = G.game.cam, ease = x => x * x * (3 - 2 * x);
-    if (S.st === 'arrive') { const k = ease(Math.min(1, S.t / 1.6)); S.p = S.from.map((v, i) => v + (S.to[i] - v) * k); S.pitch = -0.4 * (1 - k); if (S.t >= 1.6) { S.st = 'board'; S.t = 0; S.b0 = [...b.p]; Sound.play('jump'); } return false; }
-    if (S.st === 'board') { const k = Math.min(1, S.t / 1.0); b.p = S.b0.map((v, i) => v + (S.p[i] + (i === 1 ? 0.3 : 0) - v) * ease(k)); b.p[1] += Math.sin(k * Math.PI) * 2.2; b.v = [0, 0, 0]; if (k >= 1) { S.st = 'fly'; G.me.ship = true; cam.pitch = 0.05; cam.yaw = Math.atan2(-Math.cos(S.hd), -Math.sin(S.hd)); Sound.play('tp'); showToast('Flying! Drag to steer, W/joystick to fly, jump to go up, Shift or down to go down, V to get out', 4000); $('downBtn').classList.toggle('hidden', !Device.useTouch); } return true; }
+    if (S.st === 'arrive') { const k = ease(Math.min(1, S.t / 1.6)); S.p = S.from.map((v, i) => v + (S.to[i] - v) * k); S.pitch = -0.4 * (1 - k); S.open = ease(Math.max(0, Math.min(1, (S.t - 0.9) / 0.7))); if (S.t >= 1.6) { S.st = 'board'; S.t = 0; S.b0 = [...b.p]; Sound.play('jump'); } return false; }
+    if (S.st === 'board') { // jump up and into the seat, then the canopy swings shut
+      const k = Math.min(1, S.t / 1.0), seat = [S.p[0] + Math.cos(S.hd) * 0.95, S.p[1] + 1.3, S.p[2] + Math.sin(S.hd) * 0.95];
+      b.p = S.b0.map((v, i) => v + (seat[i] - v) * ease(k)); b.p[1] += Math.sin(k * Math.PI) * 2.6; b.v = [0, 0, 0];
+      S.open = 1 - ease(Math.max(0, Math.min(1, (S.t - 1.05) / 0.5))); if (k >= 1 && S.t > 1.0 && !S.landed) { S.landed = true; Sound.play('land'); }
+      if (S.t >= 1.7) { S.st = 'fly'; G.me.ship = true; cam.pitch = 0.05; cam.yaw = Math.atan2(-Math.cos(S.hd), -Math.sin(S.hd)); Sound.play('tp'); showToast('Flying! Drag to steer, W/joystick to fly, jump to go up, Shift or down to go down, V to get out', 4000); $('downBtn').classList.toggle('hidden', !Device.useTouch); } return true; }
     if (S.st === 'fly') {
       const cp = Math.cos(cam.pitch), d = [-Math.sin(cam.yaw) * cp, -Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp], rt = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)], sp = 34;
       const v = [d[0] * -iy * sp + rt[0] * ix * 16, d[1] * -iy * sp + (up ? 12 : 0) - (down ? 12 : 0), d[2] * -iy * sp + rt[2] * ix * 16];
@@ -1142,10 +1146,10 @@
       S.p[0] = Math.max(-LIMIT, Math.min(LIMIT, S.p[0])); S.p[2] = Math.max(-LIMIT, Math.min(LIMIT, S.p[2])); S.p[1] = Math.min(S.p[1], 1500);
       if (!G.game.realm && !G.game.cave) S.p[1] = Math.max(S.p[1], Math.max(G.game.T.ground(S.p[0], S.p[2]), SEA) + 1.5);
       S.hd = Math.atan2(d[2], d[0]); S.pitch = -cam.pitch;
-      b.p = [...S.p]; b.v = [0, 0, 0]; G.game.fpv = [S.p[0] + d[0] * 0.6, S.p[1] + 0.75, S.p[2] + d[2] * 0.6];
+      b.p = [...S.p]; b.v = [0, 0, 0]; G.game.fpv = [S.p[0] + d[0] * 0.95, S.p[1] + 1.35, S.p[2] + d[2] * 0.95];
       return true;
     }
-    if (S.st === 'away') { S.p[1] += dt * 25; S.p[0] += Math.cos(S.hd) * dt * 40; S.p[2] += Math.sin(S.hd) * dt * 40; if (S.t > 2.2) G.ship = null; return false; }
+    if (S.st === 'away') { S.open = 0; S.p[1] += dt * 25; S.p[0] += Math.cos(S.hd) * dt * 40; S.p[2] += Math.sin(S.hd) * dt * 40; if (S.t > 2.2) G.ship = null; return false; }
     return false;
   }
 
@@ -1294,7 +1298,7 @@
     let cursor = null;
     if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
     const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
-    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
+    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();

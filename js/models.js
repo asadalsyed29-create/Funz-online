@@ -235,7 +235,10 @@ function shipModel(gl) {
   mb.push([0, 0, 0], M4.rotZ(-Math.PI / 2), [1, 1.6, 1]);
   mb.lathe([[0, -2.6], [0.55, -2.3], [0.9, -1.4], [1.05, -0.2], [0.95, 1.0], [0.6, 2.0], [0.2, 2.6], [0, 2.7]], 24, (t, ph) => Math.abs(Math.sin(ph)) > 0.92 && t > 0.2 && t < 0.8 ? C(PP) : mixC(C('#eef3fb'), C(PB), 0.25 + 0.2 * Math.cos(ph)), 0.15);
   mb.pop();
-  mb.sph([0.9, 0.62, 0], [1.3, 0.62, 0.62], 18, [0.75, 0.9, 1, 0.42], 0); // glass canopy
+  // the open cockpit under the canopy: a seat and a little dashboard
+  mb.sph([0.9, 0.88, 0], [1.25, 0.22, 0.62], 16, C('#3a3f55'), 0);
+  mb.rbox(0.25, 0.85, -0.36, 0.55, 1.5, 0.36, C(PP)); mb.rbox(0.25, 0.85, -0.36, 1.05, 1.0, 0.36, C(PP));
+  mb.rbox(1.55, 0.9, -0.38, 1.85, 1.12, 0.38, C('#2a2f3d')); for (let k = 0; k < 3; k++) mb.sph([1.7, 1.13, -0.2 + k * 0.2], 0.045, 6, G(['#5ff0e0', '#ff9ad8', '#ffd24a'][k]), 0);
   for (const s2 of [-1, 1]) {
     mb.sph([-0.6, -0.1, s2 * 1.8], [1.4, 0.12, 1.3], 16, (x, y, z) => mixC(C(PP), C(PB), Math.abs(z)), 0.1);
     mb.push([-2.2, 0.1, s2 * 0.75], M4.rotZ(Math.PI / 2)); mb.lathe([[0, -0.6], [0.42, -0.5], [0.45, 0.6], [0.3, 0.9], [0, 0.95]], 14, C('#c8ccd8'), 0.2); mb.pop();
@@ -245,6 +248,18 @@ function shipModel(gl) {
   mb.sph([-2.0, 0.9, 0], [0.9, 0.7, 0.08], 12, C(PP), 0.1); // tail fin
   // a little crown on the nose
   for (let k = 0; k < 3; k++) mb.caps([2.0, 0.55, (k - 1) * 0.16], [2.1, 0.8, (k - 1) * 0.18], 0.06, 0.015, 6, C('#ffcf4a'));
+  return mb.build(gl);
+}
+// the glass canopy, built around its hinge at the back (it swings up so you can jump in)
+function canopyModel(gl) {
+  const mb = new MeshBuilder();
+  mb.sph([1.3, 0, 0], [1.35, 0.78, 0.7], 18, [0.78, 0.9, 1, 0.22], 0);
+  return mb.build(gl);
+}
+function canopyFrame(gl) {
+  const mb = new MeshBuilder();
+  mb.tor([1.3, 0, 0], 1, 0.05, 28, 5, hex(PP)); // stretched into an oval by the draw matrix
+  mb.caps([0, 0, -0.5], [0, 0, 0.5], 0.08, 0.08, 8, hex('#c8ccd8'));
   return mb.build(gl);
 }
 // what you see from inside the ship: the dashboard and the window frame (camera looks along +x)

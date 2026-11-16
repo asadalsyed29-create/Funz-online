@@ -618,7 +618,7 @@ class Game {
       const hd = p._hd || 0, HR = M4.rotY(-hd);
       if (p.ship) { // flying the owner ship
         const pit = Math.max(-0.5, Math.min(0.5, (p === me ? -o.shipPitch : Math.atan2(dy, Math.max(mv, 0.05)) * 0.5) || 0));
-        if (!(p === me && this.fpv)) { G.mat(1, 0.35, 0.8); const SM = M4.model(p.p, M4.mul3(HR, M4.rotZ(pit)), 1), sm = this.rigFor('ship', shipModel); G.draw(sm, SM); G.outline(sm, SM, 0.03); }
+        if (!(p === me && this.fpv)) this.drawShip(M4.model(p.p, M4.mul3(HR, M4.rotZ(pit)), 1), 0);
         continue;
       }
       const bp = p.p;
@@ -636,7 +636,7 @@ class Game {
       }
     }
     // the ship while it flies in or away (only on this screen)
-    if (o.shipFx) { G.mat(1, 0.35, 0.8); const SM = M4.model(o.shipFx.p, M4.mul3(M4.rotY(-o.shipFx.hd), M4.rotZ(o.shipFx.pitch || 0)), 1), sm = this.rigFor('ship', shipModel); G.draw(sm, SM); G.outline(sm, SM, 0.03); }
+    if (o.shipFx) this.drawShip(M4.model(o.shipFx.p, M4.mul3(M4.rotY(-o.shipFx.hd), M4.rotZ(o.shipFx.pitch || 0)), 1), o.shipFx.open || 0);
     // see-through things last
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
     G.mat(0, 0, 0);
@@ -733,6 +733,16 @@ class Game {
     for (const pt of this.portals) out.push({ x: pt.p[0], z: pt.p[2], key: 'portal:' + pt.kind, kind: 'portal', name: pt.label, col: pt.col, always: true });
     out.push({ x: 44, z: 38, key: 'parkour', kind: 'parkour', name: 'Parkour', col: '#ff9f5a', always: true });
     return out;
+  }
+  // the owner ship; open (0..1) swings the glass canopy up on its hinge
+  drawShip(SM, open) {
+    const G = this.gfx, gl = G.gl; G.mat(1, 0.35, 0.8);
+    const sm = this.rigFor('ship', shipModel); G.draw(sm, SM); G.outline(sm, SM, 0.03);
+    const CM = M4.mul(SM, M4.model([-0.05, 0.9, 0], M4.rotZ(open * 1.25), 1));
+    const fr = this.rigFor('canopyFrame', canopyFrame); G.draw(fr, M4.mul(CM, M4.model([1.3 - 1.3 * 1.35, 0.02, 0], I3, [1.35, 1, 0.7])));
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    G.draw(this.rigFor('canopy', canopyModel), CM);
+    gl.depthMask(true); gl.disable(gl.BLEND);
   }
   label(g, x, y, p, now, dist) {
     const sc = Math.max(0.7, Math.min(1.1, 14 / dist)); g.save(); g.translate(x, y); g.scale(sc, sc);
