@@ -1,9 +1,9 @@
 {
   "name": "Funz Online",
   "short_name": "Funz",
-  "description": "Explore a big world, build anything, and hang out with friends.",
+  "description": "Explore a big world and hang out with friends.",
   "id": "./",
-  "start_url": "./",
+  "start_url": "./?app=1",
   "scope": "./",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],

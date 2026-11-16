@@ -22,9 +22,12 @@ const Device = (() => {
   else if (touch && !matchMedia('(pointer:fine)').matches) type = 'tablet';
   else type = 'computer';
 
-  const icon = { phone: '📱', tablet: '📲', computer: '💻' }[type];
+  const icon = type;
   const label = { phone: 'Phone', tablet: 'Tablet', computer: 'Computer' }[type];
-  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  // the installed app opens full screen, so any app display mode counts (not just "standalone")
+  const appFlag = (() => { try { if (/[?&]app=1/.test(location.search)) sessionStorage.setItem('funz.app', '1'); return sessionStorage.getItem('funz.app') === '1'; } catch (e) { return /[?&]app=1/.test(location.search); } })();
+  const standalone = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'].some(m => matchMedia('(display-mode: ' + m + ')').matches) ||
+    navigator.standalone === true || document.referrer.startsWith('android-app://') || appFlag;
   const useTouch = type !== 'computer' || (touch && !matchMedia('(pointer:fine)').matches);
 
   return { type, os, icon, label, touch, useTouch, standalone,
