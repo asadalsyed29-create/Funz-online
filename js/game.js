@@ -284,6 +284,7 @@ class Game {
   findItem(id) {
     const s = String(id).split(':');
     if (s[0] === 'c') { const it = this.chunkItems(+s[1], +s[2]).find(i => i.id === id); return it || null; }
+    if (s[0] === 'drop') return (this.drops || []).find(d => d.id === id) || null;
     for (const l of this.landmarks) { const it = l.items.find(i => i.id === id); if (it) return it; }
     for (const st of this.St.list.values()) if (st) { const it = st.items.find(i => i.id === id); if (it) return it; }
     for (const c of this.caves.values()) { const it = c.items.find(i => i.id === id); if (it) return it; }
@@ -298,6 +299,7 @@ class Game {
       for (const st of this.St.list.values()) if (st) out.push(...st.items);
     }
     for (const l of this.landmarks) out.push(...l.items);
+    if (this.drops) for (const d of this.drops) if (Math.abs(d.p[0] - p[0]) < 120 && Math.abs(d.p[2] - p[2]) < 120) out.push(d);
     return out;
   }
 
@@ -402,6 +404,13 @@ class Game {
     return best;
   }
 
+  // clouds the admin put in the sky (everyone sees them)
+  addClouds(list) {
+    const L = this.extraClouds || (this.extraClouds = []);
+    for (const c of list) { if (!c || !this.cloudM[c.kind] || ![c.x, c.y, c.z, c.s, c.rot].every(v => typeof v === 'number' && isFinite(v))) continue; const ms = this.cloudM[c.kind]; L.push({ kind: c.kind, v: c.v | 0, x: c.x, y: Math.max(60, Math.min(1500, c.y)), z: c.z, s: Math.max(0.3, Math.min(3, c.s)), rot: c.rot, ph: c.ph || 0, puffs: ms[(c.v | 0) % ms.length] }); }
+    while (L.length > 40) L.shift();
+  }
+  setWeather(w) { this.wxForce = w; this.cloudCells.clear(); }
   stat(n) { if (!this.stats) return; const t = this.gfx.tris; this.stats[n] = Math.round(t - (this.statT || 0)); this.statT = t; }
   // ---------- drawing ----------
   render(players, me, o) {
@@ -417,7 +426,7 @@ class Game {
     let sunC = L3([0.78, 0.72, 0.6], [0.04, 0.05, 0.1], k); sunC = L3(sunC, [0.95, 0.55, 0.32], dusk * 0.6);
     let fog = hor, fogD = 1 / (this.radius * CHUNK * 0.66), night = Math.max(0, (k - 0.55) / 0.45);
     // weather here: rain darkens the light and thickens the haze; storms flash with lightning
-    const wHere = this.cave || inSt ? 0 : weatherAt(this.T.N, c.target[0], c.target[2]), rainK = Math.max(0, Math.min(1, (wHere - 0.7) / 0.2)) * (c.target[1] < 150 ? 1 : 0);
+    const wHere = this.cave || inSt ? 0 : this.wxForce != null ? this.wxForce : weatherAt(this.T.N, c.target[0], c.target[2]), rainK = Math.max(0, Math.min(1, (wHere - 0.7) / 0.2)) * (c.target[1] < 150 ? 1 : 0);
     this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = wHere;
     if (this.rain > 0.01) { const r = this.rain; sunC = sunC.map(v => v * (1 - r * 0.55)); zen = L3(zen, L3([0.36, 0.4, 0.48], [0.03, 0.04, 0.08], k), r * 0.75); hor = L3(hor, L3([0.58, 0.61, 0.67], [0.06, 0.07, 0.12], k), r * 0.75); fog = hor; fogD *= 1 + r * 0.9; amb = amb.map(v => v * (1 - r * 0.2)); }
     if (wHere > 0.78 && Math.random() < (o.dt || 0.016) * 0.12) { this.flash = 1; const d = 0.4 + Math.random() * 1.8; setTimeout(() => Sound.play('thunder'), d * 1000); }
@@ -561,9 +570,10 @@ class Game {
       const CC = CLOUD_CELL, ci = Math.floor(c.target[0] / CC), cj = Math.floor(c.target[2] / CC), near = [];
       for (let i = ci - 2; i <= ci + 2; i++) for (let j = cj - 2; j <= cj + 2; j++) {
         const key = i + ',' + j; let list = this.cloudCells.get(key);
-        if (!list) { list = cloudsInCell(this.T.N, this.T, i, j); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
+        if (!list) { list = cloudsInCell(this.T.N, this.T, i, j, this.wxForce); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
         for (const cl of list) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
       }
+      for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < 2200 && Math.abs(cl.z - c.target[2]) < 2200) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
       const top = L3(L3([1, 1, 1], [1, 0.84, 0.72], dusk), [0.28, 0.31, 0.42], Math.max(0, (k - 0.35) / 0.65)), bot = L3(L3([0.6, 0.64, 0.75], [0.55, 0.42, 0.5], dusk), [0.1, 0.11, 0.18], Math.max(0, (k - 0.35) / 0.65));
       if (!this.cloudData) this.cloudData = new Float32Array(6000 * 44);
       const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, this.maxClouds || 2600);

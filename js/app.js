@@ -316,7 +316,7 @@
       tool: 0, cat: 'blocks', building: !Device.useTouch, dayStart: performance.now() - DAY_MS * 0.875,
       lastSend: 0, lastState: 0, lastCirc: 0, lastHeard: performance.now(), rate: new Map(), running: true, dirty: false,
       muted: new Set(), kicked: new Map(), bans: new Set(s.bans || []), nonces: new Map(), reconnecting: false,
-      taken: new Map(), frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
+      taken: new Map(), drops: new Map(), wx: 'auto', frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
       board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '', wireFrom: null,
       profile: { name, ...myLook(), dev: Device.short, devType: Device.type },
       names: new Map((s.names || []).filter(e => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'string')), pending: new Set(),
@@ -501,7 +501,7 @@
       dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
       p: okVec(pos) ? pos : defaultSpawn() });
     const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
-    Net.toOne(id, { t: 'welcome', id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce, names: [...G.names] });
+    Net.toOne(id, { t: 'welcome', id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce, names: [...G.names], drops: [...G.drops.values()], wx: G.wx, clouds: G.game.extraClouds || [] });
     renderPeople();
     if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
     // a name that belongs to someone has to be proven with that device's key
@@ -518,8 +518,8 @@
     if (it === null) return;
     if (it && Math.hypot(it.p[0] - p.tp[0], it.p[1] - p.tp[1], it.p[2] - p.tp[2]) > 3.5) return;
     const type = it ? it.type : claimType; if (!ITEMS[type] || type === 'trophy') return;
-    G.taken.set(itemId, Date.now() + ITEM_RESPAWN);
-    Net.toAll({ t: 'taken', id: itemId });
+    if (itemId.startsWith('drop:')) { if (!G.drops.has(itemId)) return; G.drops.delete(itemId); syncDrops(); Net.toAll({ t: 'drop', del: itemId }); }
+    else { G.taken.set(itemId, Date.now() + ITEM_RESPAWN); Net.toAll({ t: 'taken', id: itemId }); }
     if (p === G.me) gotItem(type); else Net.toOne(p.id, { t: 'got', id: itemId, type });
   }
   function recordRace(name, time) {
@@ -539,6 +539,7 @@
       if (typeof m.name === 'string') { G.me.name = G.profile.name = cleanName(m.name); }
       if (m.renamed) setTimeout(() => sys('The name "' + cleanText(m.renamed) + '" is already taken, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1200);
       addNames(m.names);
+      G.drops = new Map((Array.isArray(m.drops) ? m.drops : []).filter(d => d && ITEMS[d.type] && okVec(vec(d.p))).map(d => [String(d.id), { id: String(d.id), type: d.type, p: vec(d.p) }])); syncDrops(); setWeather(m.wx); if (Array.isArray(m.clouds)) G.game.addClouds(m.clouds);
       idSign('id:' + m.nonce).then(sig => { if (sig && G) Net.toKeeper({ t: 'idsig', sig }); });
       G.B.load(m.parts || [], m.wires || []); G.dirty = true; G.game.allPartsChanged(); G.game.setPower(new Set(m.power || []));
       G.bans = new Set((m.bans || []).filter(b => typeof b === 'string'));
@@ -562,6 +563,10 @@
       return;
     }
     if (m.t === 'names') { addNames(m.add); return; }
+    if (m.t === 'drop') { if (m.del) G.drops.delete(String(m.del)); for (const d of Array.isArray(m.add) ? m.add : []) if (d && ITEMS[d.type] && okVec(vec(d.p))) G.drops.set(String(d.id), { id: String(d.id), type: d.type, p: vec(d.p) }); syncDrops(); return; }
+    if (m.t === 'wx') { setWeather(m.mode); return; }
+    if (m.t === 'clouds') { if (Array.isArray(m.add)) G.game.addClouds(m.add); return; }
+    if (m.t === 'flash') { G.game.flash = 1; setTimeout(() => Sound.play('thunder'), 500); return; }
     if (m.t === 'rename') { if (typeof m.name === 'string') { G.me.name = G.profile.name = cleanName(m.name); sys('The name "' + cleanText(m.was) + '" belongs to another player, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'); renderPeople(); } return; }
     if (m.t === 'roster') {
       const ids = new Set(m.roster.map(r => r.id));
@@ -669,6 +674,9 @@
     const c = (cmd || '').toLowerCase(), args = rest.join(' ').trim();
     if (c === 'say') { const [n, ...t] = rest; const p = findPlayer(n); return { cmd: c, target: p && p.id, text: t.join(' '), who: n }; }
     if (c === 'announce' || c === 'unban') return { cmd: c, text: args };
+    if (c === 'spawn') return { cmd: c, type: (rest[0] || 'coin').toLowerCase(), n: +rest[1] || 1 };
+    if (c === 'weather') return { cmd: c, mode: (rest[0] || 'auto').toLowerCase() };
+    if (c === 'lightning') return { cmd: 'flash' };
     const p = args ? findPlayer(args) : null;
     return { cmd: c, target: p && p.id, who: args };
   }
@@ -683,7 +691,7 @@
     if (needsTarget.includes(o.cmd) && !p) { reply('No player called "' + (o.who || '?') + '"'); return; }
     const text = cleanText(o.text);
     switch (o.cmd) {
-      case 'help': reply('Admin: /announce text · /say name text · /kick name · /ban name · /unban name · /mute name · /unmute name · /freeze name · /thaw name · /tp name · /bring name · /day · /night · /clearchat · /players'); break;
+      case 'help': reply('Admin: /announce text · /say name text · /kick name · /ban name · /unban name · /mute name · /unmute name · /freeze name · /thaw name · /tp name · /bring name · /bringall · /day · /night · /clearchat · /players · /spawn coin 10 · /weather storm · /lightning'); break;
       case 'announce': if (text) { announce(text); Net.toAll({ t: 'announce', text }); } break;
       case 'say': if (text) { say(p, text); Net.toAll({ t: 'chat', id: p.id, text }); } break;
       case 'kick': case 'ban': {
@@ -704,13 +712,47 @@
       case 'night': G.dayStart = performance.now() - DAY_MS * 0.5; both('The admin made it night'); break;
       case 'clearchat': $('chatLog').textContent = ''; Net.toAll({ t: 'clearchat' }); both('The admin cleared the chat'); break;
       case 'players': reply([...G.players.values()].map(x => x.name).join(', ')); break;
+      case 'spawn': { // drop coins or items around the admin for anyone to pick up
+        const type = ITEMS[o.type] && o.type !== 'trophy' ? o.type : 'coin', n = Math.max(1, Math.min(20, o.n | 0 || 1)), add = [];
+        for (let k = 0; k < n && G.drops.size < 300; k++) {
+          const a = Math.random() * 6.283, d = n > 1 ? 1.5 + Math.random() * 4 : 2.5, x = admin.tp[0] + Math.cos(a) * d, z = admin.tp[2] + Math.sin(a) * d;
+          const g = G.game.realm ? admin.tp[1] - 0.4 : G.game.cave ? G.game.cave.floor(x, z) : Math.max(G.game.T.ground(x, z), SEA);
+          const it = { id: 'drop:' + Date.now().toString(36) + ':' + Math.floor(Math.random() * 1e6).toString(36), type, p: [+x.toFixed(2), +(g + 0.6).toFixed(2), +z.toFixed(2)] };
+          G.drops.set(it.id, it); add.push(it);
+        }
+        syncDrops(); Net.toAll({ t: 'drop', add }); reply('Spawned ' + add.length + ' × ' + ITEMS[type].name); break; }
+      case 'weather': { const mode = ['auto', 'clear', 'cloudy', 'rain', 'storm'].includes(o.mode) ? o.mode : 'auto'; setWeather(mode); Net.toAll({ t: 'wx', mode }); both('The admin made the weather ' + (mode === 'auto' ? 'normal again' : mode)); break; }
+      case 'clouds': { // put real clouds of one kind in the sky around the admin
+        const kind = CLOUD_KINDS[o.kind] ? o.kind : 'cumulus', n = Math.max(1, Math.min(10, o.n | 0 || 1)), at = admin.tp, H = { cumulus: 340, congestus: 300, cb: 230, stratus: 280, strato: 330, alto: 700, cirrus: 1100, nimbo: 240, lens: 480 }, add = [];
+        for (let k = 0; k < n; k++) { const a = Math.random() * 6.283, d = 120 + Math.random() * 380; add.push({ kind, v: Math.floor(Math.random() * 3), x: Math.round(at[0] + Math.cos(a) * d), y: H[kind] + Math.round(Math.random() * 40), z: Math.round(at[2] + Math.sin(a) * d), s: +(0.9 + Math.random() * 0.5).toFixed(2), rot: +(Math.random() * 6.283).toFixed(2), ph: Math.round(Math.random() * 100) }); }
+        G.game.addClouds(add); Net.toAll({ t: 'clouds', add }); reply('Spawned ' + n + ' ' + CLOUD_KINDS[kind] + (n > 1 ? ' clouds' : ' cloud')); break; }
+      case 'flash': G.game.flash = 1; setTimeout(() => Sound.play('thunder'), 500); Net.toAll({ t: 'flash' }); break;
+      case 'bringall': for (const q of G.players.values()) if (q !== admin) tell(q, { t: 'tp', p: [admin.tp[0] + (Math.random() - 0.5) * 4, admin.tp[1] + 1.5, admin.tp[2] + (Math.random() - 0.5) * 4] }); reply('Everyone is here!'); break;
       default: reply('Unknown command. Type /help');
     }
+  }
+  function syncDrops() { if (G) G.game.drops = [...G.drops.values()]; }
+  const WX = { auto: null, clear: 0.15, cloudy: 0.58, rain: 0.75, storm: 0.92 };
+  function setWeather(mode) { if (!G) return; G.wx = WX[mode] !== undefined ? mode : 'auto'; G.game.setWeather(WX[G.wx]); if ($('adminPanel') && !$('adminPanel').classList.contains('hidden')) renderAdmin(); }
+  // teleport the admin: to a place, or to the nearest spot of a kind of land
+  function teleportTo(where) {
+    const T = G.game.T, me = G.body.p; let p = null;
+    if (where === 'plaza') p = [0, SPAWN_H + 2, 8];
+    else if (where === 'station') p = [STATION.x - STATION.R - 12, STATION.ground + 2, STATION.z];
+    else if (where === 'parkour') p = [44, T.ground(44, 30) + 2, 30];
+    else if (where === 'up') p = [me[0], me[1] + 60, me[2]];
+    else {
+      const b = +where; let best = null;
+      for (let r = 60; r < 6000 && !best; r += 70) for (let a = 0; a < 6.283; a += 140 / r) { const x = me[0] + Math.cos(a) * r, z = me[2] + Math.sin(a) * r; if (Math.abs(x) > LIMIT - 50 || Math.abs(z) > LIMIT - 50) continue; const inf = T.info(x, z); if (inf.b === b && inf.h > -1) { best = [x, inf.h + 2, z]; break; } }
+      p = best; if (!p) { showToast('Could not find that land nearby', 1500); return; }
+    }
+    if (p[1] < 0 && where !== 'up') p[1] = Math.max(T.ground(p[0], p[2]), 0) + 2;
+    G.body.p = p; G.body.v = [0, 0, 0]; G.game.cave = null; G.body.caveLock = null; Sound.play('tp'); showToast('Teleported!', 900);
   }
   function runAdmin(o) { if (G.role === 'guest') Net.toKeeper({ t: 'adminCmd', o }); else adminCommand(G.me, o); }
   function setFly(on) { G.me.fly = on; G.body.v = [0, 0, 0]; showToast(on ? 'Flying! Jump to go up, Shift or the down button to go down' : 'Back on the ground', 1600); $('downBtn').classList.toggle('hidden', !on || !Device.useTouch); renderAdmin(); }
 
-  let panelPlayer = null;
+  let panelPlayer = null; const spawnPick = { type: 'coin', cloud: 'cumulus', n: 5 };
   $('adminBtn').onclick = () => { $('adminPanel').classList.toggle('hidden'); renderAdmin(); };
   function renderAdmin() {
     const box = $('adminPanel'); if (!G || box.classList.contains('hidden')) return;
@@ -722,6 +764,22 @@
     const grid = document.createElement('div'); grid.className = 'aGrid';
     grid.append(btn('fly', G.me.fly ? 'Flying' : 'Fly', () => setFly(!G.me.fly), G.me.fly), btn('sun', 'Day', () => runAdmin({ cmd: 'day' })), btn('moon', 'Night', () => runAdmin({ cmd: 'night' })), btn('clear', 'Clear chat', () => runAdmin({ cmd: 'clearchat' })));
     box.appendChild(grid);
+    const sec = (ic, title) => { const t = document.createElement('div'); t.className = 'aTitle'; t.innerHTML = icon(ic, 16) + ' ' + title; box.appendChild(t); const g = document.createElement('div'); g.className = 'aGrid'; box.appendChild(g); return g; };
+    const tbtn = (label, fn, on) => { const b = document.createElement('button'); b.className = 'aBtn' + (on ? ' on' : ''); b.innerHTML = '<span></span>'; b.firstChild.textContent = label; b.onclick = fn; return b; };
+    // spawn: 1. pick one thing  2. for clouds, pick the kind of cloud  3. type how many
+    const sp = sec('coin', 'Spawn: pick one thing');
+    for (const t of ['coin', 'shell', 'mushroom', 'feather', 'crystal', 'gem', 'cloud', 'pepper', 'pearl', 'relic', 'star', 'fossil', 'key']) sp.append(tbtn(ITEMS[t].name, () => { spawnPick.type = t; renderAdmin(); }, spawnPick.type === t));
+    sp.append(tbtn('☁ Real clouds', () => { spawnPick.type = 'sky'; renderAdmin(); }, spawnPick.type === 'sky'));
+    if (spawnPick.type === 'sky') { const cs = sec('sun', 'Which kind of cloud?'); for (const [k, n] of Object.entries(CLOUD_KINDS)) cs.append(tbtn(n, () => { spawnPick.cloud = k; renderAdmin(); }, spawnPick.cloud === k)); }
+    { const r = document.createElement('div'); r.className = 'aRow'; const amt = document.createElement('input'); amt.type = 'number'; amt.min = 1; amt.max = spawnPick.type === 'sky' ? 10 : 20; amt.value = spawnPick.n; amt.placeholder = 'How many'; amt.oninput = () => { spawnPick.n = amt.value; };
+      const what = spawnPick.type === 'sky' ? CLOUD_KINDS[spawnPick.cloud] : ITEMS[spawnPick.type].name;
+      r.append(amt, btn('check', 'Spawn ' + what, () => { const n = Math.max(1, Math.min(+amt.max, Math.floor(+amt.value) || 1)); if (spawnPick.type === 'sky') runAdmin({ cmd: 'clouds', kind: spawnPick.cloud, n, at: G.body.p.map(v => +v.toFixed(1)) }); else runAdmin({ cmd: 'spawn', type: spawnPick.type, n }); })); box.appendChild(r); }
+    const wx = sec('sun', 'Weather');
+    for (const [m, n] of [['auto', 'Normal'], ['clear', 'Clear'], ['cloudy', 'Cloudy'], ['rain', 'Rain'], ['storm', 'Storm']]) wx.append(tbtn(n, () => runAdmin({ cmd: 'weather', mode: m }), G.wx === m));
+    wx.append(tbtn('⚡ Lightning', () => runAdmin({ cmd: 'flash' })));
+    const tp = sec('go', 'Teleport');
+    for (const [w, n] of [['plaza', 'Plaza'], ['station', 'Station'], ['parkour', 'Parkour'], ['up', 'Up high'], ['1', 'Beach'], ['3', 'Forest'], ['4', 'Desert'], ['5', 'Snow'], ['6', 'Mountains'], ['7', 'Swamp'], ['8', 'Glow fields'], ['0', 'Ocean']]) tp.append(tbtn(n, () => teleportTo(w)));
+    tp.append(tbtn('Bring everyone', () => runAdmin({ cmd: 'bringall' })));
     const row = document.createElement('div'); row.className = 'aRow';
     const inp = document.createElement('input'); inp.maxLength = 120; inp.placeholder = 'Announcement for everyone';
     row.append(inp, btn('announce', 'Send', () => { if (inp.value.trim()) { runAdmin({ cmd: 'announce', text: inp.value }); inp.value = ''; } })); box.appendChild(row);

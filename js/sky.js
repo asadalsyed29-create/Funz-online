@@ -67,8 +67,8 @@ function fillClouds(out, list, eye, tint, flash, maxN) {
 }
 
 // the clouds of one weather cell
-function cloudsInCell(N, T, i, j) {
-  const cx = (i + 0.5) * CLOUD_CELL, cz = (j + 0.5) * CLOUD_CELL, w = weatherAt(N, cx, cz), out = [];
+function cloudsInCell(N, T, i, j, force) {
+  const cx = (i + 0.5) * CLOUD_CELL, cz = (j + 0.5) * CLOUD_CELL, w = force != null ? force : weatherAt(N, cx, cz), out = [];
   const R = k => N.hash(i * 31 + k, j * 17 - k, 970), at = (k, spread = 0.8) => [cx + (R(k) - 0.5) * CLOUD_CELL * spread, cz + (R(k + 50) - 0.5) * CLOUD_CELL * spread];
   const add = (kind, k, y, s, v) => { const [x, z] = at(k); out.push({ kind, v: v ?? Math.floor(R(k + 90) * 3), x, y, z, s, rot: R(k + 70) * 6.283, ph: R(k + 80) * 100, w }); };
   if (w < 0.32) { if (R(1) < 0.7) add('cumulus', 1, 330 + R(2) * 60, 0.7 + R(3) * 0.4); if (R(4) < 0.6) add('cirrus', 4, 1100 + R(5) * 100, 1 + R(6) * 0.5); }
