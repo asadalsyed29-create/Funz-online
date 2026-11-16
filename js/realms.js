@@ -4,7 +4,7 @@
 const REALMS = {
   space: { name: 'Star garden', o: [6000, 2200, 6000], grav: 7, mood: 'glow', fog: [0.03, 0.02, 0.08], fogD: 1 / 900, amb: [0.32, 0.3, 0.45], sunC: [0.75, 0.72, 0.85], zen: [0.01, 0.0, 0.04], hor: [0.08, 0.04, 0.18], stars: 1 },
   sea: { name: 'Coral kingdom', o: [-6000, -420, 6000], grav: 8, swim: true, mood: 'ocean', fog: [0.04, 0.24, 0.36], fogD: 1 / 85, amb: [0.3, 0.5, 0.58], sunC: [0.35, 0.5, 0.55], zen: [0.04, 0.24, 0.36], hor: [0.04, 0.24, 0.36] },
-  crystal: { name: 'Crystal hollow', o: [6000, -640, -6000], grav: 22, mood: 'cave', fog: [0.08, 0.05, 0.14], fogD: 1 / 160, amb: [0.42, 0.36, 0.58], sunC: [0, 0, 0], zen: [0.04, 0.02, 0.08], hor: [0.04, 0.02, 0.08] },
+  crystal: { name: 'Crystal hollow', o: [6000, -640, -6000], grav: 22, mood: 'cave', fog: [0.12, 0.08, 0.2], fogD: 1 / 190, amb: [0.56, 0.48, 0.74], sunC: [0, 0, 0], zen: [0.04, 0.02, 0.08], hor: [0.04, 0.02, 0.08] },
 };
 // where the portals are on the main land (set when the world is made)
 const PORTALS = [];
@@ -69,10 +69,11 @@ class Realm {
       const floor = (x, z) => { const d = Math.max(Math.abs(x), Math.abs(z)); return 1.5 * Math.sin(x * 0.07) * Math.cos(z * 0.06) + (N.v(x / 14, z / 14, 1311) - 0.5) * 3 + Math.max(0, d - 120) * 1.4; };
       add(this.patch(gl, -150, -150, 150, 150, 4, floor, (x, z, h, ny) => h > 18 ? hex('#5a6a78') : ny < 0.8 ? hex('#7a8a8a') : mixC(hex('#d8c48f'), hex('#e8d8a8'), N.v(x / 6, z / 6, 1312))));
       const dmb = new MeshBuilder(), smb = new MeshBuilder().collect();
-      for (let k = 0; k < 160; k++) { const x = (R(k, 1) - 0.5) * 230, z = (R(k, 2) - 0.5) * 230, y = floor(x, z); if (k % 3 === 0) coral(dmb, o[0] + x, o[1] + y - 5, o[2] + z, 1.4 + R(k, 3), R(k, 4)); else if (k % 3 === 1) { const g = hex(R(k, 5) > 0.5 ? '#3a8a5a' : '#5aa86a'); for (let q = 0; q < 3; q++) dmb.cyl(o[0] + x + q * 0.5, o[1] + y - 0.3, o[2] + z + q * 0.3, 0.25, 0.08, 6 + R(k, q) * 8, 5, g, false, q); } else rock(dmb, o[0] + x, o[1] + y, o[2] + z, 1 + R(k, 6) * 2, '#7a8a8a', R(k, 7)); }
+      for (let k = 0; k < 160; k++) { const x = (R(k, 1) - 0.5) * 230, z = (R(k, 2) - 0.5) * 230, y = floor(x, z); if (k % 3 === 0) coral(dmb, o[0] + x, o[1] + y - 5, o[2] + z, 1.4 + R(k, 3), R(k, 4)); else if (k % 3 === 1) { seaweed(dmb, o[0] + x, o[1] + y, o[2] + z, R(k, 5)); seaweed(dmb, o[0] + x + 1.2, o[1] + y, o[2] + z - 0.8, R(k, 8)); } else rock(dmb, o[0] + x, o[1] + y, o[2] + z, 1 + R(k, 6) * 2, '#7a8a8a', R(k, 7)); }
       // sunken ship lying on its side
-      smb.push(L(30, floor(30, -25) + 2, -25), M4.mul3(M4.rotY(0.6), M4.rotX(0.35)));
-      smb.box(-12, -2, -3.5, 12, 3, 3.5, hex('#6a4a2a')); smb.box(-10, 3, -3, 10, 3.6, 3, hex('#8a6a42')); smb.cyl(2, 3.5, 0, 0.4, 0.3, 14, 6, hex('#5a3a22')); smb.tri2([2, 8, 0], [2, 15, 0], [7, 9, 0.5], hex('#d8d0c0'));
+      smb.push(L(30, floor(30, -25) - 1.2, -25), M4.mul3(M4.rotY(0.6), M4.rotX(0.5)), 1.4);
+      boatHull(smb, 20, 6.5, 3, 1); smb.cyl(1, 2.6, 0, 0.36, 0.3, 11, 7, hex(BC.woodD)); smb.push([1, 10, 0], M4.rotY(1.2)); smb.cyl(0, 0, -3, 0.12, 0.12, 6, 5, hex(BC.woodD)); smb.pop();
+      smb.tri2([1.3, 4, 0.2], [1.3, 9.6, 0.2], [5, 5, 0.6], hex('#c8d8d0')); smb.box(-9, 2.8, -1.8, -6, 5, 1.8, hex(BC.wood));
       smb.pop();
       // giant clams with pearls
       for (let k = 0; k < 5; k++) { const a = k * 1.25 + 0.4, x = Math.cos(a) * 60, z = Math.sin(a) * 60, y = floor(x, z); dmb.sph(L(x, y + 0.6, z), [2.4, 0.9, 2], 12, hex('#9a7aa8'), 0.2); dmb.push(L(x, y + 1.2, z - 1.6), M4.rotX(-0.9)); dmb.sph([0, 0, 1.6], [2.4, 0.5, 2], 12, hex('#b08ac0'), 0); dmb.pop(); this.item('pearl' + k, 'pearl', x, y + 1.6, z); }
@@ -84,7 +85,7 @@ class Realm {
     } else {
       // a giant cave: glowing crystal pillars, mushroom groves and a glowing lake
       const floor = (x, z) => { const d = Math.hypot(x, z); return (N.v(x / 16, z / 16, 1321) - 0.5) * 6 + Math.max(0, d - 110) * 1.5 - 4 * Math.exp(-((x - 40) ** 2 + (z + 30) ** 2) / 600); };
-      add(this.patch(gl, -150, -150, 150, 150, 4, floor, (x, z, h, ny) => ny < 0.8 ? hex('#4a4058') : mixC(hex('#3a3448'), hex('#5a4a6a'), N.v(x / 8, z / 8, 1322))), 'world');
+      add(this.patch(gl, -150, -150, 150, 150, 4, floor, (x, z, h, ny) => ny < 0.8 ? hex('#5e5270') : mixC(hex('#4c4262'), hex('#76649a'), N.v(x / 8, z / 8, 1322))), 'world');
       const dome = new MeshBuilder();
       dome.ico(o[0], o[1] - 10, o[2], [150, 90, 150], 3, (a, b, c) => { const g = this.N.hash(Math.floor(a * 40), Math.floor(c * 40), 1323); return g > 0.93 ? glowC(hex(g > 0.97 ? '#ff8ff0' : '#8ff6ff')) : shadeC(hex('#2a2436'), 0.8 + b * 0.3); }, true, m => m[1] > -0.1, (x, y, z) => 0.06 * Math.sin(x * 11) * Math.cos(z * 9));
       add(dome.build(gl), 'world');

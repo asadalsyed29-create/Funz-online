@@ -54,6 +54,32 @@ function cottage(mb, H, x, z, rot, w, d, h, roofC, wallC = BC.plaster) {
   mb.pop();
 }
 
+// a low-poly wooden boat hull along x (bow at +x), keel at y = 0. upTo < 1 leaves the bow broken off.
+function boatHull(mb, Lh, W, Hh, upTo = 1) {
+  const C = h => hex(h), n = 9, S = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = -Lh / 2 + t * Lh, w = W / 2 * (t < 0.6 ? 0.82 + 0.18 * Math.sin(t / 0.6 * Math.PI / 2) : Math.cos((t - 0.6) / 0.4 * Math.PI / 2) ** 0.8), rise = Hh * (0.12 * (1 - t) ** 2 + 0.25 * t * t);
+    S.push({ x, w, top: Hh + rise, bil: Hh * 0.38, t });
+  }
+  const band = k => shadeC(C(BC.wood), k % 2 ? 0.86 : 1);
+  for (let i = 0; i < n; i++) {
+    const a = S[i], b = S[i + 1]; if (b.t > upTo + 1e-6) break;
+    for (const sd of [-1, 1]) {
+      const P = (s, y, ww) => [s.x, y, sd * ww];
+      const q = (p0, p1, p2, p3, c) => sd > 0 ? mb.quad(p0, p1, p2, p3, c) : mb.quad(p1, p0, p3, p2, c);
+      // three plank bands on the side, then the bottom to the keel
+      for (let k = 0; k < 3; k++) { const f0 = k / 3, f1 = (k + 1) / 3, ya0 = a.bil + (a.top - a.bil) * f0, ya1 = a.bil + (a.top - a.bil) * f1, yb0 = b.bil + (b.top - b.bil) * f0, yb1 = b.bil + (b.top - b.bil) * f1;
+        q(P(a, ya0, a.w * (0.86 + 0.14 * f0)), P(b, yb0, b.w * (0.86 + 0.14 * f0)), P(b, yb1, b.w * (0.86 + 0.14 * f1)), P(a, ya1, a.w * (0.86 + 0.14 * f1)), band(k)); }
+      q(P(a, 0, 0), P(b, 0, 0), P(b, b.bil, b.w * 0.86), P(a, a.bil, a.w * 0.86), C(BC.woodD));
+      q(P(a, a.top, a.w), P(b, b.top, b.w), P(b, b.top + 0.18, b.w), P(a, a.top + 0.18, a.w), C(BC.woodL)); // rail
+    }
+    mb.quad([a.x, a.top - 0.35, a.w * 0.95], [b.x, b.top - 0.35, b.w * 0.95], [b.x, b.top - 0.35, -b.w * 0.95], [a.x, a.top - 0.35, -a.w * 0.95], C(BC.woodL)); // deck
+  }
+  const s0 = S[0]; mb.quad([s0.x, 0, 0], [s0.x, s0.top, -s0.w], [s0.x, s0.top, s0.w], [s0.x, 0, 0], C(BC.woodD)); mb.tri([s0.x, 0, 0], [s0.x, s0.bil, s0.w * 0.86], [s0.x, s0.top, s0.w], C(BC.woodD)); mb.tri([s0.x, 0, 0], [s0.x, s0.top, -s0.w], [s0.x, s0.bil, -s0.w * 0.86], C(BC.woodD)); mb.tri([s0.x, 0, 0], [s0.x, s0.top, s0.w], [s0.x, s0.top, -s0.w], C(BC.woodD));
+  if (upTo < 1) { const e = S[Math.floor(upTo * n)]; for (let k = 0; k < 5; k++) { const z = -e.w + k * e.w / 2, h = e.top * (0.4 + ((k * 37) % 5) / 8); mb.tri2([e.x, 0, 0], [e.x + 0.6 + (k % 2) * 0.5, h, z], [e.x, h * 0.8, z + e.w / 4], C(BC.woodD)); } }
+  return S;
+}
+
 function buildStructure(mb, p, s, item, L, rnd) {
   const H = bh(mb), C = h => hex(h);
   switch (p.type) {
@@ -153,13 +179,19 @@ function buildStructure(mb, p, s, item, L, rnd) {
       s.lights.push({ p: L(0, steps * 1.6 + 1, 0), r: 10, c: [1, 0.8, 0.3] }, { p: L(0, 2, 22.5), r: 8, c: [1, 0.7, 0.3] });
       item('gem', 0, steps * 1.6 + 0.2, -3); item('coin', 10, 0.6, 22); break;
     }
-    case 'pod': { // a crashed space pod in a crater, with scattered parts
-      mb.cyl(0, -0.8, 0, 6, 4.5, 0.5, 12, C('#5a5048'), true);
-      mb.push([0, 1.6, 0], M4.rotZ(0.35)); mb.lathe([[0, -2.4], [1.6, -2.1], [2.6, -1], [2.8, 0.4], [2.2, 1.8], [1.0, 2.6], [0, 2.8]], 12, (t) => t > 0.55 ? glowC(C('#8ff6ff')) : C(BC.metal), 0); mb.pop();
-      if (mb.tris) { const cb = new MeshBuilder().collect(); cb._set(mb.A, mb.P); cb.ico(0, 1.6, 0, 2.6, 0, () => [0, 0, 0, 1]); mb.tris.push(...cb.tris); } // a round collision shell for the pod
-      for (let k = 0; k < 3; k++) { const a = k * 2.1; mb.push([Math.cos(a) * 2.6, 0, Math.sin(a) * 2.6], M4.rotZ(0.5)); H.flatBox(-0.2, -1, -0.2, 0.2, 2, 0.2, BC.metalD); mb.pop(); }
-      for (let k = 0; k < 7; k++) { const a = rnd(k) * 6.28, d = 4 + rnd(k + 9) * 5; mb.push([Math.cos(a) * d, 0, Math.sin(a) * d], M4.rotY(a)); H.flatBox(-0.6, -0.3, -0.3, 0.6, 0.2, 0.3, k % 2 ? BC.metal : BC.metalD); mb.pop(); }
-      s.lights.push({ p: L(0, 3.5, 0), r: 8, c: [0.4, 0.9, 1] }); item('relic', 0, 0.6, 4); break;
+    case 'pod': { // a crashed space capsule in a scorched crater, hatch open, panels scattered around
+      mb.cyl(0, -0.6, 0, 7, 5.5, 0.62, 14, C('#4a4038'), true); mb.cyl(0, 0.0, 0, 5.4, 5.4, 0.04, 14, C('#2e2824'), true);
+      for (let k = 0; k < 14; k++) { const a = k / 14 * 6.283 + rnd(k) * 0.2; mb.ico(Math.cos(a) * 6.6, 0.1, Math.sin(a) * 6.6, [1 + rnd(k + 3) * 0.8, 0.5 + rnd(k + 5) * 0.4, 0.9], 0, (q, w) => shadeC(C('#6a5e52'), 0.8 + w * 0.25)); }
+      mb.push([0.4, 1.3, 0], M4.mul3(M4.rotY(0.5), M4.rotZ(-1.0)));
+      mb.lathe([[0, -1.9], [2.2, -1.75], [2.35, -1.45], [1.7, 0.6], [1.0, 1.9], [0.75, 2.1], [0, 2.15]], 14, t => t < 0.12 ? C('#3a3030') : C(t > 0.4 && t < 0.52 ? '#5ff0e0' : BC.metal), 0);
+      for (let k = 0; k < 3; k++) { const a = k * 2.09 + 0.6; mb.push([Math.cos(a) * 1.75, 0.15, Math.sin(a) * 1.75], M4.mul3(M4.rotY(-a), M4.rotZ(0.33))); mb.box(-0.02, -0.35, -0.3, 0.1, 0.35, 0.3, glowC(C('#8ff6ff'))); mb.pop(); }
+      mb.cyl(0, 2.1, 0, 0.05, 0.05, 1.3, 5, C(BC.metalD)); mb.ico(0, 3.45, 0, 0.14, 0, () => glowC(C('#ff5f7e')));
+      mb.push([0, -0.2, 2.0], M4.rotX(-1.2)); H.flatBox(-0.7, 0, -0.06, 0.7, 1.4, 0.06, BC.metal); mb.pop(); // the open hatch
+      mb.pop();
+      if (mb.tris) { const cb = new MeshBuilder().collect(); cb._set(mb.A, mb.P); cb.ico(0.4, 1.3, 0, [2.2, 1.8, 2.2], 0, () => [0, 0, 0, 1]); mb.tris.push(...cb.tris); }
+      for (let k = 0; k < 7; k++) { const a = rnd(k) * 6.28, d = 7.5 + rnd(k + 9) * 4; mb.push([Math.cos(a) * d, 0, Math.sin(a) * d], M4.mul3(M4.rotY(a), M4.rotZ((rnd(k + 2) - 0.5) * 0.5))); H.flatBox(-0.7, -0.2, -0.4, 0.7, 0.12, 0.4, k % 2 ? BC.metal : BC.metalD); mb.pop(); }
+      mb.push([-6, 0, -4], M4.rotY(0.8)); H.flatBox(-1.2, -0.1, -0.8, 1.2, 0.08, 0.8, '#3f5e9a'); for (let k = -1; k <= 1; k++) H.flatBox(k * 0.8 - 0.02, 0.08, -0.8, k * 0.8 + 0.02, 0.1, 0.8, BC.metal); mb.pop(); // a solar panel
+      s.lights.push({ p: L(0, 3.5, 0), r: 9, c: [0.4, 0.9, 1] }); item('relic', 0, 0.6, 5); break;
     }
     case 'igloo': { // an igloo with a tunnel, a snowman and an ice-fishing hole
       mb.ico(0, -0.5, 0, 4, 1, (x, y) => shadeC(C('#eef6ff'), 0.88 + y * 0.12), false, m => m[1] > -0.1);
@@ -202,18 +234,18 @@ function buildStructure(mb, p, s, item, L, rnd) {
       mb.cyl(0, -0.3, 0, 1.2, 1.4, 0.7, 8, C('#6a5a7a'));
       item('mushroom', 0, 0.6, 0); item('crystal', 2, 0.6, 1); break;
     }
-    case 'wreck': { // a shipwreck on the sand: hull planks, a broken mast, a torn sail and barrels
-      mb.push([0, 0, 0], M4.rotZ(0.22));
-      const hull = (k, s2) => { const y = 0.2 + k * 0.62, half = 2.6 + k * 0.32; mb.quad([-8 + k * 0.4, y, s2 * half], [8.5 - k * 0.2, y, s2 * half], [8.5 - k * 0.2, y + 0.6, s2 * (half + 0.3)], [-8 + k * 0.4, y + 0.6, s2 * (half + 0.3)], shadeC(C(BC.wood), 0.85 + (k % 2) * 0.12)); };
-      for (let k = 0; k < 6; k++) { mb.push([0, 0, 0]); hull(k, 1); mb.pop(); mb.push([0, 0, 0], M4.rotY(Math.PI)); hull(k, 1); mb.pop(); }
-      H.flatBox(-7, -0.5, -2.6, 8, 0.4, 2.6, BC.woodD);
-      mb.cyl(0, 0, 0, 0.32, 0.26, 6.5, 7, C(BC.woodD));
-      mb.push([0, 6.4, 0], M4.rotZ(-0.9)); mb.cyl(0, 0, 0, 0.26, 0.2, 3.5, 7, C(BC.woodD)); mb.pop();
-      mb.tri2([0.3, 2.2, 0], [0.3, 6, 0], [3.4, 3.4, 0.4], C('#e8e0cc')); mb.tri2([0.3, 2.2, 0], [3.4, 3.4, 0.4], [2.8, 1.8, 0.3], C('#d8d0bc'));
+    case 'wreck': { // a shipwreck half sunk in the sand: a tilted hull with a broken bow, a snapped mast, a torn sail
+      mb.push([0, -1.1, 0], M4.mul3(M4.rotZ(0.06), M4.rotX(0.32)));
+      boatHull(mb, 17, 6, 2.6, 0.78);
+      mb.cyl(-1, 2.2, 0, 0.32, 0.27, 7.5, 7, C(BC.woodD)); mb.cyl(-1, 6.0, 0, 0.1, 0.1, 0.1, 4, C(BC.woodD));
+      mb.push([-1, 7.4, 0], M4.rotZ(1.9)); mb.cyl(0, 0, 0, 0.26, 0.2, 4.5, 7, C(BC.woodD)); mb.pop();
+      mb.tri2([-0.7, 3.0, 0.1], [-0.7, 7.0, 0.1], [-4.2, 3.6, 0.5], C('#e8e0cc')); mb.tri2([-0.7, 3.0, 0.1], [-4.2, 3.6, 0.5], [-3.4, 2.4, 0.4], C('#d8d0bc'));
+      mb.box(-7.4, 2.5, -1.6, -5, 4.3, 1.6, C(BC.wood)); H.roof(-7.4, -5, -1.6, 1.6, 4.3, 0.9, BC.woodD, 0.2); H.window(-5, 3.4, 0, 0.6, 0.6, 1);
       mb.pop();
-      H.barrel(4, 5); H.barrel(5.2, 4.4); mb.push([3.4, 0.4, 6], M4.rotZ(Math.PI / 2)); H.barrel(0, 0); mb.pop();
-      H.crate(-5, 5); mb.ico(-2, 0.1, 6, [1, 0.4, 0.8], 0, () => C('#d8c48f'));
-      item('shell', 4, 0.6, 7); item('coin', -3, 1, 0); break;
+      H.barrel(5, 5.4); H.barrel(6.2, 4.8); mb.push([4.2, 0.45, 6.6], M4.rotZ(Math.PI / 2)); H.barrel(0, 0); mb.pop();
+      H.crate(-5, 6); H.crate(-6.1, 6.5, 0.6); mb.ico(-2, 0.1, 6.5, [1.2, 0.4, 0.9], 0, () => C('#d8c48f'));
+      mb.push([8, 0.15, -3], M4.rotY(0.4)); H.flatBox(-0.8, -0.1, -0.6, 0.8, 0.5, 0.6, '#7a4a2a'); H.flatBox(-0.82, 0.45, -0.62, 0.82, 0.62, 0.62, '#9a6a3a'); H.flatBox(-0.1, 0.25, 0.6, 0.1, 0.45, 0.66, BC.gold); mb.pop(); // a treasure chest
+      item('shell', 4, 0.6, 7); item('coin', 8, 1, -3); break;
     }
     case 'lighthouse': { // a striped lighthouse with a balcony, a lamp room and a keeper's house
       H.box(-4, -0.8, -4, 4, 0.4, 4, BC.stoneD);

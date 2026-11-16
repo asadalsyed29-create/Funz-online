@@ -1,5 +1,5 @@
 // Lets Funz Online install and open even with a weak connection.
-const VERSION = '4.10';
+const VERSION = '4.11';
 const CACHE = 'funz-online-' + VERSION;
 const FILES = ['./', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/icons.js', 'js/device.js', 'js/gl.js', 'js/terrain.js', 'js/structures.js', 'js/buildings.js', 'js/sky.js', 'js/realms.js', 'js/parts.js', 'js/custom.js', 'js/models.js', 'js/fx.js', 'js/sound.js', 'js/game.js', 'js/net.js', 'js/app.js',

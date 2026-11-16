@@ -394,7 +394,7 @@ class Game {
     let d = c.dist;
     for (let s = 0.5; s < c.dist; s += 0.4) {
       const x = c.target[0] + dir[0] * s, y = c.target[1] + dir[1] * s, z = c.target[2] + dir[2] * s;
-      const blocked = this.cave ? (y > this.cave.ceil(x, z) - 0.3 || y < this.cave.floor(x, z) + 0.3) : y < this.T.ground(x, z) + 0.4;
+      const blocked = this.cave ? (y > this.cave.ceil(x, z) - 0.3 || y < this.cave.floor(x, z) + 0.3) : this.realm ? (this.realm.floorAt ? y < this.realm.floorAt(x, z) + 0.4 : false) : y < this.T.ground(x, z) + 0.4;
       const part = this.B.get(Math.floor(x), Math.floor(y), Math.floor(z));
       if (blocked || (part && PARTS[part.id].cat === 'blocks' && !PARTS[part.id].glass)) { d = Math.max(0.9, s - 0.4); break; }
     }
