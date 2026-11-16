@@ -13,13 +13,25 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=4.5">
+<link rel="stylesheet" href="style.css?v=4.6">
 </head>
 <body>
 <canvas id="game"></canvas>
 <canvas id="ov"></canvas>
 <div id="vignette"></div>
 <div id="rotate"><div class="rotIcon"></div><b>Turn your device sideways</b><span>Funz Online plays in landscape mode</span></div>
+
+<div id="gate" class="hidden">
+  <div class="gBox">
+    <img src="icons/icon-192.png" alt="" class="gLogo">
+    <h1>Funz Online</h1>
+    <p class="gSub">Install the app to play! It's free, opens full screen and runs smoother.</p>
+    <button id="gateInstall" class="big" disabled>⬇ Install Funz Online</button>
+    <ol id="gateIos" class="gSteps hidden"><li>Tap the <b>Share</b> button <span class="gIc">⬆</span> at the bottom of Safari</li><li>Tap <b>Add to Home Screen</b></li><li>Open <b>Funz Online</b> from your home screen</li></ol>
+    <p id="gateMsg" class="gMsg">Getting the app ready…</p>
+    <button id="gateBrowser" class="gLink hidden">Can't install? Play in the browser</button>
+  </div>
+</div>
 
 <div id="menu" class="screen">
   <div class="menuWrap">
@@ -34,7 +46,7 @@
       <button id="installBtn" class="ghost hidden">Install Funz Online</button>
       <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
       <p id="menuMsg" class="msg"></p>
-      <p class="ver" id="verLabel">Version 4.5</p>
+      <p class="ver" id="verLabel">Version 4.6</p>
     </div>
     <div id="wardrobe" class="wardrobe">
       <div class="wHead"><b>Wardrobe</b><span id="coinCount" class="coins"></span><button id="wardClose" class="iconBtn hidden">✕</button></div>
@@ -88,22 +100,23 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
-<script>window.FUNZ_VERSION = '4.5';</script>
+<script>window.FUNZ_VERSION = '4.6';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js?v=4.5"></script>
-<script src="js/device.js?v=4.5"></script>
-<script src="js/gl.js?v=4.5"></script>
-<script src="js/terrain.js?v=4.5"></script>
-<script src="js/structures.js?v=4.5"></script>
-<script src="js/sky.js?v=4.5"></script>
-<script src="js/realms.js?v=4.5"></script>
-<script src="js/parts.js?v=4.5"></script>
-<script src="js/custom.js?v=4.5"></script>
-<script src="js/models.js?v=4.5"></script>
-<script src="js/fx.js?v=4.5"></script>
-<script src="js/sound.js?v=4.5"></script>
-<script src="js/game.js?v=4.5"></script>
-<script src="js/net.js?v=4.5"></script>
-<script src="js/app.js?v=4.5"></script>
+<script src="js/icons.js?v=4.6"></script>
+<script src="js/device.js?v=4.6"></script>
+<script src="js/gl.js?v=4.6"></script>
+<script src="js/terrain.js?v=4.6"></script>
+<script src="js/structures.js?v=4.6"></script>
+<script src="js/buildings.js?v=4.6"></script>
+<script src="js/sky.js?v=4.6"></script>
+<script src="js/realms.js?v=4.6"></script>
+<script src="js/parts.js?v=4.6"></script>
+<script src="js/custom.js?v=4.6"></script>
+<script src="js/models.js?v=4.6"></script>
+<script src="js/fx.js?v=4.6"></script>
+<script src="js/sound.js?v=4.6"></script>
+<script src="js/game.js?v=4.6"></script>
+<script src="js/net.js?v=4.6"></script>
+<script src="js/app.js?v=4.6"></script>
 </body>
 </html>

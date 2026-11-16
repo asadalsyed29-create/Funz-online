@@ -241,9 +241,25 @@
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') play(); });
 
   let installEvt = null;
-  addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!Device.standalone) $('installBtn').classList.remove('hidden'); });
+  // In a normal browser tab the game asks you to install the app first (the app is where you play).
+  const ios = Device.os === 'iPhone' || Device.os === 'iPad', P0 = new URLSearchParams(location.search);
+  const gate = !Device.standalone && location.protocol === 'https:' && !P0.has('debug') && !P0.has('browser') && (() => { try { return sessionStorage.getItem('funz.browser') !== '1'; } catch (e) { return true; } })();
+  const gateMsg = t => { $('gateMsg').textContent = t; };
+  if (gate) {
+    $('gate').classList.remove('hidden');
+    if (ios) { $('gateInstall').classList.add('hidden'); $('gateIos').classList.remove('hidden'); gateMsg(''); }
+    setTimeout(() => { if (!installEvt && !ios) { gateMsg('Already installed? Open Funz Online from your apps!'); $('gateBrowser').classList.remove('hidden'); } }, 4000);
+    if (ios) setTimeout(() => $('gateBrowser').classList.remove('hidden'), 6000);
+  }
+  $('gateBrowser').onclick = () => { try { sessionStorage.setItem('funz.browser', '1'); } catch (e) {} $('gate').classList.add('hidden'); };
+  $('gateInstall').onclick = async () => {
+    if (!installEvt) return;
+    installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; $('gateInstall').disabled = true;
+    gateMsg(r && r.outcome === 'accepted' ? 'Installing! Open Funz Online from your apps to play ✨' : 'No problem! Tap install whenever you are ready.');
+  };
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!Device.standalone) $('installBtn').classList.remove('hidden'); $('gateInstall').disabled = false; gateMsg(''); $('gateBrowser').classList.add('hidden'); });
   $('installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('installBtn').classList.add('hidden'); };
-  addEventListener('appinstalled', () => $('installBtn').classList.add('hidden'));
+  addEventListener('appinstalled', () => { $('installBtn').classList.add('hidden'); $('gateInstall').disabled = true; gateMsg('Installed! Open Funz Online from your apps to play ✨'); });
   if ((Device.os === 'iPhone' || Device.os === 'iPad') && !Device.standalone) $('iosHint').classList.remove('hidden');
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
