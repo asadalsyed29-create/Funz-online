@@ -27,13 +27,14 @@
   const pickOne = a => a[Math.floor(Math.random() * a.length)];
   const look = {
     color: store.get('color', pickOne(COLORS.slice(0, 8))), color2: store.get('color2', '#e8eef7'),
-    skin: store.get('skin', 'band'), hat: store.get('hat', 'none'), trail: store.get('trail', 'dust'),
+    skin: store.get('skin', 'band'), hat: store.get('hat', 'none'), trail: store.get('trail', 'dust'), gadget: store.get('gadget', 'none'),
   };
-  const LOOK_KINDS = { skin: SKINS, color: COLORS, color2: COLORS, hat: HATS, trail: TRAILS };
+  const LOOK_KINDS = { skin: SKINS, color: COLORS, color2: COLORS, hat: HATS, trail: TRAILS, gadget: { none: 1, ...GADGETS } };
   const validLook = (k, v) => k === 'color' || k === 'color2' ? COLORS.includes(v) : !!LOOK_KINDS[k][v];
+  let ownerGadgets = (() => { const v = store.json('og', []); return Array.isArray(v) ? v.filter(k => OWNER_GADGETS[k]) : []; })();
   function myLook() {
-    const o = {};
-    for (const k in look) o[k] = validLook(k, look[k]) && prog.owns(k, look[k], isOwner()) ? look[k] : ({ color: COLORS[0], color2: '#e8eef7', skin: 'plain', hat: 'none', trail: 'none' })[k];
+    const o = { og: isOwner() ? [...ownerGadgets] : [] };
+    for (const k in look) o[k] = k === 'gadget' ? (look.gadget !== 'none' && GADGETS[look.gadget] && prog.ownsGadget(look.gadget, isOwner()) ? look.gadget : 'none') : validLook(k, look[k]) && prog.owns(k, look[k], isOwner()) ? look[k] : ({ color: COLORS[0], color2: '#e8eef7', skin: 'plain', hat: 'none', trail: 'none' })[k];
     return o;
   }
 
@@ -47,18 +48,20 @@
     return thumbs;
   }
   // a little picture of a ball with a skin and hat
-  function thumb(skin, hat, A, B) {
+  function thumb(skin, hat, A, B, gadget) {
     const T = thumbMaker(); if (!T) return '';
-    const key = skin + '|' + hat + '|' + A + '|' + B; if (T.cache.has(key)) return T.cache.get(key);
-    const G2 = T.gfx, gl = G2.gl, eye = hat !== 'none' ? [0, 0.75, 2.2] : [0, 0.35, 2.2];
+    const key = skin + '|' + hat + '|' + A + '|' + B + '|' + (gadget || ''); if (T.cache.has(key)) return T.cache.get(key);
+    if (gadget) hat = hat === 'none' ? 'none' : hat;
+    const G2 = T.gfx, gl = G2.gl, tall = hat !== 'none' || gadget, eye = gadget === 'balloon' ? [0, 1.4, 3.8] : tall ? [0, 0.75, 2.6] : [0, 0.35, 2.2];
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND);
-    const vp = M4.mul(M4.persp(hat !== 'none' ? 0.62 : 0.5, 1, 0.1, 50), M4.lookAt(eye, [0, hat !== 'none' ? 0.18 : 0, 0], [0, 1, 0]));
+    const vp = M4.mul(M4.persp(tall ? 0.62 : 0.5, 1, 0.1, 50), M4.lookAt(eye, [0, gadget === 'balloon' ? 0.6 : tall ? 0.18 : 0, 0], [0, 1, 0]));
     G2.begin({ vp, eye, sun: [0.45, 0.75, 0.5], sunC: [0.75, 0.72, 0.64], sky: [0.5, 0.55, 0.68], ground: [0.28, 0.26, 0.3], fog: [0, 0, 0], fogD: 0, time: 1, horizon: [0.6, 0.75, 0.95], lp: new Float32Array(32), lc: new Float32Array(24) });
     const M = M4.model([0, 0, 0], M4.mul3(M4.rotY(0.5), M4.rotX(0.25)), 0.45), sk = (SKINS[skin] || SKINS.plain).n;
     const a = new Float32Array(hex(A).slice(0, 3)), b = new Float32Array(hex(B).slice(0, 3));
     if (CLEAR_SKINS.includes(sk)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); }
     G2.ball(M, sk, a, b); G2.ball(M, sk, a, b, 1, 0.045); gl.disable(gl.BLEND);
     if (hat !== 'none') { const h = T.hats[hat] || (T.hats[hat] = hatModel(G2, hat)); G2.mat(1, 0.35, 0.7); const HM = M4.model([0, 0, 0], M4.rotY(-0.9), 1); G2.draw(h, HM); G2.outline(h, HM, 0.016); }
+    if (gadget) { const gm = T.hats['g:' + gadget] || (T.hats['g:' + gadget] = gadgetModel(G2, gadget)); G2.mat(1, 0.35, 0.6); const GM = M4.model([0, 0, 0], M4.rotY(-0.9 + (gadget === 'jets' || gadget === 'spring' ? 2.2 : 0)), 1); G2.draw(gm, GM); G2.outline(gm, GM, 0.014); }
     const url = T.c.toDataURL(); T.cache.set(key, url); return url;
   }
   const lockText = (kind, id) => {
@@ -102,20 +105,43 @@
     const idsOf = kind => kind === 'color' || kind === 'color2' ? COLORS : Object.keys(LOOK_KINDS[kind]);
     const head = t => { const h = document.createElement('div'); h.className = 'wSec'; h.textContent = t; grid.appendChild(h); };
     if (wTab === 'shop') {
-      // everything you can buy with coins
+      // gadgets first: made from coins and things you found, yours forever
+      head('Gadgets (use one at a time)');
+      const inv = G ? G.inv : store.json('inv', {});
+      for (const id of Object.keys(GADGETS)) {
+        const Gd = GADGETS[id], owns = prog.ownsGadget(id, owner), b = document.createElement('button'); b.className = 'gad' + (L.gadget === id ? ' on' : '') + (owns ? '' : ' locked');
+        const img = document.createElement('img'); img.alt = ''; img.src = thumb(L.skin, 'none', L.color, L.color2, id); b.appendChild(img);
+        const t = document.createElement('span'); t.className = 'lk c'; t.textContent = owns ? (L.gadget === id ? 'Using' : 'Yours') : Object.entries(Gd.cost).map(([k, n]) => k === 'coins' ? n + '¢' : n + ' ' + ITEMS[k].name.toLowerCase()).join(' + '); b.appendChild(t);
+        b.title = Gd.name + ': ' + Gd.desc;
+        b.onclick = () => {
+          if (owns) { wear('gadget', L.gadget === id ? 'none' : id); wInfo(L.gadget === id ? Gd.name + ' put away' : 'Using the ' + Gd.name + ': ' + Gd.desc); return; }
+          const miss = prog.missing(id, inv);
+          if (miss.length) { wInfo(Gd.name + ': ' + Gd.desc + '. You need ' + miss.join(', ') + '.'); return; }
+          if (confirm('Make the ' + Gd.name + '? It costs ' + Object.entries(Gd.cost).map(([k, n]) => k === 'coins' ? n + ' coins' : n + ' ' + ITEMS[k].name.toLowerCase() + (n > 1 ? 's' : '')).join(', ') + '.')) { prog.craft(id, inv); store.set('inv', JSON.stringify(inv)); Sound.play('chest'); wear('gadget', id); if (G) renderBag(); }
+        };
+        grid.appendChild(b);
+      }
       let n = 0;
       for (const kind of ['skin', 'hat', 'trail', 'color']) {
         const list = idsOf(kind).filter(id => { const l = prog.lockOf(kind, id); return l && l.coins; }); if (!list.length) continue;
         head(KIND_NAME[kind] + 's');
         for (const id of list) { const owns = prog.owns(kind, id, owner); grid.appendChild(wTile(kind, id, L, owner, owns ? (owner ? 'Yours ★' : 'Yours') : null)); n++; }
       }
-      wInfo(owner ? 'You own everything in the shop already!' : 'Buy things with coins. You get coins from coins lying around, treasure and quests.');
+      wInfo(owner ? 'You own everything in the shop already! Tap a gadget to use it.' : 'Gadgets need coins plus things you found. Tap one to see what it does.');
       return;
     }
     if (wTab === 'owner') {
       head('Skins'); for (const id of Object.keys(SKINS).filter(id => ownerOnly('skin', id))) grid.appendChild(wTile('skin', id, L, owner));
       head('Hats'); for (const id of Object.keys(HATS).filter(id => ownerOnly('hat', id))) grid.appendChild(wTile('hat', id, L, owner));
       head('Trails'); for (const id of Object.keys(TRAILS).filter(id => ownerOnly('trail', id))) grid.appendChild(wTile('trail', id, L, owner));
+      head('Owner gadgets (use as many as you like)');
+      const OG_ICON = { ship: '🛸', legs: '🦿', wings: '🪽', dragon: '🐉', aura: '✨' };
+      for (const [k, g] of Object.entries(OWNER_GADGETS)) {
+        const b = document.createElement('button'), on = ownerGadgets.includes(k); b.className = 'ogad' + (on ? ' on' : ''); b.title = g.name + ': ' + g.desc;
+        b.innerHTML = '<span class="em"></span><span class="lk c"></span>'; b.firstChild.textContent = OG_ICON[k]; b.lastChild.textContent = g.name;
+        b.onclick = () => { ownerGadgets = on ? ownerGadgets.filter(x => x !== k) : [...ownerGadgets, k]; store.set('og', JSON.stringify(ownerGadgets)); wear('og', null); wInfo((on ? 'Put away: ' : 'Using: ') + g.name + '. ' + g.desc); };
+        grid.appendChild(b);
+      }
       head('Colors'); for (const id of COLORS.filter(id => ownerOnly('color', id))) grid.appendChild(wTile('color', id, L, owner)); for (const id of COLORS.filter(id => ownerOnly('color', id))) grid.appendChild(wTile('color2', id, L, owner, '2nd'));
       wInfo('★ Special things only the owner can wear.');
       return;
@@ -136,7 +162,7 @@
   $('wardBtn').onclick = () => { if ($('wardrobe').classList.contains('hidden') || $('wardrobe').parentElement.id !== 'hud') openWardrobe(true); else openWardrobe(false); };
   function wInfo(t) { const L = myLook(); $('wInfo').textContent = t || ('Wearing: ' + SKINS[L.skin].name + ' skin · ' + HATS[L.hat].name + (L.hat === 'none' ? ' hat' : '') + ' · ' + TRAILS[L.trail].name + (L.trail === 'none' ? ' trail' : ' trail')); }
   function wear(kind, id) {
-    look[kind] = id; store.set(kind, id); renderWardrobe(); drawPreview();
+    if (kind !== 'og') { look[kind] = id; store.set(kind, id); } renderWardrobe(); drawPreview(); if (G) $('shipBtn').classList.toggle('hidden', !myLook().og.includes('ship'));
     if (G) { const L = myLook(); Object.assign(G.me, L); Object.assign(G.profile, L); if (G.role === 'guest') Net.toKeeper({ t: 'look', ...L }); else renderPeople(); }
   }
 
@@ -195,6 +221,8 @@
   $('adminBtn').innerHTML = icon('star', 15) + ' Admin';
   $('bagBtn').innerHTML = icon('bag', 22);
   $('wardBtn').innerHTML = icon('shirt', 22);
+  $('shipBtn').innerHTML = '<span style="font-size:22px">🛸</span>';
+  $('shipBtn').onclick = () => toggleShip();
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
   try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}
   musicIcon();
@@ -356,6 +384,7 @@
     if (Device.useTouch) { $('touch').classList.remove('hidden'); $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
     $('adminBtn').classList.toggle('hidden', !G.me.admin);
+    $('shipBtn').classList.toggle('hidden', !myLook().og.includes('ship'));
     onResize(); last = performance.now();
     showToast(Device.useTouch ? 'Joystick to roll · drag to look · jump button to jump' : 'WASD to roll · drag to look · Space to jump · the station is on your minimap!', 5000);
     requestAnimationFrame(loop);
@@ -363,7 +392,7 @@
 
   function leave(msg) {
     if (!G) return;
-    saveWorld(); G.running = false; Net.leave(); G = null;
+    saveWorld(); G.running = false; Net.leave(); if (G.game) G.game.fpv = null; G = null;
     ['hud', 'chat', 'touch', 'buildToggle', 'bag', 'adminPanel'].forEach(id => $(id).classList.add('hidden'));
     document.body.classList.remove('building', 'showPeople');
     $('chatLog').textContent = '';
@@ -409,9 +438,9 @@
     if (list.length >= per) { G.rate.set(k, list); return false; }
     list.push(now); G.rate.set(k, list); return true;
   }
-  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, dev: p.dev, devType: p.devType, admin: !!p.admin, p: p.p.map(v => +v.toFixed(2)) });
+  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, gadget: p.gadget, og: p.og || [], dev: p.dev, devType: p.devType, admin: !!p.admin, p: p.p.map(v => +v.toFixed(2)) });
   const okLook = (kind, v, admin) => (kind === 'color' || kind === 'color2' ? COLORS.includes(v) : !!LOOK_KINDS[kind][v]) && (admin || !ownerOnly(kind, v));
-  const cleanLook = (m, admin) => ({ color: okLook('color', m.color, admin) ? m.color : COLORS[0], color2: okLook('color2', m.color2, admin) ? m.color2 : '#e8eef7', skin: okLook('skin', m.skin, admin) ? m.skin : 'plain', hat: okLook('hat', m.hat, admin) ? m.hat : 'none', trail: okLook('trail', m.trail, admin) ? m.trail : 'none' });
+  const cleanLook = (m, admin) => ({ color: okLook('color', m.color, admin) ? m.color : COLORS[0], color2: okLook('color2', m.color2, admin) ? m.color2 : '#e8eef7', skin: okLook('skin', m.skin, admin) ? m.skin : 'plain', hat: okLook('hat', m.hat, admin) ? m.hat : 'none', trail: okLook('trail', m.trail, admin) ? m.trail : 'none', gadget: GADGETS[m.gadget] ? m.gadget : 'none', og: admin && Array.isArray(m.og) ? m.og.filter(k => OWNER_GADGETS[k]).slice(0, 5) : [] });
   const roster = () => [...G.players.values()].map(publicP);
   const dayPhase = () => ((performance.now() - G.dayStart) / DAY_MS) % 1;
   const findPlayer = name => { name = (name || '').toLowerCase().replace(/^@/, ''); if (!name) return null; return [...G.players.values()].find(p => p.name.toLowerCase() === name) || [...G.players.values()].find(p => p.name.toLowerCase().startsWith(name)); };
@@ -447,7 +476,7 @@
       Object.assign(p, cleanLook(m, p.admin)); renderPeople();
     } else if (m.t === 'pos') {
       const v = vec(m.p); if (!okVec(v)) return;
-      p.tp = v; p.fly = !!m.fl && !!p.admin; p.big = !!m.big; p.glow = !!m.gl;
+      p.tp = v; p.fly = !!m.fl && !!p.admin; p.big = !!m.big; p.glow = !!m.gl; p.ship = !!m.sh && !!p.admin;
     } else if (m.t === 'admin') {
       const nonce = G.nonces.get(id); G.nonces.delete(id);
       if (nonce && typeof m.sig === 'string') adminVerify(nonce, m.sig).then(ok => {
@@ -571,11 +600,11 @@
     if (m.t === 'roster') {
       const ids = new Set(m.roster.map(r => r.id));
       for (const id of [...G.players.keys()]) if (!ids.has(id)) G.players.delete(id);
-      for (const r of m.roster) { const p = G.players.get(r.id); if (!p) addPlayer(r); else if (p !== G.me) Object.assign(p, { admin: r.admin, name: r.name, hat: r.hat, color: r.color, color2: r.color2, skin: r.skin, trail: r.trail }); else p.admin = r.admin; }
+      for (const r of m.roster) { const p = G.players.get(r.id); if (!p) addPlayer(r); else if (p !== G.me) Object.assign(p, { admin: r.admin, name: r.name, hat: r.hat, color: r.color, color2: r.color2, skin: r.skin, trail: r.trail, gadget: r.gadget, og: Array.isArray(r.og) ? r.og.filter(k => OWNER_GADGETS[k]) : [] }); else p.admin = r.admin; }
       renderPeople();
     } else if (m.t === 'state') {
       G.dayStart = performance.now() - m.phase * DAY_MS;
-      for (const [id, x, y, z, fl, big, gl] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = fl; p.big = big; p.glow = gl; } }
+      for (const [id, x, y, z, fl, big, gl, sh] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = fl; p.big = big; p.glow = gl; p.ship = !!sh; } }
     } else if (m.t === 'bye') { const p = G.players.get(m.id); if (p) { sys(p.name + ' left'); G.players.delete(m.id); renderPeople(); } }
     else if (m.t === 'chat') { const p = G.players.get(m.id); if (p) say(p, cleanText(m.text)); }
     else if (m.t === 'emote') { const p = G.players.get(m.id); if (p && EMOTES.includes(m.e)) emote(p, m.e); }
@@ -603,7 +632,7 @@
   function gotItem(type) {
     const b = G.body.p; G.game.fx.burst([b[0], b[1] + 0.3, b[2]], 18, { cols: type === 'coin' ? ['#ffd24a', '#fff2a8'] : ['#ffffff', ITEMS[type].color, '#fff2a8'], shape: 26, size: 0.18, speed: 3.5, life: 0.8, lift: 1.5 });
     if (type === 'coin') { prog.give(5); Sound.play('coin'); showToast('+5 coins!', 1000); renderBag(); questCheck(); return; }
-    Sound.play('pickup'); prog.add('items'); if (type === 'star') prog.max('star', 1); if (type === 'trophy') prog.max('trophy', 1); questCheck();
+    Sound.play('pickup'); prog.add('items'); if (type === 'star') prog.max('star', 1); if (type === 'key') prog.max('skykey', 1); if (type === 'trophy') prog.max('trophy', 1); questCheck();
     G.inv[type] = (G.inv[type] || 0) + 1; store.set('inv', JSON.stringify(G.inv));
     showToast('Found: ' + ITEMS[type].name + '!', 1500); renderBag();
     $('bagBtn').classList.add('pop'); setTimeout(() => $('bagBtn').classList.remove('pop'), 400);
@@ -664,7 +693,7 @@
   function respawn() {
     if (!G) return;
     const s = safeSpawn(G.game, G.spawn) || defaultSpawn();
-    G.body.p = [s[0], s[1] + 1.2, s[2]]; G.body.v = [0, 0, 0]; G.body.caveLock = null; G.game.cave = null;
+    G.body.p = [s[0], s[1] + 1.2, s[2]]; G.body.v = [0, 0, 0]; G.body.caveLock = null; G.game.cave = null; G.game.realm = null;
     if (G.race) { G.race = null; showToast('Race cancelled', 1200); }
   }
 
@@ -741,6 +770,8 @@
     else if (where === 'station') p = [STATION.x - STATION.R - 12, STATION.ground + 2, STATION.z];
     else if (where === 'parkour') p = [44, T.ground(44, 30) + 2, 30];
     else if (where === 'up') p = [me[0], me[1] + 60, me[2]];
+    else if (where === 'isles') p = [SKY_ISLES[0][0], SKY_ISLES[0][1] + 2, SKY_ISLES[0][2]];
+    else if (REALMS[where]) { const R = G.game.realmGet(where); G.body.p = [...R.start]; G.body.v = [0, 0, 0]; G.game.cave = null; Sound.play('tp'); showToast(R.name + '!', 1200); return; }
     else {
       const b = +where; let best = null;
       for (let r = 60; r < 6000 && !best; r += 70) for (let a = 0; a < 6.283; a += 140 / r) { const x = me[0] + Math.cos(a) * r, z = me[2] + Math.sin(a) * r; if (Math.abs(x) > LIMIT - 50 || Math.abs(z) > LIMIT - 50) continue; const inf = T.info(x, z); if (inf.b === b && inf.h > -1) { best = [x, inf.h + 2, z]; break; } }
@@ -778,7 +809,7 @@
     for (const [m, n] of [['auto', 'Normal'], ['clear', 'Clear'], ['cloudy', 'Cloudy'], ['rain', 'Rain'], ['storm', 'Storm']]) wx.append(tbtn(n, () => runAdmin({ cmd: 'weather', mode: m }), G.wx === m));
     wx.append(tbtn('⚡ Lightning', () => runAdmin({ cmd: 'flash' })));
     const tp = sec('go', 'Teleport');
-    for (const [w, n] of [['plaza', 'Plaza'], ['station', 'Station'], ['parkour', 'Parkour'], ['up', 'Up high'], ['1', 'Beach'], ['3', 'Forest'], ['4', 'Desert'], ['5', 'Snow'], ['6', 'Mountains'], ['7', 'Swamp'], ['8', 'Glow fields'], ['0', 'Ocean']]) tp.append(tbtn(n, () => teleportTo(w)));
+    for (const [w, n] of [['plaza', 'Plaza'], ['station', 'Station'], ['parkour', 'Parkour'], ['up', 'Up high'], ['1', 'Beach'], ['3', 'Forest'], ['4', 'Desert'], ['5', 'Snow'], ['6', 'Mountains'], ['7', 'Swamp'], ['8', 'Glow fields'], ['0', 'Ocean'], ['space', 'Space'], ['sea', 'Coral kingdom'], ['crystal', 'Crystal hollow']]) tp.append(tbtn(n, () => teleportTo(w)));
     tp.append(tbtn('Bring everyone', () => runAdmin({ cmd: 'bringall' })));
     const row = document.createElement('div'); row.className = 'aRow';
     const inp = document.createElement('input'); inp.maxLength = 120; inp.placeholder = 'Announcement for everyone';
@@ -967,6 +998,7 @@
     if (k === 'i' || k === 'b') { $('bagBtn').click(); return; }
     if (k === 'r') { respawn(); return; }
     if (k === 'o') { $('wardBtn').click(); return; }
+    if (k === 'v') { toggleShip(); return; }
     if (k === 'm') { $('musicBtn').click(); return; }
     if (k === ' ') e.preventDefault();
     keys.add(k);
@@ -986,7 +1018,7 @@
     if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
     const d = drags.get(e.pointerId); if (!d || !G) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y; d.x = e.clientX; d.y = e.clientY; d.moved += Math.abs(dx) + Math.abs(dy);
-    if (d.moved > 6) { G.game.cam.yaw -= dx * 0.008; G.game.cam.pitch = Math.max(-0.2, Math.min(1.35, G.game.cam.pitch + dy * 0.006)); }
+    if (d.moved > 6) { G.game.cam.yaw -= dx * 0.008; G.game.cam.pitch = G.ship && G.ship.st === 'fly' ? Math.max(-1.3, Math.min(1.3, G.game.cam.pitch + dy * 0.006)) : Math.max(-0.2, Math.min(1.35, G.game.cam.pitch + dy * 0.006)); }
   });
   const endDrag = e => {
     const d = drags.get(e.pointerId); drags.delete(e.pointerId); if (!d || !G || !G.myId) return;
@@ -1023,20 +1055,47 @@
     if (d < 5 && !G.me.fly) { prog.add('dist', d); if (b.p[1] < SEA - 0.1 && !G.game.cave) { prog.add('swim', d); if (!G.wasWet) Sound.play('splash'); G.wasWet = true; } else G.wasWet = false; }
     prog.max('high', Math.floor(b.p[1]));
     if (now - (G.lastTrack || 0) < 1000) return; G.lastTrack = now;
-    const game = G.game, inSt = insideStation(b.p), cave = game.cave, info = game.T.info(b.p[0], b.p[2]);
+    const game = G.game, inSt = insideStation(b.p), cave = game.cave || game.realm, info = game.T.info(b.p[0], b.p[2]);
     if (!cave && !inSt && info.b >= 1 && info.b <= 8) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
     if (inSt || nearStation(b.p[0], b.p[2], 70)) prog.max('station', 1);
     const night = G.wasNight; if (night) G.sawNight = true; else if (G.sawNight) { G.sawNight = false; prog.add('nights'); }
     questCheck();
     Sound.setRain(game.rain || 0);
+    if (game.realm) { Sound.setMood(game.realm.mood); return; }
     Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station' }[info.b] || 'meadow'));
+  }
+
+  // ---------- the owner ship: it flies down, you jump in, then you fly it from the cockpit ----------
+  function toggleShip() {
+    if (!G || !myLook().og.includes('ship')) return;
+    const b = G.body, f = G.game.forward();
+    if (!G.ship) { const tp = [b.p[0] + f[0] * 4, b.p[1] + 2.4, b.p[2] + f[1] * 4]; G.ship = { st: 'arrive', t: 0, from: [tp[0] - f[0] * 45, tp[1] + 35, tp[2] - f[1] * 45], to: tp, p: [...tp], hd: Math.atan2(f[1], f[0]) }; Sound.play('boost'); showToast('Here comes your ship!', 1500); }
+    else if (G.ship.st === 'fly') { G.ship.st = 'away'; G.ship.t = 0; G.me.ship = false; G.game.fpv = null; b.p = [G.ship.p[0], G.ship.p[1] - 1.6, G.ship.p[2]]; b.v = [0, 0, 0]; G.game.cam.pitch = 0.42; $('downBtn').classList.toggle('hidden', !G.me.fly || !Device.useTouch); showToast('Bye ship!', 1000); }
+  }
+  // returns true while the ship is moving the ball (so normal rolling is skipped)
+  function shipStep(dt, ix, iy, up, down) {
+    const S = G.ship; if (!S) return false; S.t += dt; const b = G.body, cam = G.game.cam, ease = x => x * x * (3 - 2 * x);
+    if (S.st === 'arrive') { const k = ease(Math.min(1, S.t / 1.6)); S.p = S.from.map((v, i) => v + (S.to[i] - v) * k); S.pitch = -0.4 * (1 - k); if (S.t >= 1.6) { S.st = 'board'; S.t = 0; S.b0 = [...b.p]; Sound.play('jump'); } return false; }
+    if (S.st === 'board') { const k = Math.min(1, S.t / 1.0); b.p = S.b0.map((v, i) => v + (S.p[i] + (i === 1 ? 0.3 : 0) - v) * ease(k)); b.p[1] += Math.sin(k * Math.PI) * 2.2; b.v = [0, 0, 0]; if (k >= 1) { S.st = 'fly'; G.me.ship = true; cam.pitch = 0.05; cam.yaw = Math.atan2(-Math.cos(S.hd), -Math.sin(S.hd)); Sound.play('tp'); showToast('Flying! Drag to steer, W/joystick to fly, jump to go up, Shift or down to go down, V to get out', 4000); $('downBtn').classList.toggle('hidden', !Device.useTouch); } return true; }
+    if (S.st === 'fly') {
+      const cp = Math.cos(cam.pitch), d = [-Math.sin(cam.yaw) * cp, -Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp], rt = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)], sp = 34;
+      const v = [d[0] * -iy * sp + rt[0] * ix * 16, d[1] * -iy * sp + (up ? 12 : 0) - (down ? 12 : 0), d[2] * -iy * sp + rt[2] * ix * 16];
+      S.v = (S.v || [0, 0, 0]).map((x, i) => x + (v[i] - x) * Math.min(1, dt * 3)); for (let i = 0; i < 3; i++) S.p[i] += S.v[i] * dt;
+      S.p[0] = Math.max(-LIMIT, Math.min(LIMIT, S.p[0])); S.p[2] = Math.max(-LIMIT, Math.min(LIMIT, S.p[2])); S.p[1] = Math.min(S.p[1], 1500);
+      if (!G.game.realm && !G.game.cave) S.p[1] = Math.max(S.p[1], Math.max(G.game.T.ground(S.p[0], S.p[2]), SEA) + 1.5);
+      S.hd = Math.atan2(d[2], d[0]); S.pitch = -cam.pitch;
+      b.p = [...S.p]; b.v = [0, 0, 0]; G.game.fpv = [S.p[0] + d[0] * 0.6, S.p[1] + 0.75, S.p[2] + d[2] * 0.6];
+      return true;
+    }
+    if (S.st === 'away') { S.p[1] += dt * 25; S.p[0] += Math.cos(S.hd) * dt * 40; S.p[2] += Math.sin(S.hd) * dt * 40; if (S.t > 2.2) G.ship = null; return false; }
+    return false;
   }
 
   // ---------- activities ----------
   function activities(now) {
     const b = G.body, game = G.game;
     for (const it of game.nearbyItems(b.p)) { // pick up items you roll into
-      if (Math.abs(it.p[0] - b.p[0]) > 1.4 || Math.abs(it.p[2] - b.p[2]) > 1.4 || Math.abs(it.p[1] - b.p[1]) > 1.6) continue;
+      const pr = G.me.gadget === 'magnet' ? 5.5 : 1.4; if (Math.abs(it.p[0] - b.p[0]) > pr || Math.abs(it.p[2] - b.p[2]) > pr || Math.abs(it.p[1] - b.p[1]) > pr + 0.2) continue;
       if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('🏆 You beat the parkour climb!'); } continue; }
       if (G.taken.has(it.id) || G.asked === it.id) continue;
       G.asked = it.id; setTimeout(() => { if (G && G.asked === it.id) G.asked = null; }, 800);
@@ -1076,6 +1135,10 @@
   }
   function fx(kind, arg) {
     const bp = G.body.p, P = G.game.fx;
+    if (kind === 'cannon') { Sound.play('boom'); P.burst(bp, 30, { cols: ['#cfcfcf', '#ffb347', '#ffffff'], shape: 0, size: 0.4, speed: 5, life: 0.8 }); prog.add('cannons'); questCheck(); showToast('Boom!', 800); return; }
+    if (kind === 'realm-in') { const R = REALMS[arg]; Sound.play('tp'); banner('Welcome to', R.name, arg === 'space' ? 'Low gravity: jump across the floating rocks!' : arg === 'sea' ? 'You can breathe down here. Find the pearls!' : 'Look for glowing crystals and gems', 4000); prog.max('realm_' + arg, 1); questCheck(); return; }
+    if (kind === 'realm-out') { Sound.play('tp'); showToast('Back on the main land!', 1400); return; }
+    if (kind === 'flap') { Sound.play('jump'); P.burst([bp[0], bp[1], bp[2]], 10, { cols: ['#cdb4ff', '#a8d8ff', '#ffffff'], shape: 22, size: 0.16, speed: 2.5, life: 0.6 }); return; }
     if (kind === 'jumped') { prog.add('jumps'); Sound.play('jump'); P.burst([bp[0], bp[1] - 0.35, bp[2]], 8, { col: [0.92, 0.88, 0.8], shape: 0, size: 0.22, speed: 1.6, up: 0.3, life: 0.5, drag: 3 }); return; }
     if (kind === 'boost') { showToast('Whoosh!', 600); Sound.play('boost'); P.burst(bp, 14, { cols: ['#8af0ff', '#ffffff'], shape: 29, size: 0.3, speed: 4, life: 0.4 }); return; }
     if (kind === 'jump') { Sound.play('boost'); P.burst(bp, 12, { cols: ['#7be36b', '#ffffff'], shape: 26, size: 0.2, speed: 3, life: 0.6 }); }
@@ -1118,9 +1181,14 @@
     const f = G.game.forward(), rt = [-f[1], f[0]], go = l > 0.12 ? 1 : 0;
     const input = { x: (rt[0] * ix - f[0] * iy) * go, z: (rt[1] * ix - f[1] * iy) * go,
       jump: !G.frozen && (keys.has(' ') || jumpHeld), up: keys.has(' ') || jumpHeld, down: keys.has('shift') || downHeld };
-    G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, fx });
-    if (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30)) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
-    m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow; m.big = !!G.effects.big;
+    const gset = new Set(m.gadget && m.gadget !== 'none' ? [m.gadget] : []);
+    if (G.ship && G.ship.st === 'fly') { ix = stick.id !== null ? stick.x : ix; }
+    for (const k of m.og || []) gset.add(k);
+    if (!shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx });
+    const RR = G.game.realmAt(b.p);
+    if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
+    else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
+    m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow || gset.has('lantern') || gset.has('aura'); m.big = !!G.effects.big;
     const a = 1 - Math.pow(0.0008, dt); // others glide to where they are and roll
     for (const p of G.players.values()) if (p !== m) {
       const ox = p.p[0], oz = p.p[2];
@@ -1145,12 +1213,12 @@
     G.game.updateCreatures(dt, m, [...G.players.values()], G.wasNight);
 
     if (G.role === 'guest' && G.myId && now - G.lastSend > 66) {
-      G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow });
+      G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow, sh: !!m.ship });
       if (now - G.lastHeard > 6000) reconnect();
     }
     if (G.role === 'keeper' && now - G.lastState > 66) {
       G.lastState = now;
-      Net.toAll({ t: 'state', phase: dayPhase(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow]) });
+      Net.toAll({ t: 'state', phase: dayPhase(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow, !!p.ship]) });
     }
 
     const ph = dayPhase(), sun = Math.cos(ph * Math.PI * 2);
@@ -1168,7 +1236,7 @@
     let cursor = null;
     if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
     const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
-    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
+    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();

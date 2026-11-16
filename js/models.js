@@ -212,6 +212,82 @@ function hatModel(gl, hat) {
   return mb.build(gl);
 }
 
+// ---------- gadgets (drawn on top of the ball like a hat, but they don't roll) ----------
+function gadgetModel(gl, id) {
+  const mb = new MeshBuilder(), C = hex, G = c => glowC(hex(c));
+  switch (id) {
+    case 'balloon': MB.tube(mb, [[-0.05, 0.42, 0], [-0.12, 0.9, 0.05], [-0.1, 1.35, 0]], 0.008, 4, C('#f4f4f4')); mb.sph([-0.1, 1.62, 0], [0.27, 0.32, 0.27], 16, C('#ff5f7e'), 0.1); mb.caps([-0.1, 1.31, 0], [-0.1, 1.27, 0], 0.04, 0.02, 6, C('#e0405e')); break;
+    case 'glider': { mb.caps([-0.05, 0.42, 0], [-0.05, 0.85, 0], 0.02, 0.02, 5, C('#5a5f70')); const w = C('#ffc45a'), w2 = C('#ff8a5a'); mb.tri2([0.4, 0.95, 0], [-0.35, 0.85, 0.95], [-0.25, 0.9, 0], w); mb.tri2([0.4, 0.95, 0], [-0.25, 0.9, 0], [-0.35, 0.85, -0.95], w2); mb.caps([-0.33, 0.86, -0.9], [-0.33, 0.86, 0.9], 0.02, 0.02, 5, C('#5a5f70')); break; }
+    case 'spring': for (let k = 0; k < 5; k++) mb.tor([-0.42, 0.05 + k * 0.08, 0], 0.11, 0.025, 14, 5, C(k % 2 ? '#c8ccd4' : '#a8b0bc')); mb.sph([-0.42, 0.45, 0], [0.13, 0.04, 0.13], 10, C('#ff5f5f'), 0); break;
+    case 'magnet': mb.push([0, 0.35, 0.5], M4.rotX(Math.PI / 2)); for (let k = 0; k <= 8; k++) { const a = k / 8 * Math.PI, b = (k + 1) / 8 * Math.PI; if (k < 8) mb.caps([Math.cos(a) * 0.15, Math.sin(a) * 0.15, 0], [Math.cos(b) * 0.15, Math.sin(b) * 0.15, 0], 0.05, 0.05, 6, C('#e0404a')); } for (const s2 of [-1, 1]) mb.caps([s2 * 0.15, 0, 0], [s2 * 0.15, -0.14, 0], 0.052, 0.052, 6, C('#e8eef7')); mb.pop(); break;
+    case 'lantern': MB.tube(mb, [[-0.25, 0.35, 0], [-0.3, 0.75, 0], [-0.05, 0.92, 0], [0.12, 0.85, 0]], 0.018, 5, C('#5a4a3a')); mb.caps([0.12, 0.84, 0], [0.12, 0.76, 0], 0.01, 0.01, 4, C('#3a3f55')); mb.rbox(0.05, 0.56, -0.07, 0.19, 0.74, 0.07, G('#ffe08a')); mb.rbox(0.03, 0.74, -0.09, 0.21, 0.78, 0.09, C('#3a3f55')); mb.rbox(0.03, 0.52, -0.09, 0.21, 0.56, 0.09, C('#3a3f55')); break;
+    case 'jets': for (const s2 of [-1, 1]) { mb.push([-0.42, 0.05, s2 * 0.2], M4.rotZ(Math.PI / 2)); mb.lathe([[0, -0.1], [0.08, -0.1], [0.09, 0.15], [0.06, 0.24], [0, 0.25]], 12, C('#c8ccd4'), 0.2); mb.pop(); mb.sph([-0.57, 0.05, s2 * 0.2], [0.06, 0.05, 0.05], 8, G('#ff9a3a'), 0); } break;
+    case 'snorkel': mb.tor([0, 0.05, 0], 0.455, 0.035, 28, 6, C('#2a2f3a')); mb.sph([0.42, 0.12, 0], [0.06, 0.12, 0.2], 10, [0.6, 0.85, 1, 0.45], 0); MB.tube(mb, [[0.1, 0.4, 0.3], [0.05, 0.6, 0.32], [0.0, 0.8, 0.3]], 0.03, 6, C('#ffc45a')); break;
+  }
+  return mb.build(gl);
+}
+
+// ---------- owner gadgets ----------
+const PB = '#a8d8ff', PP = '#cdb4ff';
+// the owner ship: a sleek pastel jet with a glass bubble cockpit, facing +x
+function shipModel(gl) {
+  const mb = new MeshBuilder(), C = hex, G = c => glowC(hex(c));
+  mb.push([0, 0, 0], M4.rotZ(-Math.PI / 2), [1, 1.6, 1]);
+  mb.lathe([[0, -2.6], [0.55, -2.3], [0.9, -1.4], [1.05, -0.2], [0.95, 1.0], [0.6, 2.0], [0.2, 2.6], [0, 2.7]], 24, (t, ph) => Math.abs(Math.sin(ph)) > 0.92 && t > 0.2 && t < 0.8 ? C(PP) : mixC(C('#eef3fb'), C(PB), 0.25 + 0.2 * Math.cos(ph)), 0.15);
+  mb.pop();
+  mb.sph([0.9, 0.62, 0], [1.3, 0.62, 0.62], 18, [0.75, 0.9, 1, 0.42], 0); // glass canopy
+  for (const s2 of [-1, 1]) {
+    mb.sph([-0.6, -0.1, s2 * 1.8], [1.4, 0.12, 1.3], 16, (x, y, z) => mixC(C(PP), C(PB), Math.abs(z)), 0.1);
+    mb.push([-2.2, 0.1, s2 * 0.75], M4.rotZ(Math.PI / 2)); mb.lathe([[0, -0.6], [0.42, -0.5], [0.45, 0.6], [0.3, 0.9], [0, 0.95]], 14, C('#c8ccd8'), 0.2); mb.pop();
+    mb.sph([-2.85, 0.1, s2 * 0.75], [0.12, 0.32, 0.32], 10, G('#ff9ad8'), 0);
+    mb.sph([-0.6, -0.08, s2 * 3.05], 0.12, 8, G(s2 > 0 ? '#7be36b' : '#ff5f7e'), 0);
+  }
+  mb.sph([-2.0, 0.9, 0], [0.9, 0.7, 0.08], 12, C(PP), 0.1); // tail fin
+  // a little crown on the nose
+  for (let k = 0; k < 3; k++) mb.caps([2.0, 0.55, (k - 1) * 0.16], [2.1, 0.8, (k - 1) * 0.18], 0.06, 0.015, 6, C('#ffcf4a'));
+  return mb.build(gl);
+}
+// what you see from inside the ship: the dashboard and the window frame (camera looks along +x)
+function cockpitModel(gl) {
+  const mb = new MeshBuilder(), C = hex, G = c => glowC(hex(c));
+  mb.rbox(0.55, -0.62, -0.75, 1.1, -0.38, 0.75, C('#3a3f55'));
+  mb.rbox(0.6, -0.4, -0.55, 0.95, -0.36, 0.55, C('#2a2f3d'));
+  for (let k = 0; k < 5; k++) mb.sph([0.75, -0.37, -0.4 + k * 0.2], [0.04, 0.012, 0.04], 6, G(['#5ff0e0', '#ff9ad8', '#ffd24a', '#7be36b', PB][k]), 0);
+  mb.sph([0.78, -0.37, 0], [0.1, 0.02, 0.18], 10, G('#a8d8ff'), 0);
+  for (const s2 of [-1, 1]) MB.tube(mb, [[0.9, -0.4, s2 * 0.8], [1.1, 0.1, s2 * 0.9], [0.8, 0.55, s2 * 0.7], [0.2, 0.75, s2 * 0.4]], 0.035, 6, C('#eef3fb'));
+  return mb.build(gl);
+}
+// robot legs and arm (a rig: the ball sits on top of the hips)
+function robotRig(gl) {
+  const parts = [], C = hex, metal = C('#c8ccd8'), dark = C('#5a6070'), add = (anim, parent, at, fn, o = {}) => { const mb = new MeshBuilder(); fn(mb); parts.push({ m: mb.build(gl), at, parent, anim, ...o }); return parts.length - 1; };
+  const hip = add('body', -1, [0, 0.62, 0], mb => { mb.tor([0, 0, 0], 0.3, 0.06, 20, 6, dark); mb.sph([0, -0.04, 0], [0.32, 0.08, 0.32], 12, metal, 0.2); });
+  for (const [x, z, ph] of [[0.24, 0.24, 0], [0.24, -0.24, Math.PI], [-0.24, 0.24, Math.PI], [-0.24, -0.24, 0]]) {
+    const up = add('leg', hip, [x, -0.04, z], mb => { mb.sph([0, 0, 0], 0.07, 8, C(PB), 0); mb.caps([0, 0, 0], [x * 0.5, -0.3, z * 0.5], 0.045, 0.04, 7, metal); }, { ph, amp: 0.5 });
+    add('knee', up, [x * 0.5, -0.3, z * 0.5], mb => { mb.sph([0, 0, 0], 0.055, 8, C(PP), 0); mb.caps([0, 0, 0], [0, -0.28, 0], 0.04, 0.035, 7, metal); mb.sph([0.03, -0.3, 0], [0.09, 0.035, 0.07], 8, dark, 0); }, { ph });
+  }
+  const sh = add('shoulder', hip, [-0.1, 0.83, 0.12], mb => { mb.sph([0, 0, 0], 0.08, 10, C(PP), 0); mb.caps([0, 0, 0], [0.05, 0.32, 0.08], 0.045, 0.04, 7, metal); });
+  const el = add('elbow', sh, [0.05, 0.32, 0.08], mb => { mb.sph([0, 0, 0], 0.06, 8, C(PB), 0); mb.caps([0, 0, 0], [0.22, 0.2, 0.02], 0.04, 0.035, 7, metal); });
+  add('hand', el, [0.22, 0.2, 0.02], mb => { mb.sph([0, 0, 0], 0.035, 6, dark, 0); mb.sph([0.06, 0.06, 0], 0.09, 12, C('#eef3fb'), 0.1); });
+  return { parts };
+}
+// pastel wings that flap (made of long soft feathers)
+function wingsModel(gl, side) {
+  const mb = new MeshBuilder();
+  for (let k = 0; k < 6; k++) { const a = -0.25 + k * 0.13, L = 0.55 + k * 0.07; mb.push([0, 0, 0], M4.mul3(M4.rotX(-side * (0.15 + k * 0.05)), M4.rotZ(a))); mb.sph([-0.02 * k, 0.03, side * L * 0.5], [0.025, 0.08 + k * 0.012, L * 0.5], 10, mixC(hex(PB), hex(PP), k / 5), 0); mb.pop(); }
+  mb.sph([0, 0, side * 0.12], [0.1, 0.05, 0.16], 8, [1, 1, 1, 1], 0);
+  return mb.build(gl);
+}
+function dragonRig(gl) {
+  const parts = [], C = hex, add = (anim, parent, at, fn, o = {}) => { const mb = new MeshBuilder(); mb.segK = 0.8; fn(mb); parts.push({ m: mb.build(gl), at, parent, anim, ...o }); return parts.length - 1; };
+  const body = add('flybody', -1, [0, 0, 0], mb => { mb.sph([0, 0, 0], [0.22, 0.17, 0.16], 14, (x, y) => y < -0.3 ? C('#fff2f8') : C(PP), 0.1); for (let k = 0; k < 4; k++) mb.caps([0.12 - k * 0.09, 0.14 - k * 0.01, 0], [0.12 - k * 0.09, 0.22, 0], 0.03, 0.005, 5, C(PB)); });
+  const head = add('head', body, [0.2, 0.12, 0], mb => { mb.sph([0.08, 0.04, 0], [0.14, 0.12, 0.12], 14, C(PP), 0.1); mb.sph([0.2, 0.0, 0], [0.07, 0.06, 0.08], 10, C('#e8d8ff'), 0); for (const k of [-1, 1]) mb.caps([0.02, 0.12, k * 0.06], [-0.06, 0.24, k * 0.08], 0.025, 0.006, 5, C('#ffe08a')); MB.cheeks(mb, 0.17, 0.0, 0, 0.09); });
+  add('eyes', head, [0.15, 0.08, 0], mb => MB.eyes(mb, 0, 0, 0, 0.06, 0.035));
+  for (const k of [-1, 1]) add('wing', body, [0, 0.1, 0.1 * k], mb => { mb.sph([0, 0, 0.18 * k], [0.12, 0.012, 0.2], 10, C(PB), 0); mb.sph([-0.05, 0, 0.3 * k], [0.08, 0.01, 0.1], 8, C('#d8ecff'), 0); }, { side: k, amp: 0.9 });
+  add('tail', body, [-0.2, 0, 0], mb => { MB.tube(mb, [[0, 0, 0], [-0.15, -0.03, 0.03], [-0.3, 0.02, 0]], t => 0.06 * (1 - t) + 0.015, 8, C(PP)); mb.sph([-0.33, 0.03, 0], [0.04, 0.06, 0.02], 6, C(PB), 0); }, { amp: 1.2 });
+  return { parts };
+}
+function auraModel(gl) { const mb = new MeshBuilder(); mb.tor([0, 0, 0], 0.85, 0.025, 40, 6, glowC(hex(PB))); mb.push([0, 0, 0], M4.rotX(1.1)); mb.tor([0, 0, 0], 0.75, 0.02, 40, 6, glowC(hex(PP))); mb.pop(); for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; mb.sph([Math.cos(a) * 0.85, 0, Math.sin(a) * 0.85], 0.05, 6, glowC(hex('#ffffff')), 0); } return mb.build(gl); }
+
 // ---------- items ----------
 function itemModel(gl, type) {
   const mb = new MeshBuilder(), c = hex(ITEMS[type].color), g = glowC(c), C = hex;
@@ -303,6 +379,7 @@ const CREATURES = {
   fish: { name: 'Fish', biomes: [0], speed: 3, swim: true },
   beetle: { name: 'Cave beetle', biomes: [], speed: 1.5 },
   butterfly: { name: 'Butterfly', biomes: [2], speed: 2, fly: true },
+  jelly: { name: 'Jellyfish', biomes: [], speed: 1, swim: true },
 };
 // Each creature is a little rig: parts (body, head, legs, tail, ears, wings, eyes) that move on their own.
 // A part: { m: mesh, at: pivot (in its parent), parent: index or -1, anim: how it moves, ph: phase, amp: how much }
@@ -431,6 +508,12 @@ function creatureRig(gl, type) {
       add('tail', body, [-0.2, 0, 0], mb => { mb.push([0, 0, 0], M4.rotY(Math.PI / 2)); mb.sph([0, 0, 0.08], [0.012, 0.12, 0.1], 8, shadeC(c, 0.9), 0); mb.pop(); }, { amp: 1.4 });
       break;
     }
+    case 'jelly': {
+      const body = add('jellyfloat', -1, [0, 0, 0], mb => { mb.lathe([[0.32, 0], [0.34, 0.08], [0.28, 0.22], [0.16, 0.32], [0, 0.35]], 16, [1, 0.6, 0.9, 0.42], 0); mb.sph([0, 0.1, 0], 0.12, 8, glowC(C('#ffc8f0')), 0); });
+      for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; add('tentacle', body, [Math.cos(a) * 0.18, 0, Math.sin(a) * 0.18], mb => MB.tube(mb, [[0, 0, 0], [0.03, -0.25, 0], [-0.02, -0.5, 0.02], [0.02, -0.75, 0]], 0.018, 4, glowC(C('#ff9ad8'))), { ph: k }); }
+      eyes(body, [0.26, 0.12, 0], 0.08, 0.035);
+      break;
+    }
     case 'beetle': default: {
       const body = add('body', -1, [0, 0.14, 0], mb => mb.sph([0, 0, 0], [0.22, 0.13, 0.17], 14, (x, y, z) => y > 0.3 ? (Math.abs(z) < 0.06 ? C('#1a1f2b') : glowC(C('#5ff0e0'))) : C('#2a2f3a'), 0.1));
       const head = add('head', body, [0.2, -0.04, 0], mb => { mb.sph([0.02, 0, 0], [0.08, 0.07, 0.09], 10, C('#2a2f3a'), 0); for (const k of [-1, 1]) MB.tube(mb, [[0.06, 0.04, 0.04 * k], [0.14, 0.14, 0.1 * k]], 0.008, 4, C('#1a1f2b')); });
@@ -464,6 +547,12 @@ function rigPose(part, s) {
     case 'hopleg': return { R: M4.rotZ(s.hop * 0.8) };
     case 'flybody': return { p: [0, Math.sin(t * 3 + s.seed) * 0.03, 0] };
     case 'swim': return { R: M4.rotY(Math.sin(t * 6 + s.seed) * 0.12) };
+    case 'jellyfloat': { const q = Math.sin(t * 2.2 + s.seed); return { p: [0, q * 0.1, 0], s: [1 + q * 0.08, 1 - q * 0.1, 1 + q * 0.08] }; }
+    case 'tentacle': return { R: M4.mul3(M4.rotZ(Math.sin(t * 2.2 + (part.ph || 0)) * 0.3), M4.rotX(Math.cos(t * 1.7 + (part.ph || 0)) * 0.2)) };
+    case 'knee': return { R: M4.rotZ(-Math.max(0, Math.sin(w + 1.2)) * 0.6 * mv) };
+    case 'shoulder': return { R: M4.mul3(M4.rotX(Math.sin(t * 2.2) * 0.25), M4.rotZ(Math.sin(t * 1.3) * 0.2)) };
+    case 'elbow': return { R: M4.rotZ(0.3 + Math.sin(t * 4) * 0.45) };
+    case 'hand': return { R: M4.rotX(Math.sin(t * 4) * 0.3) };
   }
   return null;
 }

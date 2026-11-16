@@ -205,3 +205,6 @@ body.touch #banner .t2{font-size:22px}
 .wSec{grid-column:1/-1;font-size:13px;font-weight:800;opacity:.75;text-align:left;padding:4px 2px 0;height:auto}
 .wTabs button.own{background:linear-gradient(90deg,#ffd27a,#ffb347);color:#3a2600}.wTabs button.own.on{background:#fff;color:#7a4a00}
 .wGrid{grid-auto-rows:auto}.wGrid button{height:70px}
+.wGrid button.gad .lk{white-space:normal;line-height:1.1;font-size:9px}
+.wGrid button.ogad .em{font-size:30px;margin-bottom:12px}
+.wGrid button.ogad.on{background:linear-gradient(135deg,rgba(168,216,255,.35),rgba(205,180,255,.35))}

@@ -51,7 +51,8 @@ class Particles {
   ambient(c, biome, night, dt, inCave, inStation) {
     this.amb += dt;
     let kind = null, rate = 0;
-    if (inCave) { kind = 'cave'; rate = 6; }
+    if (biome === -2) { kind = 'bubble'; rate = 14; }
+    else if (inCave) { kind = 'cave'; rate = 6; }
     else if (inStation) { kind = 'station'; rate = 10; }
     else if (biome === 5) { kind = 'snow'; rate = 40; }
     else if (biome === 8) { kind = 'glow'; rate = 16; }
@@ -69,6 +70,7 @@ class Particles {
       else if (kind === 'leaf') this.emit([p[0], c[1] + 8 + Math.random() * 4, p[2]], { v: [0.6, -0.9, 0.3], life: 9, size: 0.13, col: rgb(['#6cc04a', '#9ad85a', '#e0a83a', '#d8763a'][k % 4]), shape: 8, drag: 0, wob: 1.8 });
       else if (kind === 'pollen') this.emit(p, { v: [0.3, 0.1, 0.2], life: 5, size: 0.05, col: [1, 1, 0.85], shape: 20, a: 0.6, drag: 0, wob: 0.8 });
       else if (kind === 'sand') this.emit([p[0], c[1] - 1 + Math.random() * 2, p[2]], { v: [2.2, 0.1, 0.8], life: 3, size: 0.06, col: [0.95, 0.85, 0.6], shape: 0, a: 0.7, drag: 0 });
+      else if (kind === 'bubble') this.emit([p[0], c[1] - 3, p[2]], { v: [0, 1.6, 0], life: 4, size: 0.08 + Math.random() * 0.08, col: [0.8, 0.95, 1], shape: 5, drag: 0, wob: 0.5, a: 0.8 });
       else if (kind === 'cave') this.emit(p, { v: [0, 0.1, 0], life: 6, size: 0.05, col: [0.4, 1, 0.9], shape: 20, drag: 0, wob: 0.5 });
       else if (kind === 'station') this.emit(p, { v: [0, 0.2, 0], life: 5, size: 0.06, col: [0.4, 1, 0.95], shape: 26, drag: 0, wob: 0.5 });
     }
