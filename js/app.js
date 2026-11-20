@@ -833,6 +833,11 @@
     const L = G.game.extraClouds; if (L) { const i = L.indexOf(C.cloud); if (i >= 0) L.splice(i, 1); }
     G.chase = null; G.nail = false; G.chaseCool = performance.now() + 5000; G.game.shake = 0; $('nailBtn').classList.add('hidden'); $('nailBtn').classList.remove('on');
   }
+  const parkUI = {
+    toast: (t, ms) => showToast(t, ms), banner: (a, b, c) => banner(a, b, c),
+    finish: (t, coins, kind) => { showToast(t, 5000); prog.give(coins); prog.add({ golf: 'golfs', bowl: 'bowls', hunt: 'hunts' }[kind]); questCheck(); prog.save(); Sound.play('quest'); },
+    goal: () => { prog.add('goals'); questCheck(); },
+  };
   function toggleNail() {
     if (!G || !G.chase) return;
     G.nail = !G.nail; $('nailBtn').classList.toggle('on', G.nail);
@@ -1277,6 +1282,7 @@
     if (G.ship && G.ship.st === 'fly') { ix = stick.id !== null ? stick.x : ix; }
     for (const k of m.og || []) gset.add(k);
     if (G.chase && !G.chase.update(dt, b, now, G.nail)) endChase();
+    if (G.game.park) G.game.park.update(dt, b, input, now, parkUI);
     if (!shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx });
     if (G.chase && G.chase.anchor) { b.p = [...G.chase.anchor]; b.v = [0, 0, 0]; }
     const RR = G.game.realmAt(b.p);
@@ -1323,6 +1329,7 @@
     if ($('placeT').textContent !== (G.game.place || '')) $('placeT').textContent = G.game.place || '';
     const chips = Object.entries(G.effects).map(([k, t]) => ({ fast: 'Speed', big: 'Big', superJump: 'Super jump', glow: 'Glow' }[k] + ' ' + Math.ceil((t - now) / 1000) + 's'));
     if (G.chase) { const C = G.chase, left = Math.max(0, C.T - (now - C.t0) / 1000); chips.unshift((C.alive > 0.05 ? EF_NAMES[C.ef] + ' tornado ' + Math.round(C.near) + ' m' : 'Storm chase · a tornado is forming…') + ' · ' + Math.floor(C.score) + ' pts · ' + Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') + (G.nail ? ' · nailed down' : '')); if (C.msg) chips.unshift(C.msg.text); }
+    { const pc = G.game.park && G.game.park.chip(); if (pc) chips.unshift(pc); }
     if (G.race) chips.unshift('Race ' + ((now - G.race.start) / 1000).toFixed(1) + 's · ring ' + (G.race.next + 1) + '/12');
     const ct = chips.join('  ·  '); if ($('effects').textContent !== ct) $('effects').textContent = ct;
     $('effects').classList.toggle('hidden', !ct);

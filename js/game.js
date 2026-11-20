@@ -27,6 +27,7 @@ class Game {
     this.T = new Terrain(seed); this.St = new Structures(this.T); this.B = B;
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
     this.landmarks = buildLandmarks(this.gfx, this.St);
+    this.park = new FunPark(this); this.landmarks.push(this.park.build(this.gfx, this.St));
     // sky islands, cannons, and the portals to the special worlds
     this.cannons = []; this.cannonM = cannonModel(this.gfx); // the cannon to the sky islands comes with the sky world
     this.realms = {}; this.realm = null;
@@ -630,6 +631,7 @@ class Game {
     }
     if (!this.under && o.dark < 0.5) for (const b of this.birds) { const a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
     if (o.chase) o.chase.draw(G, t, me);
+    if (this.park && vis(PARK.x, PARK.z, far + 80)) this.park.draw(G, t, me);
     this.stat('creatures');
     // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
     const clear = [];
@@ -764,6 +766,7 @@ class Game {
     }
     for (const pt of this.portals) out.push({ x: pt.p[0], z: pt.p[2], key: 'portal:' + pt.kind, kind: 'portal', name: pt.label, col: pt.col, always: true });
     out.push({ x: 44, z: 38, key: 'parkour', kind: 'parkour', name: 'Parkour', col: '#ff9f5a', always: true });
+    out.push({ x: PARK.x, z: PARK.z, key: 'funpark', kind: 'park', name: 'Fun Park', col: '#7aff9a', always: true });
     return out;
   }
   // the owner ship; open (0..1) swings the glass canopy up on its hinge
