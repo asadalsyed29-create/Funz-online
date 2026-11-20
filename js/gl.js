@@ -282,6 +282,13 @@ class GL {
     const u = {}; for (const n of uniforms) u[n] = gl.getUniformLocation(p, n);
     return { p, n: attrs.length, u, frame: -1 };
   }
+  // frame control (the Three.js engine in gl3.js has the same calls)
+  setSize(w, h) { this.gl.viewport(0, 0, w, h); }
+  clear(col) { const gl = this.gl; gl.clearColor(col[0], col[1], col[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); }
+  clearDepth() { this.gl.clear(this.gl.DEPTH_BUFFER_BIT); }
+  blend(on) { const gl = this.gl; if (on) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); } else gl.disable(gl.BLEND); }
+  depthWrite(on) { this.gl.depthMask(!!on); }
+  end() {}
   // start a frame: S holds the camera and the light for everything drawn this frame
   begin(S) { this.S = S; this.frameId++; this.cur = null; this.matState = ''; this.lastTris = this.tris; this.tris = 0; this.calls = 0; }
   use(pr) {

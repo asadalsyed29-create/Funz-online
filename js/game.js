@@ -23,7 +23,7 @@ function rayTri(o, d, a, b, c) {
 
 class Game {
   constructor(canvas, overlay, seed, B) {
-    this.gfx = new GL(canvas); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
+    this.gfx = makeGfx(canvas, Device.type === 'phone' ? 'low' : Device.type === 'tablet' ? 'mid' : 'high'); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
     this.T = new Terrain(seed); this.St = new Structures(this.T); this.B = B;
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
     this.landmarks = buildLandmarks(this.gfx, this.St);
@@ -57,7 +57,7 @@ class Game {
     this.dpr = dpr; this.w = innerWidth; this.h = innerHeight;
     this.canvas.width = Math.round(this.w * gdpr); this.canvas.height = Math.round(this.h * gdpr);
     this.ov.width = Math.round(this.w * dpr); this.ov.height = Math.round(this.h * dpr);
-    this.gfx.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    this.gfx.setSize(this.canvas.width, this.canvas.height);
     // room for notches on phones
     let pr = document.getElementById('safeProbe');
     if (!pr) { pr = document.createElement('div'); pr.id = 'safeProbe'; pr.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right)'; document.body.appendChild(pr); }
@@ -507,8 +507,8 @@ class Game {
     const lp = new Float32Array(32), lc = new Float32Array(24), lk = this.cave || inSt ? 1 : Math.min(1, o.dark / 0.45) * 0.85 + 0.15;
     L.slice(0, this.maxLights || 8).forEach((l, i) => { lp.set([l[0][0] - c.eye[0], l[0][1] - c.eye[1], l[0][2] - c.eye[2], l[1]], i * 4); lc.set(l[2].map(v => v * lk), i * 3); });
     const tanY = Math.tan(this.fov / 2);
-    G.begin({ vp: this.vp, eye: c.eye, sun: sun.map(v => v / sl), sunC, sky: amb, ground: gnd, fog, fogD, time: t, horizon: hor, zenith: zen, right: rt, up, fwd: f, tanX: tanY * this.w / this.h, tanY, lp, lc, night, sunDisc: sd.map(v => v / sdl), sunCol: L3([1, 0.95, 0.8], [1, 0.55, 0.3], dusk) });
-    gl.clearColor(fog[0], fog[1], fog[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    G.begin({ proj, view, focus: c.target, vp: this.vp, eye: c.eye, sun: sun.map(v => v / sl), sunC, sky: amb, ground: gnd, fog, fogD, time: t, horizon: hor, zenith: zen, right: rt, up, fwd: f, tanX: tanY * this.w / this.h, tanY, lp, lc, night, sunDisc: sd.map(v => v / sdl), sunCol: L3([1, 0.95, 0.8], [1, 0.55, 0.3], dusk) });
+    G.clear(fog);
     if (!this.under && !inSt && c.eye[1] >= SEA - 0.2) G.sky();
     if (RL && RL.stars) G.sky();
     this.statT = 0;
@@ -532,7 +532,7 @@ class Game {
     this.partDirty.clear();
     if (this.wiresDirty) this.rebuildWires();
 
-    gl.disable(gl.BLEND);
+    G.blend(false);
     // only draw what's in front of the camera (sideways angle check with some room to spare)
     const fh = Math.hypot(f[0], f[2]) || 1, fx0 = f[0] / fh, fz0 = f[2] / fh, halfH = Math.atan(Math.tan(this.fov / 2) * this.w / this.h) + 0.12;
     const inView = (x, z, rad) => { const dx = x - c.eye[0], dz = z - c.eye[2], d = Math.hypot(dx, dz); if (d < rad * 1.5 + 10) return true; const a = Math.acos(Math.max(-1, Math.min(1, (dx * fx0 + dz * fz0) / d))); return a < halfH + Math.atan(rad / d) + (f[1] < -0.5 ? 0.6 : 0); };
@@ -638,20 +638,20 @@ class Game {
     // the ship while it flies in or away (only on this screen)
     if (o.shipFx) this.drawShip(M4.model(o.shipFx.p, M4.mul3(M4.rotY(-o.shipFx.hd), M4.rotZ(o.shipFx.pitch || 0)), 1), o.shipFx.open || 0);
     // see-through things last
-    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    G.blend(true); G.depthWrite(false);
     G.mat(0, 0, 0);
-    for (const p of players) {
+    if (!G.isThree || !G.R.shadowMap.enabled) for (const p of players) { // round blob shadows (the Three.js engine has real ones)
       const gy = this.cave ? this.cave.floor(p.p[0], p.p[2]) : Math.max(this.T.ground(p.p[0], p.p[2]), SEA - 0.1), hgt = p.p[1] - gy;
       if (hgt < 0 || hgt > 24 || insideStation(p.p)) continue;
       G.draw(this.shadow, M4.model([p.p[0], gy + 0.06, p.p[2]], null, (p.r || 0.45) * 1.2 * (1 - Math.min(0.6, hgt / 12))), Math.max(0.2, 1 - hgt / 14));
     }
     if (!this.under && !inSt) {
-      gl.depthMask(true); G.water(this.water, [Math.round(c.target[0] / 10) * 10, SEA - 0.1, Math.round(c.target[2] / 10) * 10]); gl.depthMask(false);
+      G.depthWrite(true); G.water(this.water, [Math.round(c.target[0] / 10) * 10, SEA - 0.1, Math.round(c.target[2] / 10) * 10]); G.depthWrite(false);
       // clouds: soft puffs (see sky.js); 'near' was worked out above
       const top = L3(L3([1, 1, 1], [1, 0.84, 0.72], dusk), [0.28, 0.31, 0.42], Math.max(0, (k - 0.35) / 0.65)), bot = L3(L3([0.6, 0.64, 0.75], [0.55, 0.42, 0.5], dusk), [0.1, 0.11, 0.18], Math.max(0, (k - 0.35) / 0.65));
       if (!this.cloudData) this.cloudData = new Float32Array(6000 * 44);
       const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, this.maxClouds || 2600);
-      gl.depthMask(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 3000)); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.enable(gl.BLEND);
+      G.depthWrite(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 3000)); G.blend(true);
       G.fog();
     }
     if (!this.under && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }
@@ -664,8 +664,9 @@ class Game {
     if (o.dt && this.rain > 0.02 && !this.under && !inSt) { const n = Math.floor(this.rain * 180 * o.dt + Math.random()); for (let q = 0; q < n; q++) { const a = Math.random() * 6.283, d = 1 + Math.random() * 18; this.fx.emit([c.target[0] + Math.cos(a) * d, c.target[1] + 9 + Math.random() * 4, c.target[2] + Math.sin(a) * d], { v: [-1.2, -24, -0.4], life: 0.7, size: 0.16, col: [0.78, 0.84, 0.95], a: 0.55, shape: 9, drag: 0 }); } }
     if (o.dt) { this.fx.ambient(c.target, this.cave ? -1 : BIOMES[this.T.info(c.target[0], c.target[2]).b] ? this.T.info(c.target[0], c.target[2]).b : -1, k, o.dt, !!this.under, inSt); this.fx.update(o.dt); }
     G.particles(this.fx.data, this.fx.fill());
-    gl.depthMask(true); gl.disable(gl.BLEND);
-    if (this.fpv) { gl.clear(gl.DEPTH_BUFFER_BIT); const cp = this.cam.pitch, hdg = Math.atan2(-Math.cos(this.cam.yaw), -Math.sin(this.cam.yaw)); G.mat(1, 0.3, 0.5); const CM = M4.model(c.eye, M4.mul3(M4.rotY(-hdg), M4.rotZ(-cp)), 1), cm = this.rigFor('cockpit', cockpitModel); G.draw(cm, CM); G.outline(cm, CM, 0.01); }
+    G.depthWrite(true); G.blend(false);
+    if (this.fpv) { G.clearDepth(); const cp = this.cam.pitch, hdg = Math.atan2(-Math.cos(this.cam.yaw), -Math.sin(this.cam.yaw)); G.mat(1, 0.3, 0.5); const CM = M4.model(c.eye, M4.mul3(M4.rotY(-hdg), M4.rotZ(-cp)), 1), cm = this.rigFor('cockpit', cockpitModel); G.draw(cm, CM); G.outline(cm, CM, 0.01); }
+    G.end();
     this.drawOverlay(players, me, o);
   }
   project(x, y, z) {
@@ -740,9 +741,9 @@ class Game {
     const sm = this.rigFor('ship', shipModel); G.draw(sm, SM); G.outline(sm, SM, 0.03);
     const CM = M4.mul(SM, M4.model([-0.05, 0.9, 0], M4.rotZ(open * 1.25), 1));
     const fr = this.rigFor('canopyFrame', canopyFrame); G.draw(fr, M4.mul(CM, M4.model([1.3 - 1.3 * 1.35, 0.02, 0], I3, [1.35, 1, 0.7])));
-    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    G.blend(true); G.depthWrite(false);
     G.draw(this.rigFor('canopy', canopyModel), CM);
-    gl.depthMask(true); gl.disable(gl.BLEND);
+    G.depthWrite(true); G.blend(false);
   }
   label(g, x, y, p, now, dist) {
     const sc = Math.max(0.7, Math.min(1.1, 14 / dist)); g.save(); g.translate(x, y); g.scale(sc, sc);

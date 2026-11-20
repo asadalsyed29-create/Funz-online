@@ -49,7 +49,8 @@ The owner unlocks the crown and the name **Outernautica** once with a secret lin
 
 ## Files
 - `index.html`, `style.css`: the page and the look
-- `js/gl.js`: a small WebGL 3D engine
+- `js/gl3.js`: the Three.js engine (real sun shadows and glow); `js/lib/` holds Three.js r147
+- `js/gl.js`: the shaders, the mesh builder and the old WebGL engine (used if Three.js can't run, or with `?engine=old`)
 - `js/terrain.js`: the world's height, biomes, chunks, trees and plants
 - `js/structures.js`: the plaza, parkour, ring race, structures, caves and the station
 - `js/parts.js`: blocks, machines, circuits and wires
