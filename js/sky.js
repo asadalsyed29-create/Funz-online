@@ -56,6 +56,8 @@ function fillClouds(out, list, eye, tint, flash, maxN) {
       P.push([(x - eye[0]) ** 2 + (y - eye[1]) ** 2 + (z - eye[2]) ** 2, x, y, z, pf[i + 3] * S, pf[i + 4], pf[i + 5], dark && flash ? flash : 0]);
     }
   }
+  // keep the nearest puffs when there are too many (so the clouds right above you never vanish), then draw far to near
+  if (P.length > maxN) { P.sort((a, b) => a[0] - b[0]); P.length = maxN; }
   P.sort((a, b) => b[0] - a[0]);
   const top = tint.top, bot = tint.bot;
   for (const q of P) {

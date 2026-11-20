@@ -24,8 +24,50 @@ function gl3WorldFS() {
   rep('vec3 light=mix(uGround,uSky,n.y*0.5+0.5)+uSunC*d;', 'float shd=getShadowMask();vec3 light=mix(uGround,uSky,n.y*0.5+0.5)*(0.8+0.2*shd)+uSunC*d*shd;');
   rep('*uSpec*length(uSunC);', '*uSpec*length(uSunC)*shd;');
   rep('gl_FragColor=vec4(mix(c,uFog,f),(vC.a<0.5?vC.a*2.0:1.0)*uAlpha);}', 'gl_FragColor=vec4(mix(c,uFog,f),uMask>0.5?clamp(glow,0.0,1.0)*(1.0-f):(vC.a<0.5?vC.a*2.0:1.0)*uAlpha);}');
+  // real textures (see textures.js): picked by what kind of thing is drawn and by its colour
+  rep('void main(){', GL3_TEXFN + 'void main(){');
+  rep('#endif\n  float d=max(dot(n,uSun),0.0);', '#endif\n  vec3 tm=vec3(1.0);if(uTex>0.5&&uTexOn>0.5&&uOutline<=0.0)tm=texDet(vC.rgb*uTint,n,length(vR));\n  float d=max(dot(n,uSun),0.0);');
+  rep('if(uTex>0.5)c=detail(c,n,length(vR));', 'if(uTex>0.5){if(uTexOn>0.5)c*=tm;else c=detail(c,n,length(vR));}');
   return s;
 }
+const GL3_TEXFN = `precision highp sampler2DArray;
+uniform sampler2DArray uTexA;uniform float uTexOn;
+vec4 tpl(float L,vec3 p,vec3 w,float sc){return texture(uTexA,vec3(p.zy*sc,L))*w.x+texture(uTexA,vec3(p.xz*sc,L))*w.y+texture(uTexA,vec3(p.xy*sc,L))*w.z;}
+vec4 tTop(float L,vec3 p,float sc){return texture(uTexA,vec3(p.xz*sc,L));}
+vec4 tBark(vec3 p,vec3 w,float sc){vec2 q=vec2(p.x*0.8+p.z*0.6,p.y*0.3);return texture(uTexA,vec3(q*sc,4.0))*(1.0-w.y)+texture(uTexA,vec3(p.xz*sc,4.0))*w.y;}
+vec3 perturbN(vec3 sp,vec3 sn,vec2 dh){vec3 sx=dFdx(sp),sy=dFdy(sp);vec3 r1=cross(sy,sn),r2=cross(sn,sx);float det=dot(sx,r1);vec3 g=sign(det)*(dh.x*r1+dh.y*r2);return normalize(abs(det)*sn-g);}
+vec3 texDet(vec3 c,inout vec3 n,float dist){
+  vec3 W=vW;vec3 w=pow(abs(n),vec3(4.0));w/=(w.x+w.y+w.z);
+  float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b)),sat=(mx-mn)/(mx+0.001);
+  vec4 t=vec4(0.5,0.5,0.0,1.0);float bk=1.4;
+  if(uTex<1.5){
+    float wSnow=smoothstep(0.8,0.9,mn);
+    float wSand=smoothstep(0.1,0.22,c.r-c.b)*smoothstep(0.6,0.75,c.r)*(1.0-wSnow);
+    float wGrass=smoothstep(0.04,0.14,c.g-max(c.r,c.b))*(1.0-wSand);
+    float wRock=clamp(1.0-wSnow-wSand-wGrass,0.0,1.0);
+    float slope=1.0-n.y;wRock=max(wRock,smoothstep(0.35,0.6,slope)*(1.0-wSnow));float ws=wSnow+wSand+wGrass*(1.0-smoothstep(0.35,0.6,slope))+wRock;
+    t=(tTop(0.0,W,0.42)*wGrass*(1.0-smoothstep(0.35,0.6,slope))+tTop(1.0,W,0.28)*wSand+tTop(2.0,W,0.22)*wSnow+tpl(3.0,W,w,0.16)*wRock)/max(ws,0.001);
+    float dirt=smoothstep(0.62,0.78,n2(W.xz*0.06+11.0))*wGrass*0.55;t=mix(t,tTop(11.0,W,0.35),dirt);
+  }else if(uTex<2.5){
+    bool brown=c.r>=c.g&&c.g>=c.b&&mx<0.62&&sat>0.2;
+    if(mn>0.78)t=tpl(2.0,W,w,0.35);
+    else if(brown)t=tBark(W,w,0.9);
+    else if(sat>0.28)t=tpl(5.0,W,w,0.5);
+    else t=tpl(3.0,W,w,0.28);
+  }else if(uTex<4.5){
+    bool brown=c.r>=c.g&&c.g>=c.b&&sat>0.22&&mx<0.86;bool roofy=sat>0.3&&n.y>0.25&&!(c.r>=c.g&&c.g>=c.b&&mx<0.86);
+    if(mx<0.3)t=tpl(8.0,W,w,0.3);
+    else if(mn>0.8)t=tpl(10.0,W,w,0.4);
+    else if(roofy||(c.r>c.g*1.4&&c.r>c.b*1.4&&sat>0.45))t=tpl(9.0,W,w,0.5);
+    else if(brown)t=tpl(6.0,W,w,0.45);
+    else if(sat<0.22)t=tpl(7.0,W,w,0.42);
+    else t=tpl(10.0,W,w,0.4);
+  }else{t=tpl(8.0,W,w,0.2);bk=0.9;}
+  float fade=1.0-smoothstep(80.0,300.0,dist);
+  n=perturbN(vR,n,vec2(dFdx(t.g),dFdy(t.g))*bk*0.7*fade);
+  float m=mix(1.0,t.r*2.0,fade*0.62+0.12)*(1.0+(n2(W.xz*0.03)-0.5)*0.16);
+  return vec3(m);}
+`;
 const GL3_BALL_VS = `uniform float uOutline;varying vec3 vL;varying vec3 vN;varying vec3 vR;
 void main(){vL=position;vec4 w=modelMatrix*vec4(position*(1.0+uOutline),1.0);vR=w.xyz-cameraPosition;vN=mat3(modelMatrix)*position;gl_Position=projectionMatrix*viewMatrix*w;}`;
 function gl3BallFS() {
@@ -73,7 +115,9 @@ class GL3 {
     // shared values for every material (set once per frame)
     const v3 = () => ({ value: new T.Vector3() });
     this.U = { uSun: v3(), uSunC: v3(), uSky: v3(), uGround: v3(), uFog: v3(), uHor: v3(), uRight: v3(), uUp: v3(), uTime: { value: 0 },
-      uL: { value: Array.from({ length: 8 }, () => new T.Vector4()) }, uLC: { value: Array.from({ length: 8 }, () => new T.Vector3()) } };
+      uL: { value: Array.from({ length: 8 }, () => new T.Vector4()) }, uLC: { value: Array.from({ length: 8 }, () => new T.Vector3()) },
+      uTexA: { value: null }, uTexOn: { value: 0 } };
+    this.makeTextures(R);
     this.lightsU = T.UniformsUtils.clone(T.UniformsLib.lights);
     this.src = { wvs: GL3_WORLD_VS, wfs: gl3WorldFS(), bvs: GL3_BALL_VS, bfs: gl3BallFS() };
     // the sphere for balls, a big triangle for the sky
@@ -100,9 +144,9 @@ class GL3 {
     this.pv = new T.Matrix4(); this.tmpM = new T.Matrix4();
     // glow: bright parts bloom (only on stronger devices)
     this.composer = null; this.w = canvas.width; this.h = canvas.height;
-    if (this.q === 'high' && T.EffectComposer && T.UnrealBloomPass) {
+    if (this.q !== 'low' && T.EffectComposer && T.UnrealBloomPass) {
       try {
-        const rt = new T.WebGLRenderTarget(canvas.width, canvas.height, { type: T.HalfFloatType, samples: 4 });
+        const rt = new T.WebGLRenderTarget(canvas.width, canvas.height, { type: T.HalfFloatType, samples: this.q === 'high' ? 4 : 2 });
         const C = this.composer = new T.EffectComposer(R, rt);
         this.pass0 = new T.RenderPass(this.scenes[0], this.cam); this.pass0.clearAlpha = 0;
         this.pass1 = new T.RenderPass(this.scenes[1], this.cam); this.pass1.clear = false; this.pass1.clearDepth = true;
@@ -114,6 +158,24 @@ class GL3 {
       } catch (e) { console.warn('no bloom', e); this.composer = null; }
     }
   }
+  // paint the surface textures a layer at a time while the game runs, then switch them on
+  makeTextures(R) {
+    if (!window.makeTextureLayers) return;
+    const T = THREE, S = this.q === 'high' ? 512 : 256, n = TEX_LAYERS.length, data = new Uint8Array(S * S * 4 * n);
+    for (let i = 0; i < data.length; i += 4) { data[i] = 128; data[i + 1] = 128; data[i + 3] = 255; }
+    const tex = new T.DataArrayTexture(data, S, S, n);
+    tex.format = T.RGBAFormat; tex.type = T.UnsignedByteType; tex.wrapS = tex.wrapT = T.RepeatWrapping;
+    tex.magFilter = T.LinearFilter; tex.minFilter = T.LinearMipmapLinearFilter; tex.generateMipmaps = true; tex.anisotropy = Math.min(8, R.capabilities.getMaxAnisotropy());
+    tex.needsUpdate = true; this.U.uTexA.value = tex;
+    let L = 0;
+    const step = () => {
+      try { data.set(makeTextureLayers(S, L), L * S * S * 4); } catch (e) { console.warn('texture', e); return; }
+      if (++L < n) setTimeout(step, 30); else { tex.needsUpdate = true; this.U.uTexOn.value = 1; this.texReady = true; }
+    };
+    setTimeout(step, 400);
+  }
+  // if the device struggles: first drop the glow, then the shadows
+  lower() { if (this.composer) { this.composer = null; return true; } if (this.R.shadowMap.enabled) { this.R.shadowMap.enabled = false; this.sun.castShadow = false; this.wMats.forEach(m => { m.needsUpdate = true; }); return true; } return false; }
   setSize(w, h) { this.w = w; this.h = h; this.R.setSize(w, h, false); if (this.composer) { this.composer.setPixelRatio(1); this.composer.setSize(w, h); } }
   // ---- per frame ----
   begin(S) {
@@ -157,7 +219,7 @@ class GL3 {
     // safety net: if this device can't run our shaders, switch to the old engine for good
     if (++this.frames === 4 || this.frames === 60) {
       const bad = (R.info.programs || []).some(p => p.diagnostics && p.diagnostics.runnable === false);
-      if (bad) { try { localStorage.setItem('funz.engine', 'old'); } catch (e) {} location.reload(); }
+      if (bad) { try { localStorage.setItem('funz.engine', 'old@' + window.FUNZ_VERSION); } catch (e) {} location.reload(); }
     }
   }
   // ---- meshes ----
@@ -199,6 +261,7 @@ class GL3 {
       const T = THREE, U = this.U;
       m = new T.ShaderMaterial({ vertexShader: this.src.wvs, fragmentShader: this.src.wfs, lights: true, vertexColors: true, extensions: { derivatives: true },
         uniforms: Object.assign({}, this.lightsU, { uSun: U.uSun, uSunC: U.uSunC, uSky: U.uSky, uGround: U.uGround, uFog: U.uFog, uL: U.uL, uLC: U.uLC,
+          uTexA: U.uTexA, uTexOn: U.uTexOn,
           uFogD: { value: 0 }, uAlpha: { value: 1 }, uTint: { value: new T.Vector3(1, 1, 1) }, uGlow: { value: 0 }, uToon: { value: 0 }, uRim: { value: 0 }, uSpec: { value: 0 },
           uOutline: { value: 0 }, uOutCol: { value: new T.Vector3(0.1, 0.1, 0.16) }, uTex: { value: 0 }, uFlat: { value: 1 }, uMask: { value: 1 } }) });
       this.wMats.push(m);
@@ -282,7 +345,7 @@ class GL3 {
 }
 // pick the engine: Three.js when it works, the old one otherwise (or with ?engine=old)
 function makeGfx(canvas, quality) {
-  let old = /[?&]engine=old/.test(location.search); try { old = old || localStorage.getItem('funz.engine') === 'old'; } catch (e) {}
+  let old = /[?&]engine=old/.test(location.search); try { old = old || localStorage.getItem('funz.engine') === 'old@' + window.FUNZ_VERSION; } catch (e) {}
   if (window.THREE && !old) {
     try { return new GL3(canvas, { quality }); } catch (e) { console.warn('Three.js engine failed, using the old one', e); }
   }

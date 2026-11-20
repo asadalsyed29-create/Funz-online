@@ -805,7 +805,10 @@
           G.drops.set(it.id, it); add.push(it);
         }
         syncDrops(); Net.toAll({ t: 'drop', add }); reply('Spawned ' + add.length + ' × ' + ITEMS[type].name); break; }
-      case 'weather': { const mode = ['auto', 'clear', 'cloudy', 'rain', 'storm'].includes(o.mode) ? o.mode : 'auto'; setWeather(mode); Net.toAll({ t: 'wx', mode }); both('The admin made the weather ' + (mode === 'auto' ? 'normal again' : mode)); break; }
+      case 'weather': { const mode = ['auto', 'clear', 'cloudy', 'rain', 'storm'].includes(o.mode) ? o.mode : 'auto'; setWeather(mode); Net.toAll({ t: 'wx', mode });
+        // rain and storms come with their real clouds, right above the admin
+        if (mode === 'storm' || mode === 'rain') { const at = admin.tp, add = [{ kind: mode === 'storm' ? 'cb' : 'nimbo', v: Math.floor(Math.random() * 3), x: Math.round(at[0] + 20), y: mode === 'storm' ? 220 : 240, z: Math.round(at[2] - 10), s: mode === 'storm' ? 1.3 : 1.1, rot: +(Math.random() * 6.28).toFixed(2), ph: +(Math.random() * 6.28).toFixed(2), wind: 0 }]; G.game.addClouds(add); Net.toAll({ t: 'clouds', add }); }
+        both('The admin made the weather ' + (mode === 'auto' ? 'normal again' : mode)); break; }
       case 'clouds': { // put real clouds of one kind in the sky around the admin
         const kind = CLOUD_KINDS[o.kind] ? o.kind : 'cumulus', n = Math.max(1, Math.min(10, o.n | 0 || 1)), at = admin.tp, H = { cumulus: 340, congestus: 300, cb: 230, stratus: 280, strato: 330, alto: 700, cirrus: 1100, nimbo: 240, lens: 480 }, add = [];
         for (let k = 0; k < n; k++) { const a = Math.random() * 6.283, d = 120 + Math.random() * 380; add.push({ kind, v: Math.floor(Math.random() * 3), x: Math.round(at[0] + Math.cos(a) * d), y: H[kind] + Math.round(Math.random() * 40), z: Math.round(at[2] + Math.sin(a) * d), s: +(0.9 + Math.random() * 0.5).toFixed(2), rot: +(Math.random() * 6.283).toFixed(2), ph: Math.round(Math.random() * 100) }); }
@@ -1229,6 +1232,7 @@
     { const P = G.perf || (G.perf = { t: 0, n: 0, sum: 0, good: 0 }); P.sum += (now - (P.last || now)) / 1000; P.last = now; P.n++;
       if (P.n >= 40 && !NO_RENDER) { const avg = P.sum / P.n, g = G.game; P.n = 0; P.sum = 0;
         if (avg > 1 / 40 && (g.scale || 1) > 0.6) { g.scale = Math.max(0.6, (g.scale || 1) - 0.1); g.resize(); P.good = 0; }
+        else if (avg > 1 / 32 && g.gfx.lower && !/[?&]hq/.test(location.search) && (P.low = (P.low || 0) + 1) >= 3) { g.gfx.lower(); P.low = 0; }
         else if (avg < 1 / 56 && (g.scale || 1) < 1) { if (++P.good >= 3) { g.scale = Math.min(1, (g.scale || 1) + 0.1); g.resize(); P.good = 0; } } else P.good = 0; } }
     const m = G.me, b = G.body, cam = G.game.cam;
     for (const k in G.effects) if (G.effects[k] < now) delete G.effects[k];

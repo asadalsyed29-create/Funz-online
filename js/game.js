@@ -23,7 +23,7 @@ function rayTri(o, d, a, b, c) {
 
 class Game {
   constructor(canvas, overlay, seed, B) {
-    this.gfx = makeGfx(canvas, Device.type === 'phone' ? 'low' : Device.type === 'tablet' ? 'mid' : 'high'); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
+    this.gfx = makeGfx(canvas, Device.type === 'computer' ? 'high' : 'mid'); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
     this.T = new Terrain(seed); this.St = new Structures(this.T); this.B = B;
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
     this.landmarks = buildLandmarks(this.gfx, this.St);
@@ -447,6 +447,27 @@ class Game {
     while (L.length > 40) L.shift();
   }
   setWeather(w) { this.wxForce = w; this.cloudCells.clear(); }
+  // a lightning strike under a thunderstorm cloud (cl), seen from 'at'
+  strike(cl, at) {
+    const R = 200 * cl.s, a = Math.random() * 6.283, d = Math.random() * R, bx = cl.x + Math.cos(a) * d, bz = cl.z + Math.sin(a) * d;
+    const gy = Math.max(this.T.ground(bx, bz), SEA), top = cl.y - 5, mb = new MeshBuilder(), col = glowC(hex('#e8f0ff'));
+    const bolt = (p0, p1, n, w, depth) => {
+      let prev = p0;
+      for (let k = 1; k <= n; k++) {
+        const t = k / n, j = (1 - t * 0.6) * (p1[1] < p0[1] ? (p0[1] - p1[1]) / n : 6) * 0.55;
+        const cur = k === n ? p1 : [p0[0] + (p1[0] - p0[0]) * t + (Math.random() - 0.5) * j * 2, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t + (Math.random() - 0.5) * j * 2];
+        mb.caps(prev, cur, w, w, 4, col);
+        if (depth < 1 && Math.random() < 0.18 && k < n - 2) { const len = (p0[1] - p1[1]) * 0.25; bolt(cur, [cur[0] + (Math.random() - 0.5) * len, cur[1] - len, cur[2] + (Math.random() - 0.5) * len], 5, w * 0.55, depth + 1); }
+        prev = cur;
+      }
+    };
+    bolt([bx, top, bz], [bx + (Math.random() - 0.5) * 30, gy, bz + (Math.random() - 0.5) * 30], 16, 0.9, 0);
+    (this.bolts = this.bolts || []).push({ mesh: mb.build(this.gfx), t: 0.35 });
+    const dist = Math.hypot(bx - at[0], bz - at[2]);
+    this.flash = Math.max(this.flash, Math.max(0.25, 1 - dist / 1600));
+    setTimeout(() => Sound.play('thunder'), Math.min(4.5, dist / 343) * 1000 + 100);
+    if (dist < 60 && this.fx) this.fx.burst([bx, gy + 0.5, bz], 30, { col: [0.9, 0.95, 1], size: 0.2 });
+  }
   stat(n) { if (!this.stats) return; const t = this.gfx.tris; this.stats[n] = Math.round(t - (this.statT || 0)); this.statT = t; }
   // ---------- drawing ----------
   render(players, me, o) {
@@ -473,13 +494,14 @@ class Game {
       }
       for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < 2200 && Math.abs(cl.z - c.target[2]) < 2200) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
     }
-    let rainK = 0, stormNear = false;
-    for (const cl of near) { if (cl.kind !== 'nimbo' && cl.kind !== 'cb') continue; const d = Math.hypot(cl.x - c.target[0], cl.z - c.target[2]), R = (cl.kind === 'cb' ? 230 : 400) * cl.s; rainK = Math.max(rainK, Math.min(1, (1 - d / R) * 1.8)); if (cl.kind === 'cb' && d < 1000) stormNear = true; }
-    if (this.wxForce != null && this.wxForce >= 0.7 && !this.under && !inSt) { rainK = Math.max(rainK, this.wxForce >= 0.9 ? 1 : 0.6); if (this.wxForce >= 0.9) stormNear = true; } // the admin made it rain
+    let rainK = 0, stormNear = null, underStorm = false, stormD = 1e9;
+    for (const cl of near) { if (cl.kind !== 'nimbo' && cl.kind !== 'cb') continue; const d = Math.hypot(cl.x - c.target[0], cl.z - c.target[2]), R = (cl.kind === 'cb' ? 230 : 400) * cl.s; rainK = Math.max(rainK, Math.min(1, (1 - d / R) * 1.8)); if (cl.kind === 'cb' && d < 1400 && d < stormD) { stormNear = cl; stormD = d; if (d < R) underStorm = true; } }
     if (c.target[1] > 220) rainK = 0;
-    this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = this.rain > 0.15 ? (stormNear ? 'Stormy' : 'Rainy') : stormNear ? 'Storm nearby' : null;
+    this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = this.rain > 0.15 ? (underStorm ? 'Stormy' : 'Rainy') : stormNear ? 'Storm nearby' : null;
     if (this.rain > 0.01) { const r = this.rain; sunC = sunC.map(v => v * (1 - r * 0.55)); zen = L3(zen, L3([0.36, 0.4, 0.48], [0.03, 0.04, 0.08], k), r * 0.75); hor = L3(hor, L3([0.58, 0.61, 0.67], [0.06, 0.07, 0.12], k), r * 0.75); fog = hor; fogD *= 1 + r * 0.9; amb = amb.map(v => v * (1 - r * 0.2)); }
-    if (stormNear && Math.random() < (o.dt || 0.016) * 0.1) { this.flash = 1; const d = 0.4 + Math.random() * 1.8; setTimeout(() => Sound.play('thunder'), d * 1000); }
+    // lightning only comes out of a real thunderstorm cloud: a bolt from its base to the ground, then thunder after the sound travels
+    if (stormNear && !this.under && !inSt && Math.random() < (o.dt || 0.016) * 0.22) this.strike(stormNear, c.target);
+    if (this.bolts && this.bolts.length) this.bolts = this.bolts.filter(b => { b.t -= o.dt || 0.016; if (b.t <= 0) { G.free(b.mesh); return false; } return true; });
     if (this.flash > 0) { const f = this.flash; amb = amb.map(v => v + f * 0.7); zen = L3(zen, [0.85, 0.88, 1], f * 0.5); hor = L3(hor, [0.8, 0.82, 0.95], f * 0.4); fog = hor; this.flash = Math.max(0, f - (o.dt || 0.016) * 6); }
     if (!this.under && c.eye[1] < SEA - 0.2) { fog = [0.08, 0.3, 0.42]; fogD = 1 / 38; amb = [0.25, 0.42, 0.5]; sunC = sunC.map(v => v * 0.5); } // under the water
     if (RL) { zen = RL.zen; hor = RL.hor; fog = RL.fog; fogD = RL.fogD; amb = RL.amb; gnd = RL.amb.map(v => v * 0.5); sunC = RL.sunC; night = RL.stars ? 1 : 0; }
@@ -555,13 +577,14 @@ class Game {
     }
     this.stat('deco');
     // big places and structures
-    G.mat(0, 0.12, 0.2);
+    G.mat(0, 0.12, 0.2); G.tex(4);
     for (const s of this.landmarks) {
       if (s.station && !this.under) { // the giant station shows through the haze from far away
         if (!vis(s.x, s.z, 3000)) continue;
         if (!inSt) G.fog(Math.min(fogD, 1 / 1500));
-        G.draw(s.mesh); G.draw(s.inside);
-        if (!inSt) { G.tex(0); G.fog(1 / 2600); G.draw(s.beam); G.tex(2); }
+        G.tex(5); G.draw(s.mesh); G.draw(s.inside);
+        if (!inSt) { G.tex(0); G.fog(1 / 2600); G.draw(s.beam); }
+        G.tex(4);
         G.fog();
       } else if (vis(s.x, s.z, s.far || far + 80)) { if (s.far) G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.mesh); if (s.far) G.fog(); }
     }
@@ -637,6 +660,8 @@ class Game {
     }
     // the ship while it flies in or away (only on this screen)
     if (o.shipFx) this.drawShip(M4.model(o.shipFx.p, M4.mul3(M4.rotY(-o.shipFx.hd), M4.rotZ(o.shipFx.pitch || 0)), 1), o.shipFx.open || 0);
+    // lightning bolts (they glow)
+    if (this.bolts) { G.mat(0, 0, 0); G.tex(0); for (const b of this.bolts) if (Math.sin(b.t * 60) > -0.3) G.draw(b.mesh, null, 1, null, 1); }
     // see-through things last
     G.blend(true); G.depthWrite(false);
     G.mat(0, 0, 0);
