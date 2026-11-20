@@ -369,7 +369,7 @@
     const spawn = safeSpawn(game, store.json('spawn5', null)) || defaultSpawn();
     const body = game.newBody([spawn[0] + (Math.random() - .5), spawn[1] + 1, spawn[2] + (Math.random() - .5)]);
     G = {
-      role: null, myId: null, players: new Map(), B, game, circ, body,
+      role: null, myId: null, players: new Map(), mgBots: new Map(), B, game, circ, body,
       tool: 0, cat: 'blocks', building: false, dayStart: performance.now() - DAY_MS * 0.875,
       lastSend: 0, lastState: 0, lastCirc: 0, lastHeard: performance.now(), rate: new Map(), running: true, dirty: false,
       muted: new Set(), kicked: new Map(), bans: new Set(s.bans || []), nonces: new Map(), reconnecting: false,
@@ -450,7 +450,7 @@
     leave(id) {
       if (!G || G.role !== 'keeper') return;
       const p = G.players.get(id); if (!p) return;
-      G.players.delete(id); renderPeople();
+      G.players.delete(id); renderPeople(); G.game.arena.hostRemove(id);
       Net.toAll({ t: 'bye', id }); sys(p.name + ' left');
     },
     closed() { if (G && G.role === 'guest') reconnect(); },
@@ -564,6 +564,8 @@
       else { for (const o of G.B.wiresOf(m.a)) { applyWire(m.a, o, false); Net.toAll({ t: 'wire', a: m.a, b: o, add: false }); } }
     } else if (m.t === 'take') {
       tryTake(p, m.id, m.type);
+    } else if (m.t === 'mg') {
+      if (m.a === 'join' && allow(id, 'mg', 3, 4000)) { const r = G.game.arena.hostJoin(id, m.k, p.name); if (r) Net.toOne(id, { t: 'mg', s: { note: r } }); }
     } else if (m.t === 'race') {
       const time = num(m.time, 5, 3600); if (time != null && allow(id, 'r', 2, 10000)) recordRace(p.name, time);
     } else if (m.t === 'adminCmd') {
@@ -648,6 +650,7 @@
       return;
     }
     if (m.t === 'names') { addNames(m.add); return; }
+    if (m.t === 'mg') { mgRecv(m.s); return; }
     if (m.t === 'drop') { if (m.del) G.drops.delete(String(m.del)); for (const d of Array.isArray(m.add) ? m.add : []) if (d && ITEMS[d.type] && okVec(vec(d.p))) G.drops.set(String(d.id), { id: String(d.id), type: d.type, p: vec(d.p) }); syncDrops(); return; }
     if (m.t === 'wx') { setWeather(m.mode); return; }
     if (m.t === 'clouds') { if (Array.isArray(m.add)) G.game.addClouds(m.add); return; }
@@ -832,6 +835,77 @@
     showToast('Chase over! ' + Math.floor(C.score) + ' points' + (C.intercepted ? ' · intercept at ' + Math.round(C.best) + ' km/h' : '') + ' · +' + coins + ' coins', 5000);
     const L = G.game.extraClouds; if (L) { const i = L.indexOf(C.cloud); if (i >= 0) L.splice(i, 1); }
     G.chase = null; G.nail = false; G.chaseCool = performance.now() + 5000; G.game.shake = 0; $('nailBtn').classList.add('hidden'); $('nailBtn').classList.remove('on');
+  }
+  // ---------- sky race, fishing pier, game arena ----------
+  const SKY_FAST = 45;
+  const gameUI = {
+    toast: (t, ms) => showToast(t, ms), banner: (a, b, c) => banner(a, b, c),
+    finish: (t, coins, kind, time) => { showToast(t, 5000); prog.give(coins); if (kind === 'sky') { prog.add('skyraces'); if (time < SKY_FAST) prog.add('skyFast'); } questCheck(); prog.save(); Sound.play('quest'); },
+    fishBar: st => {
+      const el = $('fishBar'); if (!st) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      if (el.dataset.col !== st.col) { el.dataset.col = st.col; el.querySelector('.fbFish').innerHTML = fishIconSvg(st.col); }
+      el.querySelector('.fbZone').style.left = (st.zp * 100) + '%'; el.querySelector('.fbZone').style.width = (st.zw * 100) + '%';
+      el.querySelector('.fbZone').classList.toggle('on', st.inZ);
+      el.querySelector('.fbFish').style.left = (st.fp * 100) + '%'; el.querySelector('.fbProg i').style.width = (st.prog * 100) + '%';
+    },
+    caught: (id, f, cm, rar) => {
+      const isNew = prog.mark('fishSeen', id), big = rar ? Math.round(rar.coins * (0.8 + 0.4 * (cm - f.cm[0]) / Math.max(1, f.cm[1] - f.cm[0]))) : 1, coins = big + (isNew && rar ? 10 : 0);
+      prog.give(coins); if (rar) { prog.add('fish'); if (f.rar === 3) prog.add('legendFish'); } prog.max('fishKinds', prog.count('fishSeen') - (prog.has('fishSeen', 'boot') ? 1 : 0));
+      const rec = prog.stats['fishBest_' + id] || 0; if (cm > rec) prog.max('fishBest_' + id, cm);
+      questCheck(); prog.save(); Sound.play(rar && f.rar >= 2 ? 'quest' : 'chest');
+      banner(rar ? rar.n + (isNew ? ' · new fish!' : '') : 'Junk', f.name + ' · ' + cm + ' cm', '+' + coins + (coins === 1 ? ' coin' : ' coins') + (rec && cm > rec ? ' · your biggest one yet!' : '') + ' · ' + (prog.count('fishSeen') - (prog.has('fishSeen', 'boot') ? 1 : 0)) + '/10 kinds caught', 3600);
+    },
+  };
+  const hostIO = {
+    pos: id => { const p = G.players.get(id); return p ? p.tp : null; }, alive: id => G.players.has(id),
+    tp: (id, p) => { if (id === G.myId) { G.body.p = [...p]; G.body.v = [0, 0, 0]; } else Net.toOne(id, { t: 'tp', p: p.map(v => +v.toFixed(2)) }); },
+  };
+  function mgClear() { G.mg = null; G.mgBots.clear(); $('blind').classList.add('hidden'); }
+  function mgRecv(s) {
+    if (!G || !s || typeof s !== 'object') return;
+    if (s.note) { showToast(cleanText(String(s.note)), 2600); return; }
+    if (s.ph === 'gone') { mgClear(); return; }
+    if (!Array.isArray(s.ids) || !Array.isArray(s.it)) return;
+    G.mg = s; G.mgAt = performance.now();
+    const seen = new Set();
+    for (const r of Array.isArray(s.bots) ? s.bots.slice(0, 8) : []) {
+      if (!Array.isArray(r) || r.length < 9) continue; const id = String(r[0]).slice(0, 12), tp = vec([r[6], r[7], r[8]]); if (!okVec(tp)) continue; seen.add(id);
+      let o = G.mgBots.get(id); if (!o) { o = { id, bot: true, p: [...tp], R: [1, 0, 0, 0, 1, 0, 0, 0, 1], r: 0.45, trail: 'none', og: [], devType: 'bot' }; G.mgBots.set(id, o); }
+      Object.assign(o, { name: cleanName(String(r[1])), skin: SKINS[r[2]] ? r[2] : 'plain', color: COLORS.includes(r[3]) ? r[3] : '#5aa9ff', color2: COLORS.includes(r[4]) ? r[4] : '#5aa9ff', hat: HATS[r[5]] && !ownerOnly('hat', r[5]) ? r[5] : 'none', tp });
+      if (G.role !== 'guest') o.p = [...tp];
+    }
+    for (const id of [...G.mgBots.keys()]) if (!seen.has(id)) G.mgBots.delete(id);
+    const mine = s.ids.includes(G.myId), near = Math.hypot(G.body.p[0] - ARENA.x, G.body.p[2] - ARENA.z) < 140;
+    if (Array.isArray(s.ev) && s.ev[0] !== G.mgEv) { G.mgEv = s.ev[0]; if ((mine || near) && s.ev[1]) showToast(cleanText(String(s.ev[1])), 2600); }
+    if (s.ph === 'end' && s.res && mine && G.mgPaid !== s.rid) { const r = s.res[G.myId]; if (Array.isArray(r)) { G.mgPaid = s.rid; const coins = Math.max(0, Math.min(60, r[0] | 0)); prog.give(coins); prog.add('arenaRounds'); if (r[2]) prog.add(s.k === 'tag' ? 'tagWins' : 'hideWins'); questCheck(); prog.save(); banner(s.k === 'tag' ? 'Tag' : 'Hide and seek', r[2] ? 'You win!' : 'Round over', cleanText(String(r[1])), 5000); Sound.play(r[2] ? 'quest' : 'coin'); } }
+  }
+  function arenaStep(now, dt) {
+    const A = G.game.arena, b = G.body, pad = A.padAt(b.p), mg = G.mg;
+    if (pad && now > (G.mgJoin || 0) && !(mg && mg.ids.includes(G.myId) && mg.ph !== 'end')) { G.mgJoin = now + 2000; if (G.role === 'guest') Net.toKeeper({ t: 'mg', a: 'join', k: pad }); else { const r = A.hostJoin(G.myId, pad, G.me.name); if (r) showToast(r, 2600); } }
+    if (G.role !== 'guest') { const s = A.hostTick(dt, now, hostIO); if (s) { if (now - (G.mgSent || 0) > 100 || s.ph === 'gone') { G.mgSent = now; Net.toAll({ t: 'mg', s }); } mgRecv(s); } }
+    if (G.mg && now - G.mgAt > 3000) mgClear();
+    const a = 1 - Math.pow(0.0008, dt);
+    for (const o of G.mgBots.values()) { const ox = o.p[0], oz = o.p[2]; if (G.role === 'guest') for (let i = 0; i < 3; i++) o.p[i] += (o.tp[i] - o.p[i]) * a; G.game.rollBy(o, o.p[0] - (o._rx ?? ox), o.p[2] - (o._rz ?? oz), 0.45); o._rx = o.p[0]; o._rz = o.p[2]; }
+    // who is it, who is seeking, and hide the hiders' names from the seekers
+    const s = G.mg, live = s && s.ph !== 'lobby' && s.ph !== 'end', seeker = live && s.k === 'hide' && s.it.includes(G.myId);
+    for (const p of [...G.players.values(), ...G.mgBots.values()]) {
+      const inR = live && s.ids.includes(p.id); p.it = !!(inR && s.it.includes(p.id)); p.seek = !!(s && s.k === 'hide');
+      p.badge = p.it ? (s.k === 'tag' ? { t: 'It!', c: '#e8343a' } : { t: 'Seeker', c: '#c8901a' }) : null; p.hideLabel = !!(seeker && inR && !p.it && p !== G.me);
+    }
+    const blind = !!(s && s.k === 'hide' && s.ph === 'hide' && s.it.includes(G.myId));
+    $('blind').classList.toggle('hidden', !blind); if (blind) $('blind').querySelector('span').textContent = s.left + '';
+    return blind;
+  }
+  function mgChip() {
+    const s = G.mg; if (!s || !s.ids.includes(G.myId)) return '';
+    const iAm = s.it.includes(G.myId), t = Math.floor(s.left / 60) + ':' + String(s.left % 60).padStart(2, '0'), names = s.it.map(id => (s.names && s.names[id]) || 'someone').join(', ');
+    if (s.ph === 'lobby') return (s.k === 'tag' ? 'Tag' : 'Hide and seek') + ' · starting in ' + s.left + ' s · ' + s.ids.length + ' joined (bots fill the rest)';
+    if (s.ph === 'end') return 'Round over';
+    if (s.k === 'tag') return iAm ? 'Tag · you are it! Roll into someone · ' + t : 'Tag · run! ' + names + (s.it.length > 1 ? ' are' : ' is') + ' it · ' + t;
+    if (s.ph === 'hide') return iAm ? 'Hide and seek · counting… ' + s.left : 'Hide and seek · hide! The seeker comes out in ' + s.left + ' s';
+    const left = s.ids.filter(id => !s.it.includes(id)).length;
+    return iAm ? 'Hide and seek · find them! ' + left + ' still hiding · ' + t : 'Hide and seek · stay hidden! ' + left + ' still hiding · ' + t;
   }
   const parkUI = {
     toast: (t, ms) => showToast(t, ms), banner: (a, b, c) => banner(a, b, c),
@@ -1272,19 +1346,23 @@
     if (keys.has('w') || keys.has('arrowup')) iy--; if (keys.has('s') || keys.has('arrowdown')) iy++;
     if (keys.has('q')) cam.yaw += dt * 2; if (keys.has('e')) cam.yaw -= dt * 2;
     if (stick.id !== null) { ix = stick.x; iy = stick.y; }
-    if (G.frozen) ix = iy = 0;
+    const blind = arenaStep(now, dt);
+    if (G.frozen || blind) ix = iy = 0;
     if (m.fly && !m.admin) m.fly = false;
     const l = Math.hypot(ix, iy); if (l > 1) { ix /= l; iy /= l; }
     const f = G.game.forward(), rt = [-f[1], f[0]], go = l > 0.12 ? 1 : 0;
     const input = { x: (rt[0] * ix - f[0] * iy) * go, z: (rt[1] * ix - f[1] * iy) * go,
-      jump: !G.frozen && (keys.has(' ') || jumpHeld), up: keys.has(' ') || jumpHeld, down: keys.has('shift') || downHeld };
+      jump: !G.frozen && !blind && (keys.has(' ') || jumpHeld), up: keys.has(' ') || jumpHeld, down: keys.has('shift') || downHeld };
     const gset = new Set(m.gadget && m.gadget !== 'none' ? [m.gadget] : []);
     if (G.ship && G.ship.st === 'fly') { ix = stick.id !== null ? stick.x : ix; }
     for (const k of m.og || []) gset.add(k);
     if (G.chase && !G.chase.update(dt, b, now, G.nail)) endChase();
     if (G.game.park) G.game.park.update(dt, b, input, now, parkUI);
-    if (!shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx });
+    const fishing = G.game.pier.update(dt, b, input, now, gameUI, { night: G.dark > 0.3, rain: (G.game.rain || 0) > 0.3 });
+    const skyHold = G.game.sky.update(dt, b, now, gameUI, G.game.cam);
+    if (!fishing && !skyHold && !shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx });
     if (G.chase && G.chase.anchor) { b.p = [...G.chase.anchor]; b.v = [0, 0, 0]; }
+    if (!fishing && !skyHold && G.game.arena.bounce(b)) Sound.play('boost');
     const RR = G.game.realmAt(b.p);
     if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
     else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
@@ -1330,6 +1408,7 @@
     const chips = Object.entries(G.effects).map(([k, t]) => ({ fast: 'Speed', big: 'Big', superJump: 'Super jump', glow: 'Glow' }[k] + ' ' + Math.ceil((t - now) / 1000) + 's'));
     if (G.chase) { const C = G.chase, left = Math.max(0, C.T - (now - C.t0) / 1000); chips.unshift((C.alive > 0.05 ? EF_NAMES[C.ef] + ' tornado ' + Math.round(C.near) + ' m' : 'Storm chase · a tornado is forming…') + ' · ' + Math.floor(C.score) + ' pts · ' + Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') + (G.nail ? ' · nailed down' : '')); if (C.msg) chips.unshift(C.msg.text); }
     { const pc = G.game.park && G.game.park.chip(); if (pc) chips.unshift(pc); }
+    for (const c of [G.game.sky.chip(), G.game.pier.chip(), mgChip()]) if (c) chips.unshift(c);
     if (G.race) chips.unshift('Race ' + ((now - G.race.start) / 1000).toFixed(1) + 's · ring ' + (G.race.next + 1) + '/12');
     const ct = chips.join('  ·  '); if ($('effects').textContent !== ct) $('effects').textContent = ct;
     $('effects').classList.toggle('hidden', !ct);
@@ -1338,7 +1417,7 @@
     let cursor = null;
     if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
     const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
-    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, chase: G.chase, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
+    if (!NO_RENDER) G.game.render([...G.players.values(), ...G.mgBots.values()], m, { now, dt, dark, chase: G.chase, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();

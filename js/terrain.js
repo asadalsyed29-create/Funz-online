@@ -157,6 +157,7 @@ function buildTerrainChunk(gl, T, cx, cz, decos) {
     const x = gx * CELL + 0.6 + N.hash(gx, gz, 502) * (CELL - 1.2), z = gz * CELL + 0.6 + N.hash(gx, gz, 503) * (CELL - 1.2);
     const info = inf(i, j); if (info.b === 9 || info.b === 10) continue;
     if (Math.abs(x - 120) < 62 && Math.abs(z + 40) < 56) continue; // the Fun Park deck and its ramps
+    if ((Math.abs(x - 100) < 72 && Math.abs(z + 160) < 72) || (x > -580 && x < -458 && z > -14 && z < 18)) continue; // the game arena, the fishing pier and its bait shop
     const y = T.ground(x, z); if (y < SEA - 0.3 && info.b !== 7 && info.b !== 0) continue;
     const s = 0.8 + N.hash(gx, gz, 504) * 0.6, rot = N.hash(gx, gz, 505) * 6.28;
     decorate(dmb, colliders, info.b, r, x, y, z, s, rot, N.hash(gx, gz, 506), decos);

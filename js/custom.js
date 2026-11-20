@@ -34,7 +34,7 @@ const HATS = {
   sprout: { name: 'Sprout', lock: { quest: 'forest' } }, cowboy: { name: 'Cowboy hat', lock: { quest: 'desert' } }, winter: { name: 'Winter hat', lock: { quest: 'snow' } },
   viking: { name: 'Viking helmet', lock: { quest: 'mountain' } }, mushroom: { name: 'Mushroom cap', lock: { quest: 'swamp' } }, pirate: { name: 'Pirate hat', lock: { quest: 'chests' } },
   miner: { name: 'Miner helmet', lock: { quest: 'cave' } }, antenna: { name: 'Antenna', lock: { quest: 'station' } }, bunny: { name: 'Bunny ears', lock: { quest: 'friends' } },
-  cone: { name: 'Traffic cone', lock: { quest: 'night' } }, grad: { name: 'Scholar cap', lock: { quest: 'ways' } },
+  cone: { name: 'Traffic cone', lock: { quest: 'night' } }, bucket: { name: 'Fishing hat', lock: { quest: 'angler' } }, helmet: { name: 'Racing helmet', lock: { quest: 'skyracer' } }, headband: { name: 'Sport headband', lock: { quest: 'tagger' } }, grad: { name: 'Scholar cap', lock: { quest: 'ways' } },
   crown: { name: 'Crown', lock: { owner: true } }, stormcloud: { name: 'Storm cloud', lock: { coins: 250 } }, starcrown: { name: 'Star crown', lock: { coins: 300 } },
 };
 
@@ -95,6 +95,14 @@ const QUESTS = [
   { id: 'bowler', name: 'Bowling ball', desc: 'Play a game of bowling', stat: 'bowls', goal: 1, coins: 50 },
   { id: 'striker', name: 'Striker', desc: 'Score 5 goals in ball soccer', stat: 'goals', goal: 5, coins: 60 },
   { id: 'treasure', name: 'Treasure hunter', desc: 'Find a hidden treasure chest', stat: 'hunts', goal: 1, coins: 80 },
+  { id: 'skyracer', name: 'Sky racer', desc: 'Finish the sky race above the Fun Park', stat: 'skyraces', goal: 1, coins: 60 },
+  { id: 'skyfast', name: 'Speed of light', desc: 'Finish the sky race in under 45 seconds', stat: 'skyFast', goal: 1, coins: 120 },
+  { id: 'angler', name: 'Angler', desc: 'Catch 5 fish at the fishing pier', stat: 'fish', goal: 5, coins: 50 },
+  { id: 'fishdex', name: 'Fish collector', desc: 'Catch 8 different kinds of fish', stat: 'fishKinds', goal: 8, coins: 150 },
+  { id: 'legend', name: 'Legend of the deep', desc: 'Catch a legendary fish', stat: 'legendFish', goal: 1, coins: 120 },
+  { id: 'tagger', name: 'Tag, you are it!', desc: 'Play 3 rounds in the game arena', stat: 'arenaRounds', goal: 3, coins: 50 },
+  { id: 'tagwin', name: 'Too fast to catch', desc: 'Win a round of tag', stat: 'tagWins', goal: 1, coins: 70 },
+  { id: 'hider', name: 'Master hider', desc: 'Win a round of hide and seek', stat: 'hideWins', goal: 1, coins: 70 },
   { id: 'chaser', name: 'Storm chaser', desc: 'Go on a storm chase', stat: 'chases', goal: 1, coins: 40 },
   { id: 'intercept', name: 'Intercept!', desc: 'Nail yourself down inside a tornado', stat: 'intercepts', goal: 1, coins: 150 },
   { id: 'night', name: 'Night owl', desc: 'Stay out for a whole night', stat: 'nights', goal: 1, coins: 30 },

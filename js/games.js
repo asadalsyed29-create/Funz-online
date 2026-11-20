@@ -23,7 +23,7 @@ class FunPark {
   // ---------- the deck and everything built on it ----------
   build(gl, st) {
     const mb = new MeshBuilder().collect(), C = h => hex(h), Y = this.Y, W = PARK.w, D = PARK.d, H = bh(mb);
-    const s = { key: 'park', items: [], lights: [], triggers: [], label: null, x: PARK.x, z: PARK.z, signs: [] };
+    const s = { key: 'park', items: [], lights: [], triggers: [], label: null, x: PARK.x, z: PARK.z, rad: 60, signs: [] };
     mb.push([PARK.x, 0, PARK.z]);
     // the deck, its sides down into the ground, and ramps up on every side
     mb.box(-W, Y - 0.6, -D, W, Y, D, C('#a4abb6'));

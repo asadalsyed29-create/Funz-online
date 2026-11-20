@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=5.5">
+<link rel="stylesheet" href="style.css?v=5.6">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -66,6 +66,8 @@
   <div id="clock"><span id="clockIc"></span><span id="clockT"></span><span id="placeT"></span></div>
   <div id="adminPanel" class="hidden"></div>
   <div id="toast" class="hidden"></div>
+  <div id="fishBar" class="hidden"><div class="fbTrack"><div class="fbZone"></div><div class="fbFish"></div></div><div class="fbProg"><i></i></div><div class="fbHint">Hold jump to push the green zone right. Keep the fish inside it!</div></div>
+  <div id="blind" class="hidden"><b>Counting…</b><span></span><em>No peeking! Everyone is hiding</em></div>
   <div id="banner" class="hidden"></div>
   <div id="effects" class="hidden"></div>
   <div id="emotes"></div>
@@ -100,29 +102,30 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
-<script>window.FUNZ_VERSION = '5.5';</script>
+<script>window.FUNZ_VERSION = '5.6';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js?v=5.5"></script>
-<script src="js/device.js?v=5.5"></script>
-<script src="js/gl.js?v=5.5"></script>
+<script src="js/icons.js?v=5.6"></script>
+<script src="js/device.js?v=5.6"></script>
+<script src="js/gl.js?v=5.6"></script>
 <script src="js/lib/three.min.js?v=r147"></script>
 <script src="js/lib/three-post.js?v=r147"></script>
-<script src="js/textures.js?v=5.5"></script>
-<script src="js/gl3.js?v=5.5"></script>
-<script src="js/terrain.js?v=5.5"></script>
-<script src="js/structures.js?v=5.5"></script>
-<script src="js/buildings.js?v=5.5"></script>
-<script src="js/sky.js?v=5.5"></script>
-<script src="js/realms.js?v=5.5"></script>
-<script src="js/parts.js?v=5.5"></script>
-<script src="js/custom.js?v=5.5"></script>
-<script src="js/models.js?v=5.5"></script>
-<script src="js/fx.js?v=5.5"></script>
-<script src="js/sound.js?v=5.5"></script>
-<script src="js/chase.js?v=5.5"></script>
-<script src="js/games.js?v=5.5"></script>
-<script src="js/game.js?v=5.5"></script>
-<script src="js/net.js?v=5.5"></script>
-<script src="js/app.js?v=5.5"></script>
+<script src="js/textures.js?v=5.6"></script>
+<script src="js/gl3.js?v=5.6"></script>
+<script src="js/terrain.js?v=5.6"></script>
+<script src="js/structures.js?v=5.6"></script>
+<script src="js/buildings.js?v=5.6"></script>
+<script src="js/sky.js?v=5.6"></script>
+<script src="js/realms.js?v=5.6"></script>
+<script src="js/parts.js?v=5.6"></script>
+<script src="js/custom.js?v=5.6"></script>
+<script src="js/models.js?v=5.6"></script>
+<script src="js/fx.js?v=5.6"></script>
+<script src="js/sound.js?v=5.6"></script>
+<script src="js/chase.js?v=5.6"></script>
+<script src="js/games.js?v=5.6"></script>
+<script src="js/games2.js?v=5.6"></script>
+<script src="js/game.js?v=5.6"></script>
+<script src="js/net.js?v=5.6"></script>
+<script src="js/app.js?v=5.6"></script>
 </body>
 </html>

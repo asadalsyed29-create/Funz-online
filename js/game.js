@@ -28,6 +28,9 @@ class Game {
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
     this.landmarks = buildLandmarks(this.gfx, this.St);
     this.park = new FunPark(this); this.landmarks.push(this.park.build(this.gfx, this.St));
+    this.sky = new SkyRace(this, this.park); this.landmarks.push(this.sky.build(this.gfx, this.St));
+    this.pier = new FishingPier(this); this.landmarks.push(this.pier.build(this.gfx, this.St));
+    this.arena = new GameArena(this); this.landmarks.push(this.arena.build(this.gfx, this.St));
     // sky islands, cannons, and the portals to the special worlds
     this.cannons = []; this.cannonM = cannonModel(this.gfx); // the cannon to the sky islands comes with the sky world
     this.realms = {}; this.realm = null;
@@ -164,7 +167,7 @@ class Game {
       b.p[0] = Math.max(-LIMIT, Math.min(LIMIT, b.p[0])); b.p[2] = Math.max(-LIMIT, Math.min(LIMIT, b.p[2])); b.p[1] = Math.min(b.p[1], 600);
       this.roll(b, dt); b.grounded = false; return;
     }
-    const gd = opts.g || new Set(), maxS = 8 * (opts.fast ? 1.7 : 1) * (gd.has('jets') ? 1.45 : 1), acc = (b.grounded ? 28 : 11) * (gd.has('jets') ? 1.3 : 1);
+    const gd = opts.g || new Set(), maxS = 8 * (opts.fast ? 1.7 : 1) * (gd.has('jets') ? 1.45 : 1) * (opts.slow || 1), acc = (b.grounded ? 28 : 11) * (gd.has('jets') ? 1.3 : 1);
     // on the ground, push along the slope (so hills can be climbed) instead of into it
     let ax = input.x, ay = 0, az = input.z;
     if (b.grounded && b.gn && (ax || az)) {
@@ -588,7 +591,7 @@ class Game {
         if (!inSt) { G.tex(0); G.fog(1 / 2600); G.draw(s.beam); }
         G.tex(4);
         G.fog();
-      } else if (vis(s.x, s.z, s.far || far + 80)) { if (s.far) G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.mesh); if (s.far) G.fog(); }
+      } else if (vis(s.x, s.z, s.far || far + 80, s.rad || 30)) { if (s.far) G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.mesh); if (s.far) G.fog(); }
     }
     if (!this.under) for (const s of this.St.list.values()) if (s && vis(s.x, s.z, far, 40)) G.draw(s.mesh);
     if (!this.under) {
@@ -632,6 +635,9 @@ class Game {
     if (!this.under && o.dark < 0.5) for (const b of this.birds) { const a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
     if (o.chase) o.chase.draw(G, t, me);
     if (this.park && vis(PARK.x, PARK.z, far + 80)) this.park.draw(G, t, me);
+    if (this.sky && !this.under) this.sky.draw(G, t, me);
+    if (this.pier) this.pier.draw(G, t, me);
+    if (this.arena) this.arena.draw(G, t, players);
     this.stat('creatures');
     // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
     const clear = [];
@@ -690,6 +696,7 @@ class Game {
     if (RL && RL.lake) G.draw(RL.lake, null, 1, null, 0.8);
     for (const pc of this.partChunks.values()) G.draw(pc.clear);
     for (const [M, sk, A, B] of clear) G.ball(M, sk, A, B);
+    if (this.sky && !this.under) { this.sky.drawClear(G, t, me); G.mat(0, 0.1, 0.3); }
     if (o.cursor) G.draw(this.cursorM, M4.model(o.cursor.cell), 1, o.cursor.ok ? [1, 1, 1] : [1, 0.3, 0.3], 1);
     // particles
     if (o.dt && this.rain > 0.02 && !this.under && !inSt) { const n = Math.floor(this.rain * 180 * o.dt + Math.random()); for (let q = 0; q < n; q++) { const a = Math.random() * 6.283, d = 1 + Math.random() * 18; this.fx.emit([c.target[0] + Math.cos(a) * d, c.target[1] + 9 + Math.random() * 4, c.target[2] + Math.sin(a) * d], { v: [-1.2, -24, -0.4], life: 0.7, size: 0.16, col: [0.78, 0.84, 0.95], a: 0.55, shape: 9, drag: 0 }); } }
@@ -708,7 +715,7 @@ class Game {
   drawOverlay(players, me, o) {
     const g = this.o; g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); g.clearRect(0, 0, this.w, this.h); g.textAlign = 'center';
     const labels = [];
-    for (const p of players) { const s = this.project(p.p[0], p.p[1] + (p.r || 0.45) + 0.6 + (p.hat && p.hat !== 'none' ? 0.4 : 0), p.p[2]); if (s && s[2] < 70) labels.push([s, p]); }
+    for (const p of players) { if (p.hideLabel) continue; const s = this.project(p.p[0], p.p[1] + (p.r || 0.45) + 0.6 + (p.hat && p.hat !== 'none' ? 0.4 : 0), p.p[2]); if (s && s[2] < 70) labels.push([s, p]); }
     labels.sort((a, b) => b[0][2] - a[0][2]);
     for (const [s, p] of labels) this.label(g, s[0], s[1], p, o.now, s[2]);
     const sign = (x, y, z, text, col, maxD = 50) => { const s = this.project(x, y, z); if (!s || s[2] > maxD) return; g.font = '700 13px system-ui'; const w = g.measureText(text).width + 18; g.globalAlpha = Math.min(1, (maxD - s[2]) / 10); g.fillStyle = 'rgba(10,16,34,.72)'; this.rr(g, s[0] - w / 2, s[1] - 12, w, 22, 8); g.fill(); g.fillStyle = col; g.fillText(text, s[0], s[1] + 4); g.globalAlpha = 1; };
@@ -767,6 +774,8 @@ class Game {
     for (const pt of this.portals) out.push({ x: pt.p[0], z: pt.p[2], key: 'portal:' + pt.kind, kind: 'portal', name: pt.label, col: pt.col, always: true });
     out.push({ x: 44, z: 38, key: 'parkour', kind: 'parkour', name: 'Parkour', col: '#ff9f5a', always: true });
     out.push({ x: PARK.x, z: PARK.z, key: 'funpark', kind: 'park', name: 'Fun Park', col: '#7aff9a', always: true });
+    out.push({ x: PIER.end[0] + 30, z: 0, key: 'pier', kind: 'pier', name: 'Fishing pier', col: '#5ab8ff', always: true });
+    out.push({ x: ARENA.x, z: ARENA.z, key: 'arena', kind: 'arena', name: 'Game arena', col: '#ff5ad8', always: true });
     return out;
   }
   // the owner ship; open (0..1) swings the glass canopy up on its hinge
@@ -781,6 +790,7 @@ class Game {
   }
   label(g, x, y, p, now, dist) {
     const sc = Math.max(0.7, Math.min(1.1, 14 / dist)); g.save(); g.translate(x, y); g.scale(sc, sc);
+    if (p.badge) { g.font = '800 11px system-ui'; const bw = g.measureText(p.badge.t).width + 14; g.fillStyle = p.badge.c; this.rr(g, -bw / 2, -30, bw, 17, 7); g.fill(); g.fillStyle = '#fff'; g.fillText(p.badge.t, 0, -18); }
     g.font = '600 12px system-ui'; const tag = p.name, sw = p.admin ? 14 : 0, w = g.measureText(tag).width + 26 + sw;
     g.fillStyle = p.admin ? 'rgba(120,80,0,.75)' : 'rgba(0,0,0,.5)'; this.rr(g, -w / 2, -9, w, 18, 7); g.fill();
     g.fillStyle = p.admin ? '#ffd27a' : '#fff'; g.fillText(tag, -7 + sw / 2, 4); if (sw) drawStar(g, -w / 2 + 11, 0, 5.5, '#ffd27a');

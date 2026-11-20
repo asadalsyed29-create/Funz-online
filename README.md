@@ -14,6 +14,7 @@ Explore a big world and hang out with your friends. Open the link, install the a
 - **Structures to discover**: ruins, stone circles, villages, watchtowers, giant trees, cabins, pyramids, crashed pods, igloos, frozen towers, swamp huts, crystal arches, mushroom rings, shipwrecks and lighthouses.
 - **Creatures**: animated hoppers, antlerbucks, foxes, sand crabs, beach turtles, sun lizards, snowpuffs, bog blobs, frogs, cliff goats, glowmoths, butterflies, fish and birds. They walk, hop, flap, wag their tails, blink and run off if you come close.
 - **Things to do**: collect items for your inventory (and use them for powers), race through 12 rings, and beat the parkour climb with checkpoints.
+- **Minigames**: storm chasing, the Fun Park (ball soccer, mini golf, bowling, treasure hunts), the **sky race** (a glowing track 140 m up with boost pads, jumps, sweepers, bumpers and a ghost of your best run), the **fishing pier** on the west beach (10 kinds of fish plus junk, from common to legendary) and the **game arena** (tag and hide and seek with friends, and bots fill in when there aren't enough players).
 - **Chat and emotes**, with bubbles over players' heads.
 - **Device detection**: phones and tablets get a joystick and buttons (landscape mode only), and computers get WASD and the mouse.
 - **An app**: in a browser tab the link shows an install button (or the Add to Home Screen steps on iPhone and iPad), and you play in the installed app.
