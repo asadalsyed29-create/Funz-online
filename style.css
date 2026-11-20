@@ -210,10 +210,10 @@ body.touch #banner .t2{font-size:22px}
 .wGrid button.ogad.on{background:linear-gradient(135deg,rgba(168,216,255,.35),rgba(205,180,255,.35))}
 
 /* the browser version: install the app to play */
-#gate{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;
+#gate{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;
   background:radial-gradient(120% 90% at 50% 0%,#1d3b6a 0%,#0c1630 55%,#070c1c 100%)}
 #gate.hidden{display:none}
-.gBox{width:100%;max-width:380px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+.gBox{margin:auto 0;width:100%;max-width:380px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
 .gLogo{width:96px;height:96px;border-radius:24px;box-shadow:0 12px 40px rgba(72,214,172,.45)}
 #gate h1{margin:4px 0 0;font-size:32px}
 .gSub{margin:0;opacity:.85;font-size:15px;line-height:1.4}

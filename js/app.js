@@ -246,21 +246,35 @@
   const ios = Device.os === 'iPhone' || Device.os === 'iPad', P0 = new URLSearchParams(location.search);
   const gate = !Device.standalone && location.protocol === 'https:' && !P0.has('debug') && !P0.has('browser') && (() => { try { return sessionStorage.getItem('funz.browser') !== '1'; } catch (e) { return true; } })();
   const gateMsg = t => { $('gateMsg').textContent = t; };
+  // when the browser can't pop up its own install window, show how to install from its menu instead
+  const installSteps = () => {
+    const ua = navigator.userAgent, pc = Device.type === 'computer';
+    if (/FBAN|FBAV|Instagram|Discord|Snapchat|TikTok|Line\/|; wv\)/i.test(ua)) return ['This page is open inside another app, which can\'t install apps.', 'Open the menu and pick <b>Open in browser</b> (or copy the link into Chrome).', 'Then tap <b>Install Funz Online</b> again.'];
+    if (/SamsungBrowser/i.test(ua)) return ['Tap the menu <b>(three lines)</b> at the bottom.', 'Tap <b>Add page to</b>, then <b>Home screen</b>.', 'Open <b>Funz Online</b> from your home screen.'];
+    if (/Firefox|FxiOS/i.test(ua)) return pc ? ['Firefox on computers can\'t install apps.', 'Open this page in <b>Chrome</b> or <b>Edge</b> to install it,', 'or play in the browser for now.'] : ['Tap the menu <b>(three dots)</b>.', 'Tap <b>Install</b> or <b>Add to Home screen</b>.', 'Open <b>Funz Online</b> from your home screen.'];
+    if (/Edg\//i.test(ua)) return pc ? ['Click the menu <b>(three dots)</b> at the top right.', 'Go to <b>Apps</b>, then <b>Install this site as an app</b>.', 'Open <b>Funz Online</b> from your apps.'] : ['Tap the menu <b>(three dots)</b> at the bottom.', 'Tap <b>Add to phone</b>.', 'Open <b>Funz Online</b> from your home screen.'];
+    if (/OPR|Opera/i.test(ua)) return ['Open the browser menu.', 'Tap <b>Add to Home screen</b> (or <b>Home screen</b>).', 'Open <b>Funz Online</b> from your home screen.'];
+    return pc ? ['Click the install icon at the right end of the address bar (a little screen with an arrow), or open the menu <b>(three dots)</b>.', 'Pick <b>Install Funz Online</b> (it might be under <b>Cast, save and share</b>).', 'Open <b>Funz Online</b> from your apps.']
+      : ['Tap the menu <b>(three dots)</b> at the top right.', 'Tap <b>Add to Home screen</b> or <b>Install app</b>, then <b>Install</b>.', 'Open <b>Funz Online</b> from your home screen.'];
+  };
+  const showSteps = () => { const ol = $('gateSteps'); ol.innerHTML = installSteps().map(t => '<li>' + t + '</li>').join(''); ol.classList.remove('hidden'); $('gateBrowser').classList.remove('hidden'); gateMsg(''); };
   if (gate) {
     $('gate').classList.remove('hidden');
     if (ios) { $('gateInstall').classList.add('hidden'); $('gateIos').classList.remove('hidden'); gateMsg(''); }
-    setTimeout(() => { if (!installEvt && !ios) { gateMsg('Already installed? Open Funz Online from your apps!'); $('gateBrowser').classList.remove('hidden'); } }, 4000);
-    if (ios) setTimeout(() => $('gateBrowser').classList.remove('hidden'), 6000);
+    else gateMsg('');
+    setTimeout(() => { if (!installEvt) $('gateBrowser').classList.remove('hidden'); }, ios ? 6000 : 3000);
   }
   $('gateBrowser').onclick = () => { try { sessionStorage.setItem('funz.browser', '1'); } catch (e) {} $('gate').classList.add('hidden'); };
-  $('gateInstall').onclick = async () => {
-    if (!installEvt) return;
-    installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; $('gateInstall').disabled = true;
-    gateMsg(r && r.outcome === 'accepted' ? 'Installing! Open Funz Online from your apps to play!' : 'No problem! Tap install whenever you are ready.');
+  const doInstall = async () => {
+    if (!installEvt) { showSteps(); return false; }
+    const ev = installEvt; installEvt = null;
+    try { ev.prompt(); const r = await ev.userChoice; if (r && r.outcome === 'accepted') { gateMsg('Installing! Open Funz Online from your apps to play!'); return true; } } catch (e) { showSteps(); return false; }
+    gateMsg('No problem! Tap install whenever you are ready.'); return false;
   };
-  addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!Device.standalone) $('installBtn').classList.remove('hidden'); $('gateInstall').disabled = false; gateMsg(''); $('gateBrowser').classList.add('hidden'); });
-  $('installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('installBtn').classList.add('hidden'); };
-  addEventListener('appinstalled', () => { $('installBtn').classList.add('hidden'); $('gateInstall').disabled = true; gateMsg('Installed! Open Funz Online from your apps to play!'); });
+  $('gateInstall').onclick = () => doInstall();
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!Device.standalone) $('installBtn').classList.remove('hidden'); $('gateSteps').classList.add('hidden'); gateMsg(''); });
+  $('installBtn').onclick = async () => { if (await doInstall()) $('installBtn').classList.add('hidden'); };
+  addEventListener('appinstalled', () => { installEvt = null; $('installBtn').classList.add('hidden'); $('gateSteps').classList.add('hidden'); gateMsg('Installed! Open Funz Online from your apps to play!'); });
   if ((Device.os === 'iPhone' || Device.os === 'iPad') && !Device.standalone) $('iosHint').classList.remove('hidden');
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
