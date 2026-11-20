@@ -532,3 +532,5 @@ const hex = (h, a = 1) => { const n = parseInt(h.slice(1), 16); return [(n >> 16
 const shadeC = (c, k) => [c[0] * k, c[1] * k, c[2] * k, c[3] ?? 1];
 const mixC = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] ?? 1];
 const glowC = c => [c[0], c[1], c[2], 0.9];
+const smoothC = c => [c[0], c[1], c[2], 0.995]; // no painted texture on this part (mushroom caps, cactus skin, fruit)
+const rockC = c => [c[0], c[1], c[2], 0.991]; // painted with the rock texture even on buildings

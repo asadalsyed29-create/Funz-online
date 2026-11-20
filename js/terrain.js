@@ -410,7 +410,7 @@ function palm(mb, x, y, z, s, rot) {
   for (let k = 0; k < 4; k++) mb.sph([px + Math.cos(k * 1.6) * 0.28 * s, py - 0.32 * s, pz + Math.sin(k * 1.6) * 0.28 * s], 0.2 * s, 7, hex(k % 2 ? '#6a4a22' : '#7a5a2a'), 0.2);
 }
 function cactus(mb, x, y, z, s, rot, r2 = 0.5) {
-  const g = hex('#4f9a4a'), ribs = (t, ph) => shadeC(g, 0.84 + 0.16 * Math.cos(ph * 8)), spine = hex('#f4eccc'), ax = Math.cos(rot), az = Math.sin(rot);
+  const g = smoothC(hex('#4f9a4a')), ribs = (t, ph) => smoothC(shadeC(g, 0.84 + 0.16 * Math.cos(ph * 8))), spine = hex('#f4eccc'), ax = Math.cos(rot), az = Math.sin(rot);
   const dots = (cx, cy, cz, rad, hgt, n) => { if (mb.lod) return; for (let k = 0; k < n; k++) { const a = k * 2.39996, yy = cy + (k / n) * hgt; mb.sph([cx + Math.cos(a) * rad * 1.02, yy, cz + Math.sin(a) * rad * 1.02], 0.025, 3, spine, 0); } };
   if (r2 < 0.22) { // a round barrel cactus with a crown of flowers
     mb.push([x, y - 0.15, z]); mb.lathe([[0.55 * s, 0], [0.68 * s, 0.4 * s], [0.62 * s, 0.85 * s], [0.35 * s, 1.1 * s], [0, 1.15 * s]], 12, ribs, 0.1); mb.pop();
@@ -467,7 +467,7 @@ function deadTree(mb, x, y, z, s, rot) {
 function reeds(mb, x, y, z, r) { const g = hex('#7a8a3a'), b = hex('#6a4a2a'); for (let k = 0; k < 5; k++) { const px = x + Math.cos(k * 1.3 + r * 9) * 0.45, pz = z + Math.sin(k * 1.3 + r * 9) * 0.45, h = 1.3 + (k % 3) * 0.3; mb.cyl(px, y - 0.3, pz, 0.04, 0.025, h, 3, g, false); if (k % 2 === 0) mb.cyl(px, y + h - 0.6, pz, 0.08, 0.07, 0.4, 5, b); } }
 function lily(mb, x, z, r = 0.5) { mb.cyl(x, SEA - 0.05, z, 0.65, 0.65, 0.05, 9, hex('#4f9a4a')); if (r > 0.4) { const fx = x + 0.2; for (let q = 0; q < 6; q++) { const b = q / 6 * 6.283; mb.tri([fx, SEA + 0.05, z], [fx + Math.cos(b - 0.4) * 0.2, SEA + 0.22, z + Math.sin(b - 0.4) * 0.2], [fx + Math.cos(b + 0.4) * 0.2, SEA + 0.22, z + Math.sin(b + 0.4) * 0.2], hex('#ffb3d1'), true); } mb.ico(fx, SEA + 0.12, z, 0.06, 0, () => hex('#ffe066')); } }
 function giantShroom(mb, x, y, z, s, r) {
-  const cap = hex(r > 0.5 ? '#c05ae0' : '#5a7ae0'), capHi = mixC(cap, [1, 0.9, 1, 1], 0.35);
+  const cap = smoothC(hex(r > 0.5 ? '#c05ae0' : '#5a7ae0')), capHi = smoothC(mixC(cap, [1, 0.9, 1, 1], 0.35));
   mb.push([x, y - 0.4, z]); mb.lathe([[0.55 * s, 0], [0.42 * s, 0.4 * s], [0.34 * s, 2.5 * s], [0.4 * s, 3.9 * s], [0, 4 * s]], 10, (t) => mixC(hex('#efe6f8'), hex('#d8c8f0'), t), 0.15);
   // glowing gills under the cap, then the round cap
   mb.lathe([[0, 3.95 * s], [1.2 * s, 3.85 * s], [2.45 * s, 3.62 * s]], 16, glowC(mixC(cap, [1, 1, 0.8, 1], 0.5)), 0);

@@ -126,302 +126,339 @@ function boatHull(mb, Lh, W, Hh, upTo = 1) {
   return S;
 }
 
+// extra building pieces used by the structures below
+function bx(mb) {
+  const C = h => (typeof h === 'string' ? hex(h) : h);
+  const X = {
+    // a walkable ramp (planks across) along a list of points, with rope rails if asked
+    ramp(pts, w, col, rails, edge) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1, r = [-dz / l * w / 2, dx / l * w / 2];
+        const L = (p, k, dy = 0) => [p[0] + r[0] * k, p[1] + dy, p[2] + r[1] * k];
+        mb.quad(L(a, -1), L(a, 1), L(b, 1), L(b, -1), C(col)); mb.quad(L(b, -1, -0.25), L(b, 1, -0.25), L(a, 1, -0.25), L(a, -1, -0.25), shadeC(C(col), 0.6));
+        const n = Math.max(1, Math.round(l / 0.5)); for (let k = 1; k < n; k++) { const t = k / n, p = [a[0] + dx * t, a[1] + (b[1] - a[1]) * t, a[2] + dz * t]; mb.quad(L(p, -1, 0.01), L(p, 1, 0.01), L([p[0] + dx / l * 0.05, p[1], p[2] + dz / l * 0.05], 1, 0.01), L([p[0] + dx / l * 0.05, p[1], p[2] + dz / l * 0.05], -1, 0.01), shadeC(C(col), 0.7), true); }
+        if (rails) for (const k of [-1, 1]) { mb.caps(L(a, k, 0.9), L(b, k, 0.9), 0.04, 0.04, 4, C(edge || '#d8c8a0')); for (let q = 0; q <= n; q += 2) { const t = q / n, p = [a[0] + dx * t, a[1] + (b[1] - a[1]) * t, a[2] + dz * t]; mb.box(L(p, k)[0] - 0.05, p[1], L(p, k)[2] - 0.05, L(p, k)[0] + 0.05, p[1] + 0.95, L(p, k)[2] + 0.05, C('#6a4a2a')); } }
+      }
+    },
+    // a wall from (x0,z0) to (x1,z1) whose top follows h(t) (0..1 along the wall) - jagged when broken, with merlons where it is whole
+    wall(x0, z0, x1, z1, th, h, col, merl, gap) {
+      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 0.9)), a = Math.atan2(z1 - z0, x1 - x0);
+      mb.push([x0, 0, z0], M4.rotY(-a));
+      for (let k = 0; k < n; k++) { const t0 = k / n, t1 = (k + 1) / n, hh = h((t0 + t1) / 2); if (hh <= 0.05 || (gap && gap((t0 + t1) / 2))) continue; const c = shadeC(C(col), 0.9 + ((k * 7) % 5) * 0.03);
+        mb.box(t0 * L, -0.5, -th / 2, t1 * L + 0.01, hh, th / 2, c);
+        for (let r = 1; r < hh / 0.55; r++) mb.box(t0 * L, r * 0.55 - 0.03, -th / 2 - 0.02, t1 * L, r * 0.55 + 0.03, th / 2 + 0.02, shadeC(c, 0.78), true, true);
+        if (merl && hh >= merl - 0.01 && k % 2 === 0) mb.box(t0 * L, hh, -th / 2, t1 * L, hh + 0.75, th / 2, c); }
+      mb.pop();
+    },
+    // a round stone tower with block rings, arrow slits and a crenellated top (or a broken one)
+    rtower(x, z, r, h, col, broken, rnd, k0 = 0) {
+      for (let k = 0; k < Math.ceil(h / 0.6); k++) { const y = k * 0.6, top = Math.min(h, y + 0.6); mb.cyl(x, y - (k ? 0 : 0.6), z, r, r, top - y + (k ? 0 : 0.6), 12, shadeC(C(col), k % 2 ? 0.92 : 1.0), true, k % 2 ? 0.26 : 0); }
+      for (let k = 0; k < 3; k++) { const a = k * 2.1 + k0, y = 1.6 + k * 2.2; if (y > h - 1) break; mb.push([x + Math.cos(a) * r, y, z + Math.sin(a) * r], M4.rotY(-a)); mb.box(-0.05, -0.5, -0.09, 0.05, 0.5, 0.09, C('#221e1a'), true, true); mb.pop(); }
+      if (!broken) { mb.cyl(x, h, z, r + 0.3, r + 0.3, 0.4, 12, shadeC(C(col), 0.85)); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; mb.push([x + Math.cos(a) * (r + 0.05), h + 0.4, z + Math.sin(a) * (r + 0.05)], M4.rotY(-a)); mb.box(-0.3, 0, -0.4, 0.3, 0.8, 0.4, C(col)); mb.pop(); } }
+      else for (let k = 0; k < 7; k++) { const a = k / 7 * 6.283 + k0; mb.push([x + Math.cos(a) * r * 0.82, h, z + Math.sin(a) * r * 0.82], M4.rotY(-a)); mb.box(-0.35, 0, -0.45, 0.35, 0.3 + rnd(k0 * 9 + k) * 1.4, 0.45, C(col)); mb.pop(); }
+    },
+    // a stone arch (half ring of wedge blocks) in the x-y plane at depth z
+    arch(cx, cy, z0, z1, R, w, col, n = 9) { for (let k = 0; k < n; k++) { const a0 = k / n * Math.PI, a1 = (k + 1) / n * Math.PI, P = (a, rr, z) => [cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, z], c = shadeC(C(col), k % 2 ? 0.9 : 1.02);
+      mb.quad(P(a0, R + w, z1), P(a1, R + w, z1), P(a1, R, z1), P(a0, R, z1), c); mb.quad(P(a1, R + w, z0), P(a0, R + w, z0), P(a0, R, z0), P(a1, R, z0), c);
+      mb.quad(P(a0, R + w, z0), P(a1, R + w, z0), P(a1, R + w, z1), P(a0, R + w, z1), shadeC(c, 0.9)); mb.quad(P(a0, R, z1), P(a1, R, z1), P(a1, R, z0), P(a0, R, z0), shadeC(c, 0.75)); } },
+    // a four-sided pointed roof over a square
+    pyroof(x, y, z, hw, h, col, o = 0.3) { const T = [x, y + h, z], P = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [x + a * (hw + o), y, z + b * (hw + o)]); for (let k = 0; k < 4; k++) mb.tri(P[k], T, P[(k + 1) % 4], shadeC(C(col), [0.85, 0.95, 1.0, 0.8][k])); mb.quad(P[3], P[2], P[1], P[0], shadeC(C(col), 0.6)); },
+    // a cone roof with shingle rings
+    cone(x, y, z, r, h, col, seg = 12) { mb.cyl(x, y, z, r, 0, h, seg, C(col)); for (let k = 1; k < 4; k++) { const t = k / 4; mb.cyl(x, y + h * t - 0.06, z, r * (1 - t) + 0.04, r * (1 - t) + 0.04, 0.08, seg, shadeC(C(col), 0.75), false); } },
+    // a simple palm
+    palm(x, z, h, lean) { const pts = []; for (let k = 0; k <= 5; k++) { const t = k / 5; pts.push([x + lean * t * t, h * t, z]); } MB.tube(mb, pts, t => 0.3 - t * 0.12, 6, hex('#9a7a4a')); const [px, py, pz] = pts[5]; for (let k = 0; k < 7; k++) { const a = k / 7 * 6.283, e = [px + Math.cos(a) * 2.6, py - 0.9, pz + Math.sin(a) * 2.6], m = [px + Math.cos(a) * 1.4, py + 0.4, pz + Math.sin(a) * 1.4], s = [-Math.sin(a) * 0.4, 0, Math.cos(a) * 0.4]; mb.tri2([px, py, pz], [m[0] + s[0], m[1], m[2] + s[2]], e, hex('#4f9a44')); mb.tri2([px, py, pz], e, [m[0] - s[0], m[1], m[2] - s[2]], hex('#3f8a3e')); } for (let k = 0; k < 3; k++) mb.sph([px + Math.cos(k * 2) * 0.35, py - 0.3, pz + Math.sin(k * 2) * 0.35], 0.2, 6, hex('#7a5a2a'), 0); },
+  };
+  return X;
+}
+
 function buildStructure(mb, p, s, item, L, rnd) {
-  const H = bh(mb), C = h => hex(h);
+  const H = bh(mb), X = bx(mb), C = h => hex(h);
   switch (p.type) {
-    case 'ruins': { // an old temple: a stepped platform with cracked tiles, fluted columns (some broken), a carved gateway, vines, a fallen statue and an altar
-      const desert = p.b === 4, c = desert ? BC.sand : BC.stone, cd = desert ? BC.sandD : BC.stoneD, cl = desert ? '#efd8a8' : BC.stoneL;
-      H.box(-8, -1, -8, 8, 0.4, 8, cd); H.box(-6.5, 0.4, -6.5, 6.5, 0.9, 6.5, c);
-      for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) { const x = -6 + i * 2, z = -6 + j * 2, cr = rnd(i * 7 + j) < 0.18; if (rnd(i * 13 + j + 3) < 0.08) continue; H.deco(x + 0.05, 0.9, z + 0.05, x + 1.95, 0.95 + (cr ? 0.08 : 0), z + 1.95, shadeC(C(cl), 0.88 + rnd(i + j * 6) * 0.16)); }
-      H.stairs(0, -8, 4, 2, 0.45, 0.6, c); for (const sx of [-1, 1]) H.box(sx * 2.4 - 0.4, -0.4, -9.2, sx * 2.4 + 0.4, 1.4, -8, cd);
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + 0.39, x = Math.cos(a) * 5.4, z = Math.sin(a) * 5.4, br = rnd(k) < 0.45; mb.push([0, 0.9, 0]); H.column(x, z, br ? 1.5 + rnd(k + 9) * 2 : 5.2, 0.42, c, br); mb.pop();
-        if (br) { mb.push([x + Math.cos(a) * 1.6, 1.25, z + Math.sin(a) * 1.6], M4.mul3(M4.rotY(-a + 1), M4.rotZ(Math.PI / 2))); mb.cyl(0, -0.5, 0, 0.4, 0.4, 1.0, 12, C(c)); mb.pop(); } }
-      // the gateway lintel with a carved band and a glowing rune
-      mb.push([0, 0.9, 0]); H.box(-5.8, 5.2, -0.6, 5.8, 6.0, 0.6, c); H.box(-6, 6, -0.7, -1, 6.4, 0.7, cd);
-      for (let k = 0; k < 9; k++) H.deco(-5.4 + k * 1.3, 5.45, 0.6, -5.0 + k * 1.3, 5.75, 0.66, cd);
-      mb.ico(0, 5.6, 0.68, [0.25, 0.25, 0.05], 0, () => glowC(C('#7ae8ff'))); H.vines(-5.6, 0.62, 5.6, 0.62, 5.2, 9, rnd, 70); mb.pop();
-      for (let k = 0; k < 6; k++) { const a = rnd(k + 30) * 6.28, d = 8 + rnd(k + 31) * 3; H.box(Math.cos(a) * d - 0.4, -0.2, Math.sin(a) * d - 0.3, Math.cos(a) * d + 0.4, 0.4, Math.sin(a) * d + 0.3, cd); }
-      // a fallen statue head and a little altar with a fire bowl
-      mb.ico(6.5, 0.9, 9, [1.1, 1.0, 1.0], 1, (x, y) => shadeC(C(cl), 0.85 + y * 0.1)); mb.ico(7.35, 1.1, 9.2, [0.25, 0.4, 0.3], 0, () => C(cl)); for (const dz of [-0.35, 0.35]) mb.ico(7.25, 1.3, 9 + dz, [0.12, 0.08, 0.12], 0, () => C(cd));
-      H.box(-1, 0.9, 1.5, 1, 1.9, 2.6, cd); mb.cyl(0, 1.9, 2.05, 0.55, 0.4, 0.3, 8, C(BC.metalD)); mb.ico(0, 2.35, 2.05, 0.3, 0, () => glowC(C('#ffb347')));
-      if (!desert) for (let k = 0; k < 7; k++) H.deco(-6 + k * 1.9, 0.9, 3.5 + rnd(k) * 2.5, -5 + k * 1.9, 0.99, 4.5 + rnd(k) * 2.5, BC.moss);
-      H.torch(-2.4, -6.6); H.torch(2.4, -6.6); s.lights.push({ p: L(0, 2.4, -6.6), r: 9, c: [1, 0.7, 0.35] }, { p: L(0, 2.8, 2.05), r: 7, c: [1, 0.7, 0.35] });
-      item('coin', 0, 1.6, 0); item(desert ? 'gem' : 'relic', 4, 1.6, 3); break;
+    case 'ruins': { // castle ruins: crumbling curtain walls with a gate arch, four round towers (two broken), a wall walk you can climb to, a tree in the courtyard
+      const desert = p.b === 4, c = desert ? '#d8b878' : '#a29d93', cd = desert ? BC.sandD : '#7d786f';
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) if (rnd(i * 5 + j) > 0.3) H.deco(-8 + i * 3.3, -0.05, -8 + j * 3.3, -5.4 + i * 3.3, 0.06, -5.4 + j * 3.3, shadeC(C(cd), 0.9 + rnd(i + j * 7) * 0.15));
+      X.wall(-9, -9, 9, -9, 1.4, t => 6, c, 6);                                   // the back wall stands tall
+      X.wall(-9, 9, -9, -9, 1.4, t => 1.2 + t * 4.8 * (0.7 + 0.3 * Math.sin(t * 20)), c, 6); // the left wall crumbles away
+      X.wall(9, -9, 9, 9, 1.4, t => t > 0.35 && t < 0.62 ? 0 : 5 - Math.abs(Math.sin(t * 9)) * 1.6, c, 0);
+      X.wall(-9, 9, 9, 9, 1.4, t => 5, c, 5, t => Math.abs(t - 0.5) < 0.13); // front wall with the gate
+      X.arch(0, 3.2, 8.3, 9.7, 2.1, 0.8, c); mb.box(-2.9, 3.2, 8.3, -2.1, 5.0, 9.7, C(c)); mb.box(2.1, 3.2, 8.3, 2.9, 5.0, 9.7, C(c)); mb.box(-2.9, 5.0, 8.3, 2.9, 6.0, 9.7, C(c));
+      for (let k = 0; k < 7; k++) H.deco(-1.8 + k * 0.6, 3.6, 8.9, -1.72 + k * 0.6, 5.2, 9.0, BC.metalD); for (let k = 0; k < 3; k++) H.deco(-2, 3.8 + k * 0.5, 8.86, 2, 3.88 + k * 0.5, 9.04, BC.metalD); // the portcullis, stuck half open
+      X.rtower(-9, -9, 2.4, 9, c, false, rnd, 0); X.rtower(9, -9, 2.4, 4.5, c, true, rnd, 1); X.rtower(-9, 9, 2.4, 7, c, false, rnd, 2); X.rtower(9, 9, 2.4, 2, c, true, rnd, 3);
+      X.cone(-9, 9.4, -9, 3.0, 3.5, desert ? '#c87a3a' : '#5a6a8a');
+      // a ramp up to the wall walk on the back wall
+      X.ramp([[7.5, 0, -6.2], [-3, 6, -6.2]], 1.8, cd, true); H.box(-8, 5.6, -8.3, 8, 6.05, -6.2, cd);
+      for (let k = 0; k < 4; k++) { const x = 6 - k * 3.2; H.flatBox(x - 0.15, -0.5, -6.3, x + 0.15, k * 1.6 + 0.5, -6.0, BC.woodD); }
+      mb.push([14, 1.6, 2], M4.mul3(M4.rotY(0.4), M4.rotZ(Math.PI / 2))); mb.cyl(0, -2.4, 0, 2.2, 2.2, 4.8, 12, C(c)); mb.pop(); // a fallen tower chunk
+      for (let k = 0; k < 9; k++) { const a = rnd(k + 40) * 6.28, d = 10.5 + rnd(k + 41) * 4; mb.ico(Math.cos(a) * d, 0.2, Math.sin(a) * d, [0.6 + rnd(k) * 0.6, 0.45, 0.6], 0, () => shadeC(C(c), 0.85 + rnd(k + 3) * 0.2)); }
+      MB.tube(mb, [[3, -0.3, 2], [3.3, 2.5, 2.2], [3.1, 5, 2.4]], t => 0.45 - t * 0.2, 7, C('#6a4a2e')); mb.ico(3.1, 6.6, 2.4, [3, 2.2, 3], 1, (a, b) => b > 0.3 ? C('#5aae4a') : C('#3f8a3e'));
+      if (!desert) H.vines(-8, -8.3, 8, -8.3, 6, 12, rnd, 60);
+      mb.tri2([-4, 6, -8.25], [-2.6, 6, -8.25], [-3.3, 3, -8.25], C('#c8343a')); mb.tri2([3, 6, -8.25], [4.4, 6, -8.25], [3.7, 3.6, -8.25], C('#3a5ac8'));
+      H.torch(-3.6, 10.5); H.torch(3.6, 10.5); s.lights.push({ p: L(0, 2.4, 10.5), r: 9, c: [1, 0.7, 0.35] });
+      item('coin', 0, 0.6, 0); item(desert ? 'gem' : 'relic', -5, 6.6, -7.2); break;
     }
-    case 'circle': { // standing stones with glowing carved runes, lintels, a rune ring on the ground and a crystal altar
-      for (let k = 0; k < 10; k++) {
-        const a = k / 10 * 6.283, h = 4.4 + rnd(k) * 1.6;
-        mb.push([Math.cos(a) * 11, 0, Math.sin(a) * 11], M4.mul3(M4.rotY(-a), M4.rotZ((rnd(k + 5) - 0.5) * 0.12)));
-        mb.lathe([[1.05, -1], [1.0, 0.3], [0.9, h * 0.6], [0.72, h - 0.3], [0.4, h], [0, h + 0.08]], 6, (t, ph) => shadeC(C(BC.stoneD), 0.86 + rnd(k) * 0.16 + Math.cos(ph * 3 + k) * 0.05), 0.1);
-        for (let q = 0; q < 3; q++) H.deco(-0.86 + q * 0.02, 1.2 + q * 0.9, -0.12, -0.8, 1.6 + q * 0.9, 0.12, glowC(C('#7ae8ff')));
-        H.deco(-0.3, 0, -1.1, 0.3, 0.25, 1.1, BC.moss);
-        mb.pop();
-        if (k % 2 === 0) { const b = (k + 1) / 10 * 6.283, m = (a + b) / 2; mb.push([Math.cos(m) * 11.2, 4.6 + rnd(k) * 0.5, Math.sin(m) * 11.2], M4.rotY(-m)); H.box(-0.7, 0, -3.6, 0.7, 0.9, 3.6, BC.stoneD); mb.pop(); }
-      }
-      H.box(-2.2, -0.6, -1.4, 2.2, 0.9, 1.4, BC.stone); H.flatBox(-2.4, 0.9, -1.6, 2.4, 1.15, 1.6, BC.stoneL); for (const sx of [-1.9, 1.9]) H.box(sx - 0.25, -0.5, -1.7, sx + 0.25, 0.95, 1.7, BC.stoneD);
-      for (let k = 0; k < 5; k++) { const a = k * 1.256; mb.push([Math.cos(a) * 0.25, 1.15, Math.sin(a) * 0.25], M4.rotZ(Math.cos(a) * 0.3)); mb.cyl(0, 0, 0, 0.16, 0, 0.8 + (k % 2) * 0.5, 6, glowC(C(k % 2 ? '#c8a8ff' : '#9ff0ff'))); mb.pop(); }
-      mb.ico(0, 2.3, 0, [0.4, 0.75, 0.4], 0, () => glowC(C('#9ff0ff')));
-      for (const R of [6.5, 7.5]) mb.tor([0, 0.06, 0], R, 0.06, 40, 3, glowC(C('#7ae8ff')));
-      for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; mb.ico(Math.cos(a) * 7, 0.05, Math.sin(a) * 7, [0.5, 0.15, 0.5], 0, () => C(k % 2 ? BC.stoneL : BC.stone)); H.deco(Math.cos(a + 0.26) * 7 - 0.12, 0.04, Math.sin(a + 0.26) * 7 - 0.12, Math.cos(a + 0.26) * 7 + 0.12, 0.09, Math.sin(a + 0.26) * 7 + 0.12, glowC(C('#c8a8ff'))); }
-      s.lights.push({ p: L(0, 2.5, 0), r: 10, c: [0.4, 0.9, 1] }); item('crystal', 0, 3.2, 0); break;
+    case 'circle': { // moon henge: a stepped round dais, a tall rune monolith ringed by floating stone rings, a spiral of standing stones and a pale moon orb
+      for (let k = 0; k < 3; k++) mb.cyl(0, -0.5 + k * 0.45, 0, 6.5 - k * 1.6, 6.3 - k * 1.6, 0.95, 20, shadeC(C('#9a968e'), 0.95 + k * 0.05));
+      for (let k = 0; k < 20; k++) { const a = k / 20 * 6.283; H.deco(Math.cos(a) * 5.6 - 0.1, 0.45, Math.sin(a) * 5.6 - 0.1, Math.cos(a) * 5.6 + 0.1, 0.48, Math.sin(a) * 5.6 + 0.1, glowC(C('#9ab8ff'))); }
+      mb.cyl(0, 1.3, 0, 0.95, 0.55, 9.5, 4, C('#6e6a74'), true, 0.785); for (let k = 0; k < 6; k++) for (let sd = 0; sd < 4; sd++) { const a = sd * 1.571 + 0.785, r = 0.93 - (k * 1.5 / 9.5) * 0.4; mb.push([Math.cos(a) * r * 0.72, 2 + k * 1.4, Math.sin(a) * r * 0.72], M4.rotY(-a)); H.deco(0, 0, -0.18, 0.04, 0.5, 0.18, glowC(C('#9ab8ff'))); mb.pop(); }
+      for (const [y, R, tx, tz] of [[4.5, 2.6, 0.4, 0], [7, 2.1, -0.3, 0.5], [9.4, 1.6, 0.2, -0.6]]) { mb.push([0, y, 0], M4.mul3(M4.rotX(tx), M4.rotZ(tz))); mb.tor([0, 0, 0], R, 0.22, 24, 6, C('#8a8692')); mb.tor([0, 0, 0], R - 0.24, 0.05, 24, 3, glowC(C('#c8d8ff'))); mb.pop(); }
+      mb.sph([0, 11.6, 0], 0.9, 14, (x, y, z) => glowC(C(Math.sin(x * 9) * Math.sin(z * 7) > 0.5 ? '#c8ccd8' : '#eef2ff')), 0);
+      for (let k = 0; k < 16; k++) { const t = k / 16, a = t * 9.4, r = 13 - t * 5.5, h = 1.2 + t * 3.4; mb.push([Math.cos(a) * r, 0, Math.sin(a) * r], M4.mul3(M4.rotY(-a), M4.rotZ((rnd(k) - 0.5) * 0.15))); mb.lathe([[0.55, -0.6], [0.5, h * 0.7], [0.25, h], [0, h + 0.1]], 5, shadeC(C('#7a767e'), 0.9 + rnd(k + 3) * 0.15), 0.1); H.deco(0.42, h * 0.5, -0.1, 0.5, h * 0.5 + 0.35, 0.1, glowC(C('#9ab8ff'))); mb.pop(); }
+      s.lights.push({ p: L(0, 11.6, 0), r: 16, c: [0.6, 0.7, 1] }); item('crystal', 2.5, 1.9, 0); break;
     }
-    case 'village': { // cottages around a well, a cobbled path, a market stall, a garden, a haystack, a bench and lanterns
-      const roofs = [BC.roofR, BC.roofB, BC.roofG, '#a8683a'], walls = [BC.plaster, '#f2dcc0', '#e8eef2', BC.plaster];
-      for (let k = 0; k < 4; k++) { const a = k * 1.571 + 0.4, x = Math.cos(a) * 13, z = Math.sin(a) * 13; cottage(mb, H, x, z, -a - Math.PI / 2, 5.5, 4.4, 3.2, roofs[k], walls[k], q => rnd(q + k * 9)); }
-      for (let k = 0; k < 40; k++) { const a = k / 40 * 6.283, r = 3.2 + (k % 2) * 0.7; mb.cyl(Math.cos(a) * r, -0.05, Math.sin(a) * r, 0.42, 0.42, 0.12, 6, shadeC(C('#b8b0a0'), 0.9 + (k % 3) * 0.06), true, k); }
-      // the well: a stone ring, water, two posts, a little roof, a crank, a rope and a bucket
-      for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; mb.push([Math.cos(a) * 1.4, 0, Math.sin(a) * 1.4], M4.rotY(-a)); H.box(-0.3, -0.5, -0.42, 0.3, 0.45 + (k % 2) * 0.05, 0.42, k % 2 ? BC.stone : BC.stoneD); H.box(-0.32, 0.45, -0.44, 0.32, 0.9, 0.44, k % 2 ? BC.stoneD : BC.stone); mb.pop(); }
-      mb.cyl(0, 0.55, 0, 1.15, 1.15, 0.06, 12, C('#3f86c8'), true);
-      for (const sx of [-1, 1]) H.flatBox(sx * 1.35 - 0.12, 0.9, -0.12, sx * 1.35 + 0.12, 3.1, 0.12, BC.wood);
-      mb.push([0, 3.1, 0]); H.roof(-1.8, 1.8, -1.2, 1.2, 0, 1.1, BC.roofR, 0.2, 3); mb.pop();
-      mb.push([0, 2.3, 0], M4.rotZ(Math.PI / 2)); mb.cyl(0, -1.3, 0, 0.12, 0.12, 2.6, 6, C(BC.woodL)); mb.pop(); H.deco(1.5, 2.25, -0.05, 1.6, 2.6, 0.05, BC.woodD); H.deco(1.5, 2.55, -0.05, 1.8, 2.65, 0.05, BC.woodD);
-      mb.cyl(0, 1.5, 0, 0.02, 0.02, 0.8, 4, C('#d8c8a0')); mb.cyl(0, 1.2, 0, 0.2, 0.24, 0.32, 8, C(BC.woodL)); mb.tor([0, 1.52, 0], 0.22, 0.02, 8, 3, C(BC.metalD));
-      // a market stall with a striped awning and crates of fruit
-      mb.push([-6.5, 0, -1.5], M4.rotY(0.6));
-      H.box(-1.5, 0, -0.6, 1.5, 0.9, 0.6, BC.woodL); for (const [x, zz] of [[-1.5, -0.6], [1.5, -0.6], [-1.5, 0.6], [1.5, 0.6]]) H.flatBox(x - 0.07, 0.9, zz - 0.07, x + 0.07, 2.4 + (zz < 0 ? 0.4 : 0), zz + 0.07, BC.wood);
-      for (let k = 0; k < 6; k++) mb.quad([-1.7 + k * 0.567, 2.3, 1.0], [-1.7 + (k + 1) * 0.567, 2.3, 1.0], [-1.7 + (k + 1) * 0.567, 2.9, -0.8], [-1.7 + k * 0.567, 2.9, -0.8], C(k % 2 ? '#ffffff' : '#e8504a'));
-      for (let k = 0; k < 3; k++) { H.deco(-1.3 + k * 0.9, 0.9, -0.45, -0.6 + k * 0.9, 1.15, 0.45, '#9a6a3a'); for (let q = 0; q < 6; q++) mb.ico(-1.15 + k * 0.9 + (q % 3) * 0.2, 1.22, -0.25 + Math.floor(q / 3) * 0.4, 0.13, 0, () => C(['#ff5a3a', '#ffd23a', '#7bd85a'][k])); }
+    case 'village': { // windmill village: a stone windmill with big sails, a round hut, a two-storey house, a red barn, a fountain, a cart and a pen
+      // the windmill
+      mb.push([-8, 0, -7]);
+      mb.cyl(0, -0.5, 0, 3.4, 3.4, 1.4, 8, C(BC.stoneD), true, 0.39); mb.cyl(0, 0.9, 0, 3.0, 2.0, 8.5, 8, C('#e8e0d0'), true, 0.39); for (let k = 1; k < 5; k++) mb.cyl(0, 0.9 + k * 1.7, 0, 3.02 - k * 0.2, 3.02 - k * 0.2, 0.12, 8, C(BC.woodD), false, 0.39);
+      mb.cyl(0, 9.4, 0, 2.4, 2.4, 0.3, 8, C(BC.woodD), true, 0.39); X.cone(0, 9.7, 0, 2.5, 3.2, '#a8452e', 8);
+      mb.push([0, 0, 2.92]); H.door(0, 0.05, 1.1, 2.0); mb.pop(); H.window(0, 4.5, 2.62, 0.7, 0.8, 1, true); H.window(0, 7.0, 2.28, 0.6, 0.7, 1, true);
+      mb.push([0, 9.6, 2.6]); mb.caps([0, 0, -0.4], [0, 0, 0.6], 0.2, 0.25, 8, C(BC.woodD)); mb.push([0, 0, 0.6], M4.rotZ(0.4));
+      for (let k = 0; k < 4; k++) { mb.push([0, 0, 0], M4.rotZ(k * Math.PI / 2)); mb.box(-0.12, 0, -0.08, 0.12, 6.8, 0.08, C(BC.wood)); for (let q = 0; q < 6; q++) mb.box(0.1, 1.2 + q * 0.95, -0.05, 1.3, 1.26 + q * 0.95, 0.05, C(BC.woodL), true, true); mb.quad([0.12, 1.2, 0.06], [1.3, 1.2, 0.06], [1.3, 6.4, 0.06], [0.12, 6.4, 0.06], C('#f2ead8'), true); mb.quad([0.12, 1.2, 0.06], [0.12, 6.4, 0.06], [1.3, 6.4, 0.06], [1.3, 1.2, 0.06], C('#d8d0bc'), true); mb.pop(); }
+      mb.pop(); mb.pop(); mb.pop();
+      // a round hut with a tall straw roof
+      mb.push([8, 0, -6]); mb.cyl(0, -0.3, 0, 2.7, 2.7, 2.9, 12, C('#e8d2b0')); for (let k = 0; k < 5; k++) mb.cyl(0, 2.4 + k * 0.6, 0, 3.6 - k * 0.72, 3.0 - k * 0.72, 0.65, 12, shadeC(C(BC.thatch), k % 2 ? 0.9 : 1)); mb.cyl(0, 5.4, 0, 0.5, 0, 0.6, 8, shadeC(C(BC.thatch), 0.8));
+      mb.push([0, 0, 2.68]); H.door(0, 0.02, 1.0, 1.9); mb.pop(); for (const a of [0.9, 2.3]) { mb.push([Math.cos(a) * 2.68, 0, Math.sin(a) * 2.68], M4.rotY(Math.PI / 2 - a)); H.window(0, 1.6, 0, 0.6, 0.6, 1, true); mb.pop(); } mb.pop();
+      // a two-storey house: stone ground floor, an overhanging timber upper floor, a steep roof and a balcony
+      mb.push([7.5, 0, 7.5], M4.rotY(-0.6)); H.box(-3, -0.5, -2, 3, 2.6, 2, BC.stone); H.flatBox(-3.4, 2.6, -2.4, 3.4, 5.2, 2.4, '#f2e6cc');
+      for (const x of [-3.4, -1.2, 1.2, 3.4]) H.deco(x - 0.12, 2.6, 2.38, x + 0.12, 5.2, 2.5, BC.woodD); H.deco(-3.4, 3.8, 2.38, 3.4, 3.95, 2.5, BC.woodD);
+      H.roof(-3.4, 3.4, -2.4, 2.4, 5.2, 3.2, BC.roofB, 0.5, 6); H.door(0, 2.0, 1.1, 2.1); H.window(-2, 1.4, 2.0, 0.8, 0.8, 1, true, '#7a3a2a'); H.window(2, 1.4, 2.0, 0.8, 0.8, 1, true, '#7a3a2a'); H.window(-2.3, 4.2, 2.45, 0.8, 0.9, 1, true); H.window(2.3, 4.2, 2.45, 0.8, 0.9, 1, true);
+      H.flatBox(-1, 3.0, 2.45, 1, 3.15, 3.4, BC.woodL); for (let k = 0; k < 6; k++) H.deco(-0.95 + k * 0.38, 3.15, 3.32, -0.9 + k * 0.38, 3.9, 3.4, BC.woodL); H.deco(-1, 3.85, 3.3, 1, 3.95, 3.42, BC.woodL); H.window(0, 4.1, 2.45, 0.7, 1.4, 1, true);
       mb.pop();
-      // a vegetable garden with a scarecrow
-      for (let r = 0; r < 4; r++) { H.flatBox(5, -0.1, -6 + r * 1.1, 9, 0.18, -5.6 + r * 1.1, '#6a4a2a'); for (let q = 0; q < 5; q++) { mb.ico(5.4 + q * 0.8, 0.38, -5.8 + r * 1.1, 0.22, 0, () => C(r % 2 ? '#7bd85a' : '#ff8a3a')); if (r % 2) mb.cone(5.4 + q * 0.8, 0.45, -5.8 + r * 1.1, 0.08, 0.35, 4, C('#4faa3a')); } }
-      H.fence(4.5, -6.6, 9.5, -6.6); H.fence(9.5, -6.6, 9.5, -1.6); H.fence(4.5, -6.6, 4.5, -1.6);
-      H.flatBox(7, 0, -4.05, 7.12, 2.6, -3.95, BC.wood); H.flatBox(6.2, 1.8, -4.05, 7.9, 1.92, -3.95, BC.wood); mb.ico(7.06, 2.85, -4, 0.3, 1, () => C('#e8d8a0')); mb.cyl(7.06, 3.05, -4, 0.45, 0.2, 0.22, 8, C('#c8a050')); mb.box(6.8, 1.4, -4.15, 7.32, 2.4, -3.85, C('#4a7ac8'), true, true);
-      // a haystack, a bench, a signpost
-      mb.ico(-3, 0.6, 7.5, [1.3, 1.0, 1.1], 1, (x, y) => shadeC(C('#e8c860'), 0.85 + y * 0.15)); mb.ico(-1.8, 0.4, 7.9, [0.6, 0.45, 0.5], 0, () => C('#dcbc58'));
-      mb.push([3.5, 0, 6.5], M4.rotY(-0.5)); H.flatBox(-1, 0.42, -0.25, 1, 0.52, 0.25, BC.woodL); H.flatBox(-1, 0.52, -0.3, 1, 1.0, -0.22, BC.woodL); for (const sx of [-0.85, 0.85]) H.flatBox(sx - 0.06, 0, -0.25, sx + 0.06, 0.42, 0.25, BC.woodD); mb.pop();
-      H.flatBox(2.4, 0, -2.6, 2.55, 2.4, -2.45, BC.wood); for (const [y, a] of [[2.1, 0.4], [1.7, -0.6]]) { mb.push([2.47, y, -2.52], M4.rotY(a)); H.flatBox(0, -0.15, -0.04, 1.1, 0.15, 0.04, BC.woodL); mb.pop(); }
-      for (let k = 0; k < 4; k++) { const a = k * 1.571 + 1.2; H.lantern(Math.cos(a) * 7, 2.4, Math.sin(a) * 7); s.lights.push({ p: L(Math.cos(a) * 7, 2.6, Math.sin(a) * 7), r: 8, c: [1, 0.8, 0.45] }); }
-      H.barrel(-3, 4); H.crate(-4, 5); H.crate(-3.7, 5.1, 0.6, 0.8);
-      item('coin', 6, 0.6, 0); item('mushroom', -6, 0.6, 3); break;
-    }
-    case 'tower': { // a stone watchtower with block courses, arrow slits, a wooden lookout on struts, a shingled cone roof, a flag and a ramp winding up
-      for (let k = 0; k < 18; k++) { const y = -1 + k * 0.62, r = 3.1 - k * 0.022; mb.cyl(0, y, 0, r, r - 0.02, 0.62, 10, shadeC(C(k % 2 ? BC.stone : '#9c978d'), 0.95 + (k % 3) * 0.04), true, k % 2 ? 0.31 : 0); }
-      mb.cyl(0, -1, 0, 3.5, 3.2, 1.2, 10, C(BC.stoneD));
-      for (let k = 0; k < 4; k++) { const a = k * 1.571 + 0.8; mb.push([Math.cos(a) * 2.75, 5.5 + (k % 2) * 2, Math.sin(a) * 2.75], M4.rotY(-a)); H.deco(0, -0.6, -0.1, 0.12, 0.6, 0.1, '#2a2620'); H.deco(0.02, -0.68, -0.22, 0.14, -0.6, 0.22, BC.stoneL); mb.pop(); }
-      mb.push([0, 0, 3.0]); H.door(0, 0.05, 1.2, 2.2); mb.pop();
-      mb.cyl(0, 9.5, 0, 3.7, 3.7, 0.6, 10, C(BC.woodD));
-      for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; mb.push([Math.cos(a) * 2.8, 8.4, Math.sin(a) * 2.8], M4.mul3(M4.rotY(-a), M4.rotZ(-0.75))); H.deco(-0.08, 0, -0.08, 0.08, 1.4, 0.08, BC.woodD); mb.pop(); }
-      for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; H.flatBox(Math.cos(a) * 3.4 - 0.12, 10.1, Math.sin(a) * 3.4 - 0.12, Math.cos(a) * 3.4 + 0.12, 13, Math.sin(a) * 3.4 + 0.12, BC.wood); }
-      mb.cyl(0, 10.8, 0, 3.5, 3.5, 0.15, 10, C(BC.woodL), false); mb.cyl(0, 11.6, 0, 3.5, 3.5, 0.1, 10, C(BC.woodL), false);
-      for (let k = 0; k < 5; k++) mb.cyl(0, 13 + k * 0.62, 0, 4.4 - k * 0.86, 3.6 - k * 0.86 > 0 ? 3.62 - k * 0.86 : 0.1, 0.66, 10, shadeC(C(BC.roofR), k % 2 ? 0.86 : 1), true, 0.31);
-      mb.cyl(0, 16.1, 0, 0.3, 0, 0.6, 10, C(BC.roofR));
-      mb.cyl(0, 16.4, 0, 0.06, 0.06, 1.8, 4, C(BC.metalD)); mb.ico(0, 18.25, 0, 0.1, 0, () => C(BC.gold));
-      for (let k = 0; k < 4; k++) { const f = k / 4, f1 = (k + 1) / 4, w = Math.sin(k * 1.4) * 0.12; mb.tri2([0.06 + f * 1.4, 18.1 + w, 0], [0.06 + f1 * 1.4, 18.1 + Math.sin((k + 1) * 1.4) * 0.12, 0], [0.06 + f1 * 1.4, 17.4 + Math.sin((k + 1) * 1.4) * 0.12, 0], C(k % 2 ? '#ffcf4a' : '#e8504a')); mb.tri2([0.06 + f * 1.4, 18.1 + w, 0], [0.06 + f1 * 1.4, 17.4 + Math.sin((k + 1) * 1.4) * 0.12, 0], [0.06 + f * 1.4, 17.4 + w, 0], C(k % 2 ? '#ffcf4a' : '#e8504a')); }
-      for (let k = 0; k < 24; k++) {
-        const a0 = k / 24 * 6.28 * 1.5, a1 = (k + 1) / 24 * 6.28 * 1.5, y0 = k / 24 * 9.5, y1 = (k + 1) / 24 * 9.5, P = (a, r, y) => [Math.cos(a) * r, y, Math.sin(a) * r];
-        mb.quad(P(a0, 3.2, y0), P(a0, 6, y0), P(a1, 6, y1), P(a1, 3.2, y1), shadeC(C(BC.woodL), k % 2 ? 0.92 : 1));
-        mb.quad(P(a0, 3.2, y0 - 0.3), P(a1, 3.2, y1 - 0.3), P(a1, 6, y1 - 0.3), P(a0, 6, y0 - 0.3), C(BC.woodD));
-        mb.quad(P(a0, 6, y0 - 0.3), P(a1, 6, y1 - 0.3), P(a1, 6, y1 + 0.5), P(a0, 6, y0 + 0.5), C(BC.wood));
-        if (k % 3 === 0) { mb.box(P(a0, 6, 0)[0] - 0.1, y0, P(a0, 6, 0)[2] - 0.1, P(a0, 6, 0)[0] + 0.1, y0 + 1.1, P(a0, 6, 0)[2] + 0.1, C(BC.woodD)); if (y0 > 0.8) mb.box(P(a0, 5.95, 0)[0] - 0.08, -0.5, P(a0, 5.95, 0)[2] - 0.08, P(a0, 5.95, 0)[0] + 0.08, y0 - 0.3, P(a0, 5.95, 0)[2] + 0.08, C(BC.woodD), true, true); }
-        const ra = P(a0, 6, y0 + 1.0), rb = P(a1, 6, y1 + 1.0); mb.caps(ra, rb, 0.035, 0.035, 4, C('#d8c8a0'));
-      }
-      H.lantern(4.3, 2.0, 3.0); s.lights.push({ p: L(0, 12, 0), r: 10, c: [1, 0.8, 0.5] }, { p: L(4.3, 2.3, 3.0), r: 7, c: [1, 0.8, 0.45] }); item('feather', 0, 10.8, 0); break;
-    }
-    case 'bigtree': { // a giant old tree with roots, branches and a treehouse with a railing, lanterns and a rope swing
-      const bark = C('#6b4a2b');
-      mb.lathe([[3.6, -1], [3.0, 0.8], [2.6, 4], [2.5, 12], [2.2, 17], [1.6, 20], [0, 20.5]], 12, (t, ph) => shadeC(bark, 0.84 + 0.16 * Math.cos(ph * 7 + t * 8)), 0.1);
-      for (let k = 0; k < 7; k++) { const a = k * 0.9 + 0.3; MB.tube(mb, [[Math.cos(a) * 2.2, 1.2, Math.sin(a) * 2.2], [Math.cos(a) * 3.6, 0.3, Math.sin(a) * 3.6], [Math.cos(a + 0.15) * 5, -0.4, Math.sin(a + 0.15) * 5]], t => 0.9 - t * 0.6, 6, shadeC(bark, 0.9)); }
-      const leaf = (q, w) => w > 0.35 ? C('#58b84e') : w < -0.3 ? C('#2f7a3a') : C('#3f9a4e');
-      for (let k = 0; k < 7; k++) { const a = k * 0.9, r = 5.5 + rnd(k) * 2.2, bx = Math.cos(a) * 7, bz = Math.sin(a) * 7, by = 19 + rnd(k) * 3.5; MB.tube(mb, [[Math.cos(a) * 1.5, 16 + (k % 3), Math.sin(a) * 1.5], [bx * 0.6, by - 1.5, bz * 0.6]], t => 0.7 - t * 0.35, 6, bark); mb.ico(bx, by, bz, [r, r * 0.78, r], 1, leaf); mb.ico(bx * 1.15, by - r * 0.4, bz * 1.15, r * 0.5, 0, leaf); }
-      mb.ico(0, 26, 0, [7.5, 6, 7.5], 1, leaf);
-      // the treehouse platform, little house, railing and lanterns
-      mb.cyl(0, 11, 0, 5, 5, 0.4, 12, C(BC.woodL)); for (let k = 0; k < 12; k++) { const a = (k + 0.5) / 12 * 6.283; mb.push([Math.cos(a) * 3.8, 9.6, Math.sin(a) * 3.8], M4.mul3(M4.rotY(-a), M4.rotZ(0.7))); H.deco(-0.08, 0, -0.08, 0.08, 1.9, 0.08, BC.woodD); mb.pop(); }
-      mb.push([0, 11.4, 0]); H.flatBox(-2, 0, 1.6, 2, 2.6, 4.2, BC.woodL); for (let k = 0; k < 6; k++) H.deco(-2.02, 0.1 + k * 0.42, 4.2, 2.02, 0.14 + k * 0.42, 4.24, BC.wood); H.roof(-2, 2, 1.6, 4.2, 2.6, 1.3, BC.roofG, 0.3, 4); H.window(1.1, 1.5, 4.2, 0.7, 0.7, 1, true); H.door(-0.8, 4.2, 0.8, 1.8); mb.pop();
-      for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; H.flatBox(Math.cos(a) * 4.8 - 0.07, 11.4, Math.sin(a) * 4.8 - 0.07, Math.cos(a) * 4.8 + 0.07, 12.4, Math.sin(a) * 4.8 + 0.07, BC.woodD); }
-      mb.tor([0, 12.4, 0], 4.8, 0.07, 24, 3, C(BC.woodL)); mb.tor([0, 11.9, 0], 4.8, 0.04, 24, 3, C('#d8c8a0'));
-      for (const a of [0.8, 2.6, 4.4]) { mb.cyl(Math.cos(a) * 4.8, 12.4, Math.sin(a) * 4.8, 0.03, 0.03, 0.7, 4, C('#3a3f55')); mb.box(Math.cos(a) * 4.8 - 0.14, 13.1, Math.sin(a) * 4.8 - 0.14, Math.cos(a) * 4.8 + 0.14, 13.4, Math.sin(a) * 4.8 + 0.14, glowC(C('#ffe08a'))); }
-      // a rope swing hanging from a branch
-      for (const dz of [-0.4, 0.4]) mb.cyl(6.2, 2.2, 3 + dz, 0.03, 0.03, 13.5, 4, C('#d8c8a0')); H.flatBox(5.9, 2.0, 2.5, 6.5, 2.2, 3.5, BC.woodL);
-      for (let k = 0; k < 22; k++) { const a0 = k / 22 * 6.28 * 1.3, a1 = (k + 1) / 22 * 6.28 * 1.3, y0 = k / 22 * 11, y1 = (k + 1) / 22 * 11, P = (a, r, y) => [Math.cos(a) * r, y, Math.sin(a) * r]; mb.quad(P(a0, 3, y0), P(a0, 5.4, y0), P(a1, 5.4, y1), P(a1, 3, y1), shadeC(C(BC.woodL), k % 2 ? 0.9 : 1)); mb.quad(P(a0, 3, y0 - 0.25), P(a1, 3, y1 - 0.25), P(a1, 5.4, y1 - 0.25), P(a0, 5.4, y0 - 0.25), C(BC.woodD)); if (k % 3 === 0) mb.box(P(a0, 5.35, 0)[0] - 0.07, y0, P(a0, 5.35, 0)[2] - 0.07, P(a0, 5.35, 0)[0] + 0.07, y0 + 1, P(a0, 5.35, 0)[2] + 0.07, C(BC.woodD), true, true); }
-      s.lights.push({ p: L(0, 13, 2.5), r: 9, c: [1, 0.8, 0.45] }); item('relic', 0, 12, 0); break;
-    }
-    case 'cabin': { // a log cabin with notched corners, a stone chimney, a porch with a railing and a rocking chair, and a woodpile with an axe
-      const w = 7, d = 5.6, h = 3.2;
-      H.box(-w / 2 - 0.3, -0.6, -d / 2 - 0.3, w / 2 + 0.3, 0.3, d / 2 + 1.9, BC.stoneD);
-      for (let k = 0; k < 8; k++) { const y = 0.3 + k * 0.38 + 0.19; for (const [a, b, rot, len] of [[0, d / 2, 0, w + 0.8], [0, -d / 2, 0, w + 0.8], [w / 2, 0, 1, d + 0.8], [-w / 2, 0, 1, d + 0.8]]) { mb.push([a, y + (rot ? 0.19 : 0), b], M4.mul3(M4.rotY(rot ? Math.PI / 2 : 0), M4.rotZ(Math.PI / 2))); mb.cyl(0, -len / 2, 0, 0.2, 0.2, len, 7, shadeC(C(BC.wood), 0.9 + ((k * 3 + a) % 2) * 0.1), true); mb.cyl(0, -len / 2 - 0.01, 0, 0.16, 0.16, 0.02, 7, C('#d8b080')); mb.cyl(0, len / 2 - 0.01, 0, 0.16, 0.16, 0.02, 7, C('#d8b080')); mb.pop(); } }
-      H.roof(-w / 2, w / 2, -d / 2, d / 2, h + 0.3, 2.2, '#7a4a32', 0.7, 6);
-      H.door(0, d / 2 + 0.2, 1.1, 2.1); H.window(-2.1, 2, d / 2 + 0.2, 0.9, 0.8, 1, true, '#7a3a2a'); H.window(2.1, 2, d / 2 + 0.2, 0.9, 0.8, 1, true, '#7a3a2a'); mb.push([-w / 2 - 0.2, 0, 0], M4.rotY(-Math.PI / 2)); H.window(0, 2, 0, 0.8, 0.7, 1, true); mb.pop();
-      // the porch: posts, a railing and a slanted roof
-      for (const x of [-w / 2, -w / 4, w / 4, w / 2]) H.flatBox(x - 0.12, 0.3, d / 2 + 1.6, x + 0.12, 2.6, d / 2 + 1.84, BC.woodD);
-      for (const [x0, x1] of [[-w / 2, -0.8], [0.8, w / 2]]) { H.flatBox(x0, 1.15, d / 2 + 1.66, x1, 1.25, d / 2 + 1.78, BC.woodL); for (let x = x0 + 0.3; x < x1; x += 0.35) H.deco(x - 0.03, 0.3, d / 2 + 1.69, x + 0.03, 1.15, d / 2 + 1.75, BC.woodL); }
-      mb.quad([-w / 2 - 0.3, 2.6, d / 2 + 2.1], [w / 2 + 0.3, 2.6, d / 2 + 2.1], [w / 2 + 0.3, 3.2, d / 2], [-w / 2 - 0.3, 3.2, d / 2], C('#7a4a32'));
-      mb.push([2.3, 0.3, d / 2 + 0.9], M4.rotY(-0.4)); H.deco(-0.3, 0.42, -0.3, 0.3, 0.5, 0.3, BC.woodL); H.deco(-0.3, 0.5, -0.32, 0.3, 1.2, -0.25, BC.woodL); for (const sx of [-0.3, 0.27]) { H.deco(sx, 0, -0.3, sx + 0.04, 0.45, 0.3, BC.woodD); mb.tor([sx + 0.02, 0.0, 0], 0.4, 0.03, 10, 3, C(BC.woodD)); } mb.pop();
-      // a chimney of stacked stones
-      for (let k = 0; k < 10; k++) H.flatBox(2 - (k % 2) * 0.05, 0.3 + k * 0.7, -1.4 - (k % 2) * 0.05, 3 + (k % 2) * 0.05, 1.0 + k * 0.7, -0.4 + (k % 2) * 0.05, k % 2 ? BC.stoneD : BC.stone); H.flatBox(1.85, 7.3, -1.55, 3.15, 7.5, -0.25, BC.stoneL);
-      // a woodpile with a little roof, a chopping stump and an axe
-      for (let k = 0; k < 9; k++) { mb.push([-w / 2 - 1.4, 0.25 + Math.floor(k / 3) * 0.42, -1 + (k % 3) * 0.44], M4.rotZ(Math.PI / 2)); mb.cyl(0, -0.8, 0, 0.2, 0.2, 1.6, 7, C(BC.woodL)); mb.cyl(0, 0.79, 0, 0.17, 0.17, 0.02, 7, C('#e8c890')); mb.pop(); }
-      mb.quad([-w / 2 - 2.4, 1.7, -1.6], [-w / 2 - 2.4, 1.7, 0.4], [-w / 2 - 0.4, 2.1, 0.4], [-w / 2 - 0.4, 2.1, -1.6], C('#7a4a32'));
-      mb.cyl(3.5, -0.3, 4.8, 0.45, 0.45, 0.8, 8, C(BC.woodL)); mb.cyl(3.5, 0.49, 4.8, 0.4, 0.4, 0.02, 8, C('#e8c890'));
-      mb.push([3.5, 0.5, 4.8], M4.rotZ(0.5)); mb.cyl(0, 0, 0, 0.04, 0.04, 0.9, 5, C(BC.woodD)); H.deco(-0.15, 0.75, -0.02, 0.12, 0.95, 0.02, BC.metal); mb.pop();
-      H.lantern(-w / 2 - 0.05, 2.2, d / 2 + 1.9); s.lights.push({ p: L(0, 2, d / 2 + 1.2), r: 8, c: [1, 0.8, 0.45] });
-      item('mushroom', 0, 0.9, 6); break;
-    }
-    case 'pyramid': { // a stepped pyramid with carved bands, a pillared doorway, a stair ramp, carved obelisks, a cat statue and a golden top
-      const steps = 9;
-      for (let k = 0; k < steps; k++) { const w = 18 - k * 2; H.flatBox(-w, k * 1.6 - 1, -w, w, (k + 1) * 1.6 - 1, w, k % 2 ? BC.sand : '#d8b878'); H.flatBox(-w - 0.05, (k + 1) * 1.6 - 1.15, -w - 0.05, w + 0.05, (k + 1) * 1.6 - 1, w + 0.05, BC.sandD);
-        if (k % 2 === 0) for (let q = 0; q < Math.floor(w / 1.5); q++) for (const sd of [-1, 1]) H.deco(-w + 0.6 + q * 3, k * 1.6 - 0.5, sd * w - 0.03, -w + 1.4 + q * 3, k * 1.6 - 0.1, sd * w + 0.03, shadeC(C(BC.sandD), 0.9)); }
-      mb.quad([-2.5, -0.9, 22], [2.5, -0.9, 22], [2.5, steps * 1.6 - 1, 2], [-2.5, steps * 1.6 - 1, 2], C('#c9a060'));
-      for (let k = 0; k < 18; k++) { const t = k / 18; H.deco(-2.4, -0.9 + t * steps * 1.6, 22 - t * 20 - 0.05, 2.4, -0.85 + t * steps * 1.6, 22 - t * 20 + 0.05, BC.sandD); }
-      for (const sx of [-1, 1]) mb.quad([sx * 2.5, -0.9, 22], [sx * 2.5, steps * 1.6 - 1, 2], [sx * 2.5, steps * 1.6 - 0.6, 2], [sx * 2.5, -0.5, 22], C(BC.sandD));
-      H.flatBox(-1.6, -1, 17.99, 1.6, 2.6, 18.05, '#2a2016'); for (const sx of [-1, 1]) { mb.cyl(sx * 2.1, -1, 18.4, 0.4, 0.35, 3.8, 8, C(BC.sand)); mb.cyl(sx * 2.1, 2.8, 18.4, 0.35, 0.55, 0.3, 8, C(BC.sandD)); } H.box(-2.8, 3.0, 18, 2.8, 3.6, 18.9, BC.sandD); mb.ico(0, 3.3, 18.92, [0.35, 0.2, 0.05], 0, () => glowC(C('#5ae8d8')));
-      for (const [x, z] of [[-21, 21], [21, 21], [-21, -21], [21, -21]]) { mb.cyl(x, -1, z, 0.9, 0.55, 7, 4, C(BC.sand), true, 0.785); mb.cyl(x, 6, z, 0.55, 0, 1.2, 4, C(BC.gold), true, 0.785); for (let q = 0; q < 4; q++) H.deco(x - 0.12, 1 + q * 1.3, z + 0.72 - q * 0.05, x + 0.12, 1.6 + q * 1.3, z + 0.8 - q * 0.05, glowC(C('#5ae8d8'))); H.box(x - 1.3, -1, z - 1.3, x + 1.3, 0, z + 1.3, BC.sandD); }
-      // a sitting cat statue beside the stairs
-      for (const sx of [-1, 1]) { mb.push([sx * 6, 0, 21], M4.rotY(Math.PI)); H.box(-1, -0.5, -1.5, 1, 0.6, 1.5, BC.sandD); mb.ico(0, 1.6, 0.2, [0.7, 1.1, 0.8], 1, () => C(BC.sand)); mb.ico(0, 2.9, -0.2, [0.55, 0.5, 0.5], 1, () => C(BC.sand)); for (const ez of [-0.3, 0.3]) mb.cone(ez, 3.25, -0.2, 0.2, 0.45, 4, C(BC.sand)); mb.ico(0, 2.95, -0.7, [0.05, 0.08, 0.02], 0, () => glowC(C('#5ae8d8'))); mb.caps([0, 0.7, 0.9], [0.5 * sx, 0.6, 1.5], 0.12, 0.08, 6, C(BC.sand)); mb.pop(); }
-      mb.cyl(0, steps * 1.6 - 1, 0, 1.6, 0, 1.6, 4, glowC(C(BC.gold)), true, 0.785);
-      for (const sx of [-1, 1]) H.torch(sx * 3.5, 22.5, 1.8);
-      s.lights.push({ p: L(0, steps * 1.6 + 1, 0), r: 10, c: [1, 0.8, 0.3] }, { p: L(0, 2, 22.5), r: 8, c: [1, 0.7, 0.3] });
-      item('gem', 0, steps * 1.6 + 0.2, -3); item('coin', 10, 0.6, 22); break;
-    }
-    case 'pod': { // a crashed space capsule in a scorched crater: panel lines, glowing windows, an antenna dish, a parachute spread on the ground, an open hatch, glowing cracks
-      mb.cyl(0, -0.6, 0, 7, 5.5, 0.62, 16, C('#4a4038'), true); mb.cyl(0, 0.0, 0, 5.4, 5.4, 0.04, 16, C('#2e2824'), true);
-      for (let k = 0; k < 6; k++) { const a = k * 1.05 + 0.3; mb.push([Math.cos(a) * 2.8, 0.05, Math.sin(a) * 2.8], M4.rotY(-a)); H.deco(-2, 0, -0.06, 2, 0.02, 0.06, glowC(C('#ff7a3a'))); mb.pop(); }
-      for (let k = 0; k < 14; k++) { const a = k / 14 * 6.283 + rnd(k) * 0.2; mb.ico(Math.cos(a) * 6.6, 0.1, Math.sin(a) * 6.6, [1 + rnd(k + 3) * 0.8, 0.5 + rnd(k + 5) * 0.4, 0.9], 0, (q, w) => shadeC(C('#6a5e52'), 0.8 + w * 0.25)); }
-      mb.push([0.4, 1.3, 0], M4.mul3(M4.rotY(0.5), M4.rotZ(-1.0)));
-      mb.lathe([[0, -1.9], [2.2, -1.75], [2.35, -1.45], [2.0, -0.6], [1.7, 0.6], [1.0, 1.9], [0.75, 2.1], [0, 2.15]], 16, (t, ph) => t < 0.12 ? C('#3a3030') : t > 0.38 && t < 0.48 ? C('#5ff0e0') : Math.floor(ph / 6.283 * 16) % 4 === 0 ? C('#9aa2ae') : (Math.floor(t * 10) % 3 === 0 ? C('#d0d6de') : C(BC.metal)), 0);
-      mb.cyl(0, -1.95, 0, 1.6, 1.4, 0.3, 12, C('#5a4a3a')); for (let k = 0; k < 3; k++) mb.cyl(0, -2.2 - k * 0.1, 0, 0.5 - k * 0.12, 0.4 - k * 0.12, 0.12, 8, C('#4a4a52'));
-      for (let k = 0; k < 4; k++) { const a = k * 1.571 + 0.6; mb.push([Math.cos(a) * 1.82, 0.0, Math.sin(a) * 1.82], M4.mul3(M4.rotY(-a), M4.rotZ(0.33))); mb.box(-0.02, -0.32, -0.3, 0.1, 0.32, 0.3, glowC(C('#8ff6ff'))); mb.box(-0.03, -0.38, -0.36, 0.06, 0.38, 0.36, C(BC.metalD), true, true); mb.pop(); }
-      mb.cyl(0, 2.1, 0, 0.05, 0.05, 1.3, 5, C(BC.metalD)); mb.ico(0, 3.45, 0, 0.14, 0, () => glowC(C('#ff5f7e')));
-      mb.push([0.6, 1.4, 0.8], M4.rotX(-0.8)); mb.cyl(0, 0, 0, 0.03, 0.03, 0.5, 4, C(BC.metalD)); mb.lathe([[0.02, 0.45], [0.35, 0.55], [0.5, 0.7]], 10, C('#e8ecf2'), 0); mb.pop();
-      mb.push([0, -0.2, 2.0], M4.rotX(-1.2)); H.flatBox(-0.7, 0, -0.06, 0.7, 1.4, 0.06, BC.metal); H.deco(-0.5, 0.2, 0.06, 0.5, 1.2, 0.08, '#9aa2ae'); mb.pop();
+      // a red barn with a gambrel roof and white X doors
+      mb.push([-8, 0, 7], M4.rotY(0.5)); H.flatBox(-4, -0.4, -2.6, 4, 3.2, 2.6, '#b8432e');
+      const gb = [[-2.9, 3.2], [-2.4, 5.2], [0, 6.4], [2.4, 5.2], [2.9, 3.2]]; for (let k = 0; k < 4; k++) { const [z0, y0] = gb[k], [z1, y1] = gb[k + 1]; mb.quad([-4.3, y0, z0], [-4.3, y1, z1], [4.3, y1, z1], [4.3, y0, z0], shadeC(C('#5a4a4a'), k % 2 ? 0.9 : 1)); mb.quad([4.3, y0, z0], [4.3, y1, z1], [-4.3, y1, z1], [-4.3, y0, z0], C('#4a3a3a')); }
+      for (const sx of [-4, 4]) { mb.tri([sx, 3.2, -2.6], [sx, 5.2, -2.1], [sx, 3.2, 2.6], C('#b8432e')); mb.tri([sx, 3.2, 2.6], [sx, 5.2, -2.1], [sx, 5.2, 2.1], C('#b8432e')); mb.tri([sx, 5.2, -2.1], [sx, 6.4, 0], [sx, 5.2, 2.1], C('#b8432e')); mb.tri([sx, 3.2, 2.6], [sx, 5.2, 2.1], [sx, 3.2, -2.6], C('#a03a28')); mb.tri([sx, 5.2, 2.1], [sx, 5.2, -2.1], [sx, 3.2, -2.6], C('#a03a28')); mb.tri([sx, 5.2, 2.1], [sx, 6.4, 0], [sx, 5.2, -2.1], C('#a03a28')); }
+      mb.push([4.02, 0, 0], M4.rotY(Math.PI / 2)); H.deco(-1.4, 0, 0, 1.4, 2.6, 0.08, '#8a2e22'); for (const sx of [-0.7, 0.7]) { mb.push([sx, 1.3, 0.09], M4.rotZ(1.07)); H.deco(-1.45, -0.07, 0, 1.45, 0.07, 0.04, '#ffffff'); mb.pop(); mb.push([sx, 1.3, 0.09], M4.rotZ(-1.07)); H.deco(-1.45, -0.07, 0, 1.45, 0.07, 0.04, '#ffffff'); mb.pop(); } H.deco(-1.45, 0, 0.08, 1.45, 0.12, 0.13, '#ffffff'); H.deco(-1.45, 2.5, 0.08, 1.45, 2.62, 0.13, '#ffffff'); H.deco(-0.04, 0, 0.08, 0.04, 2.6, 0.13, '#ffffff'); mb.pop();
       mb.pop();
-      if (mb.tris) { const cb = new MeshBuilder().collect(); cb._set(mb.A, mb.P); cb.ico(0.4, 1.3, 0, [2.2, 1.8, 2.2], 0, () => [0, 0, 0, 1]); mb.tris.push(...cb.tris); }
-      // the parachute lying on the ground in striped panels, with its cords
-      mb.push([-8, 0.05, 3], M4.rotY(0.4)); for (let k = 0; k < 8; k++) { const a0 = k / 8 * 3.4 - 1.7, a1 = (k + 1) / 8 * 3.4 - 1.7; mb.tri2([0, 0.02, 0], [Math.cos(a0) * 4, 0.1 + (k % 2) * 0.25, Math.sin(a0) * 4], [Math.cos(a1) * 4, 0.1 + ((k + 1) % 2) * 0.25, Math.sin(a1) * 4], C(k % 2 ? '#ffffff' : '#ff7a3a')); }
-      for (let k = 0; k < 4; k++) mb.caps([0, 0.05, 0], [5 - k * 0.3, 0.05, -2 + k * 1.2], 0.02, 0.02, 3, C('#d8d8d8')); mb.pop();
-      for (let k = 0; k < 7; k++) { const a = rnd(k) * 6.28, d = 7.5 + rnd(k + 9) * 4; mb.push([Math.cos(a) * d, 0, Math.sin(a) * d], M4.mul3(M4.rotY(a), M4.rotZ((rnd(k + 2) - 0.5) * 0.5))); H.flatBox(-0.7, -0.2, -0.4, 0.7, 0.12, 0.4, k % 2 ? BC.metal : BC.metalD); H.deco(-0.5, 0.12, -0.02, 0.5, 0.14, 0.02, BC.metalD); mb.pop(); }
-      mb.push([-6, 0, -4], M4.rotY(0.8)); H.flatBox(-1.2, -0.1, -0.8, 1.2, 0.08, 0.8, '#3f5e9a'); for (let k = -1; k <= 1; k++) H.flatBox(k * 0.8 - 0.02, 0.08, -0.8, k * 0.8 + 0.02, 0.1, 0.8, BC.metal); mb.pop();
-      s.lights.push({ p: L(0, 3.5, 0), r: 9, c: [0.4, 0.9, 1] }); item('relic', 0, 0.6, 5); break;
+      // the fountain in the square
+      mb.cyl(0, -0.3, 0, 3.2, 3.2, 0.8, 8, C(BC.stone), true, 0.39); mb.cyl(0, 0.45, 0, 2.8, 2.8, 0.06, 8, glowC(C('#5ab8f0')), true, 0.39); mb.cyl(0, 0.5, 0, 0.35, 0.3, 1.6, 8, C(BC.stoneL)); mb.lathe([[0.2, 2.0], [1.1, 2.2], [1.2, 2.45], [0.9, 2.4], [0, 2.35]], 10, C(BC.stoneL), 0); mb.cyl(0, 2.35, 0, 0.95, 0.95, 0.05, 10, glowC(C('#8ad8ff'))); mb.cyl(0, 2.4, 0, 0.12, 0.05, 0.9, 6, glowC(C('#c8f0ff')));
+      for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; mb.caps([Math.cos(a) * 0.9, 2.4, Math.sin(a) * 0.9], [Math.cos(a) * 1.9, 0.55, Math.sin(a) * 1.9], 0.05, 0.03, 4, glowC(C('#c8f0ff'))); }
+      // a cart, a pen with hay, lanterns
+      mb.push([3.5, 0, -1.5], M4.rotY(0.8)); H.flatBox(-1.2, 0.6, -0.7, 1.2, 1.3, 0.7, BC.woodL); for (const z of [-0.8, 0.8]) { mb.push([0, 0.55, z], M4.rotX(Math.PI / 2)); mb.cyl(0, -0.06, 0, 0.55, 0.55, 0.12, 10, C(BC.woodD)); mb.pop(); } mb.caps([1.2, 0.8, -0.3], [2.6, 0.5, -0.3], 0.05, 0.05, 4, C(BC.woodD)); mb.caps([1.2, 0.8, 0.3], [2.6, 0.5, 0.3], 0.05, 0.05, 4, C(BC.woodD)); for (let k = 0; k < 4; k++) mb.sph([-0.7 + k * 0.45, 1.45, 0], 0.28, 6, C(['#ffb43a', '#ff7a3a', '#ffd23a', '#7bd85a'][k]), 0); mb.pop();
+      H.fence(-3, -12, 3, -12); H.fence(3, -12, 3, -16.5); H.fence(-3, -12, -3, -16.5); H.fence(-3, -16.5, 3, -16.5); mb.ico(0, 0.6, -14.5, [1.3, 0.9, 1.0], 1, (x, y) => shadeC(C('#e8c860'), 0.85 + y * 0.15));
+      for (const [x, z] of [[-3, 3], [3, 3.5], [0, -4], [-4, -2]]) { H.lantern(x, 2.4, z); s.lights.push({ p: L(x, 2.6, z), r: 8, c: [1, 0.8, 0.45] }); }
+      item('coin', 0, 0.9, 4.5); item('mushroom', 5, 0.6, 0); break;
     }
-    case 'igloo': { // an igloo of snow blocks with a tunnel, a snowman with a scarf, a fire, a sled and an ice-fishing hole with a stool
-      const blocks = (x, y, z) => { const a = Math.atan2(z, x), row = Math.floor((y + 0.1) * 6); return shadeC(C('#eef6ff'), (Math.floor(a * 3 + (row % 2) * 0.5) + row) % 2 ? 0.94 : 1.0); };
-      mb.ico(0, -0.5, 0, 4, 2, blocks, false, m => m[1] > -0.1);
-      for (let k = 1; k < 4; k++) mb.tor([0, -0.5 + k * 1.0, 0], Math.sqrt(16 - (k * 1.0) ** 2) + 0.02, 0.05, 24, 3, C('#c8dcf0'));
-      mb.push([0, -0.5, 4.2]); mb.lathe([[1.6, 0], [1.6, 1.2], [1.1, 2.0], [0, 2.2]], 10, C('#e2eefa')); mb.pop();
-      H.flatBox(-1.6, -0.5, 3.2, 1.6, 1.6, 5.4, '#e2eefa'); H.flatBox(-0.8, -0.5, 5.39, 0.8, 1.2, 5.42, '#2a3a4a'); mb.ico(0, 1.0, 5.43, [0.3, 0.2, 0.02], 0, () => glowC(C('#ffd08a')));
-      for (let k = 0; k < 3; k++) mb.tor([0, -0.5 + k * 0.6, 4.2], 1.62, 0.04, 12, 3, C('#c8dcf0'));
-      // the snowman: three balls, coal eyes and buttons, a carrot, a scarf, stick arms and a hat
-      mb.ico(6, 0.5, 2, 0.9, 1, () => C(BC.snow)); mb.ico(6, 1.8, 2, 0.65, 1, () => C(BC.snow)); mb.ico(6, 2.8, 2, 0.45, 1, () => C(BC.snow));
-      mb.push([6, 2.8, 2.4], M4.rotX(Math.PI / 2)); mb.cyl(0, 0, 0, 0.08, 0, 0.45, 5, C('#ff8a3a')); mb.pop();
-      for (const sx of [-1, 1]) mb.ico(6 + sx * 0.16, 2.95, 2.38, 0.05, 0, () => C('#22262e')); for (let k = 0; k < 3; k++) mb.ico(6, 1.5 + k * 0.28, 2.62, 0.06, 0, () => C('#22262e'));
-      mb.tor([6, 2.4, 2], 0.42, 0.1, 12, 4, C('#e8343a')); mb.caps([6.25, 2.35, 2.35], [6.4, 1.8, 2.55], 0.09, 0.07, 5, C('#e8343a'));
-      for (const sx of [-1, 1]) { MB.tube(mb, [[6 + sx * 0.55, 1.9, 2], [6 + sx * 1.2, 2.3, 2.1], [6 + sx * 1.5, 2.6, 2.05]], 0.04, 4, C(BC.woodD)); mb.caps([6 + sx * 1.2, 2.3, 2.1], [6 + sx * 1.35, 2.55, 2.3], 0.025, 0.02, 3, C(BC.woodD)); }
-      mb.cyl(6, 3.15, 2, 0.35, 0.35, 0.08, 8, C('#3a3f55')); mb.cyl(6, 3.2, 2, 0.24, 0.24, 0.45, 8, C('#3a3f55')); mb.cyl(6, 3.27, 2, 0.25, 0.25, 0.08, 8, C('#e8343a'), false);
-      // ice fishing hole with a stool and a rod
-      mb.cyl(-5, -0.45, 3, 1, 1, 0.5, 12, C('#bfe6ff')); mb.cyl(-5, 0.03, 3, 0.7, 0.7, 0.02, 12, C('#2a6aa8'), true);
-      mb.cyl(-6.4, 0, 3.2, 0.3, 0.3, 0.06, 8, C(BC.woodL), true); mb.cyl(-6.4, 0.45, 3.2, 0.3, 0.3, 0.06, 8, C(BC.woodL), true); for (let k = 0; k < 3; k++) { const a = k * 2.09; mb.cyl(-6.4 + Math.cos(a) * 0.2, 0, 3.2 + Math.sin(a) * 0.2, 0.03, 0.03, 0.45, 4, C(BC.woodD)); }
-      mb.caps([-6.1, 0.5, 3.1], [-5.1, 1.5, 3], 0.025, 0.012, 4, C('#3a3a48')); mb.cyl(-5.1, 0.03, 3, 0.006, 0.006, 1.47, 3, C('#e8e8f0'));
-      // a little campfire and a sled
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; mb.ico(3.5 + Math.cos(a) * 0.7, 0.05, -4 + Math.sin(a) * 0.7, [0.22, 0.15, 0.2], 0, () => C('#7a7a80')); }
-      for (let k = 0; k < 3; k++) { const a = k * 1.05; mb.push([3.5, 0.15, -4], M4.mul3(M4.rotY(a), M4.rotZ(Math.PI / 2))); mb.cyl(0, -0.45, 0, 0.08, 0.08, 0.9, 5, C(BC.woodD)); mb.pop(); }
-      mb.cone(3.5, 0.1, -4, 0.35, 0.8, 6, glowC(C('#ffa03a'))); mb.cone(3.5, 0.15, -4, 0.2, 0.55, 5, glowC(C('#fff0a0')));
-      mb.push([-3, 0, -5], M4.rotY(0.5)); H.flatBox(-0.6, 0.3, -1.1, 0.6, 0.38, 1.0, '#c8483a'); for (const sx of [-0.5, 0.5]) { H.flatBox(sx - 0.04, 0, -1.1, sx + 0.04, 0.06, 1.2, BC.metalD); MB.tube(mb, [[sx, 0.03, 1.2], [sx, 0.2, 1.4], [sx, 0.4, 1.3]], 0.04, 4, C(BC.metalD)); H.flatBox(sx - 0.03, 0.06, -0.8, sx + 0.03, 0.3, -0.7, BC.metalD); H.flatBox(sx - 0.03, 0.06, 0.6, sx + 0.03, 0.3, 0.7, BC.metalD); } mb.pop();
-      s.lights.push({ p: L(3.5, 1, -4), r: 8, c: [1, 0.6, 0.3] }); item('crystal', 0, 0.6, 7); break;
+    case 'tower': { // watch keep: a tall square stone keep, a zig-zag scaffold of ramps up its four sides, a roofed wooden lookout, hanging banners and a beacon fire on top
+      const c = '#9c978d';
+      for (let k = 0; k < 24; k++) { const y = -0.6 + k * 0.62, hw = 3 - k * 0.012; mb.box(-hw, y, -hw, hw, y + 0.62, hw, shadeC(C(c), k % 2 ? 0.92 : 1.0)); }
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) mb.box(sx * 3.05 - 0.4, -0.6, sz * 3.05 - 0.4, sx * 3.05 + 0.4, 14.3, sz * 3.05 + 0.4, C('#8a857b'));
+      for (let k = 0; k < 3; k++) for (const [sx, sz] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) H.deco(sx ? sx * 3.0 - 0.05 : -0.1, 4 + k * 3.4, sz ? sz * 3.0 - 0.05 : -0.1, sx ? sx * 3.0 + 0.05 : 0.1, 5 + k * 3.4, sz ? sz * 3.0 + 0.05 : 0.1, '#221e1a');
+      H.door(0, 2.9, 1.2, 2.2);
+      // the scaffold: a ramp up each side, landings on the corners, posts down to the ground
+      const R = 4.4, pts = [[-R, 0, R], [R, 3.5, R], [R, 7, -R], [-R, 10.5, -R], [-R, 14, R]];
+      for (let i = 0; i < 4; i++) X.ramp([pts[i], pts[i + 1]], 1.8, BC.woodL, true);
+      for (let i = 1; i < 4; i++) { const q = pts[i]; mb.box(q[0] - 1, q[1] - 0.25, q[2] - 1, q[0] + 1, q[1], q[2] + 1, C(BC.woodL)); }
+      for (let i = 0; i < 4; i++) for (let k = 1; k < 4; k++) { const t = k / 4, a = pts[i], b = pts[i + 1], x = a[0] + (b[0] - a[0]) * t, z = a[2] + (b[2] - a[2]) * t, y = a[1] + (b[1] - a[1]) * t; const ox = Math.sign(x) * 0.8, oz = Math.sign(z) * 0.8; mb.box(x + ox - 0.1, -0.5, z + oz - 0.1, x + ox + 0.1, y - 0.25, z + oz + 0.1, C(BC.woodD), true, true); }
+      // the lookout: a deck, posts, a railing and a pointed roof, with a beacon fire
+      mb.box(-4.8, 13.75, -4.8, 4.8, 14.0, 4.8, C(BC.woodL)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) mb.box(sx * 4.6 - 0.15, 14, sz * 4.6 - 0.15, sx * 4.6 + 0.15, 17, sz * 4.6 + 0.15, C(BC.woodD));
+      for (const [a, b] of [[[-4.6, -4.6], [4.6, -4.6]], [[4.6, -4.6], [4.6, 4.6]], [[-4.6, -4.6], [-4.6, 2.6]]]) { mb.caps([a[0], 15, a[1]], [b[0], 15, b[1]], 0.06, 0.06, 4, C(BC.woodL)); }
+      X.pyroof(0, 17, 0, 4.6, 3.4, '#5a6a8a', 0.6); mb.cyl(0, 20.4, 0, 0.05, 0.05, 1.2, 4, C(BC.metalD));
+      mb.cyl(0, 14, 0, 0.9, 0.6, 0.6, 8, C(BC.metalD)); mb.cone(0, 14.6, 0, 0.6, 1.2, 6, glowC(C('#ffa03a'))); mb.cone(0, 14.6, 0, 0.35, 0.8, 5, glowC(C('#fff0a0')));
+      for (const [x, z, col] of [[-1.6, 3.06, '#c8343a'], [1.6, 3.06, '#3a5ac8']]) { mb.quad([x - 0.6, 13.6, z], [x + 0.6, 13.6, z], [x + 0.6, 9.2, z], [x - 0.6, 9.2, z], C(col), true); mb.tri([x - 0.6, 9.2, z], [x + 0.6, 9.2, z], [x, 8.5, z], C(col), true); mb.ico(x, 11.5, z + 0.02, [0.3, 0.3, 0.02], 0, () => C(BC.gold)); }
+      s.lights.push({ p: L(0, 15.5, 0), r: 12, c: [1, 0.7, 0.35] }); item('feather', 2, 14.6, 2); break;
     }
-    case 'frozen': { // a giant ice spire with facets, a glowing core, ledges with icicles, shards and snow drifts
-      const ice = C(BC.ice), iceL = C('#e8f6ff');
-      mb.lathe([[3.4, -1], [3.0, 3], [2.6, 6], [2.4, 9], [2.0, 12], [1.2, 15], [0, 18]], 6, (t, ph) => shadeC(Math.floor(ph * 0.95) % 2 ? C('#a8d4f4') : C('#d8eeff'), 0.85 + t * 0.2), 0);
-      for (let k = 0; k < 6; k++) { const a = (k + 0.5) / 6 * 6.283; mb.push([Math.cos(a) * 2.75, 0, Math.sin(a) * 2.75], M4.mul3(M4.rotY(-a), M4.rotZ(0.06))); H.deco(0, 0.5 + (k % 3), -0.08, 0.12, 6 + (k % 2) * 4, 0.08, glowC(C('#8ff6ff'))); mb.pop(); }
-      for (const [y, r] of [[4, 3.2], [9, 2.6]]) { mb.cyl(0, y, 0, r + 0.6, r + 0.4, 0.4, 6, C(BC.snow), true, 0.3); for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283 + 0.3; mb.cyl(Math.cos(a) * (r + 0.35), y - 0.6 - (k % 3) * 0.3, Math.sin(a) * (r + 0.35), 0, 0.1, 0.6 + (k % 3) * 0.3, 4, glowC(iceL)); } }
-      for (let k = 0; k < 11; k++) { const a = k * 0.7, d = 4 + rnd(k) * 3.5, h = 2 + rnd(k + 5) * 4; mb.push([Math.cos(a) * d, -0.5, Math.sin(a) * d], M4.mul3(M4.rotY(-a), M4.rotZ(0.3 * (rnd(k + 3) - 0.5)))); mb.cyl(0, 0, 0, 0.7, 0.5, h, 6, k % 2 ? ice : glowC(ice), true, k); mb.cyl(0, h, 0, 0.5, 0, 1.2, 6, k % 2 ? iceL : glowC(iceL), true, k); mb.pop(); }
-      for (let k = 0; k < 6; k++) { const a = k * 1.05 + 0.5; mb.ico(Math.cos(a) * 5.5, -0.3, Math.sin(a) * 5.5, [2 + rnd(k) * 1.5, 0.8, 1.5], 1, () => C(BC.snow)); }
-      s.lights.push({ p: L(0, 6, 0), r: 12, c: [0.5, 0.85, 1] }); item('gem', 4, 0.6, 0); break;
+    case 'bigtree': { // treehouse village: a huge banyan tree with hanging roots, a wide flat crown and three round treehouses joined by rope bridges
+      const bark = C('#6e4e30'), barkD = C('#5a3e24'), leaf = (q, w) => w > 0.35 ? C('#6ac05a') : w < -0.3 ? C('#2f7a3a') : C('#48a050');
+      mb.lathe([[4.2, -1], [3.2, 1], [2.8, 6], [3.0, 12], [3.6, 15], [0, 15.5]], 14, (t, ph) => shadeC(bark, 0.82 + 0.18 * Math.cos(ph * 9 + t * 6)), 0.1);
+      for (let k = 0; k < 6; k++) { const a = k * 1.05 + 0.2, bx2 = Math.cos(a) * 11, bz = Math.sin(a) * 11; MB.tube(mb, [[Math.cos(a) * 2.5, 13.5, Math.sin(a) * 2.5], [Math.cos(a) * 6.5, 16.5, Math.sin(a) * 6.5], [bx2, 17, bz]], t => 1.2 - t * 0.6, 7, bark);
+        mb.ico(bx2, 18.5, bz, [5.5, 2.4, 5.5], 1, leaf); if (k % 2 === 0) mb.cyl(bx2 * 0.8, -0.5, bz * 0.8, 0.45, 0.3, 17, 6, barkD); else for (let q = 0; q < 3; q++) mb.cyl(bx2 * 0.75 + q * 0.4, 12 - q * 2, bz * 0.75, 0.05, 0.05, 4 + q * 2, 3, C('#7a6a3a')); }
+      mb.ico(0, 19.5, 0, [8, 3.2, 8], 1, leaf);
+      const pod = (x, y, z, r, col) => { mb.cyl(x, y, z, r + 1.2, r + 1.2, 0.35, 14, C(BC.woodL)); mb.cyl(x, y + 0.35, z, r, r, 2.6, 12, C('#c8a070')); for (let k = 0; k < 4; k++) mb.cyl(x, y + 0.55 + k * 0.62, z, r + 0.02, r + 0.02, 0.06, 12, C(BC.woodD), false); X.cone(x, y + 2.95, z, r + 0.6, 2.2, col); for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; mb.box(x + Math.cos(a) * (r + 1.05) - 0.06, y + 0.35, z + Math.sin(a) * (r + 1.05) - 0.06, x + Math.cos(a) * (r + 1.05) + 0.06, y + 1.3, z + Math.sin(a) * (r + 1.05) + 0.06, C(BC.woodD), true, true); } mb.tor([x, y + 1.3, z], r + 1.05, 0.06, 20, 3, C(BC.woodL)); mb.push([x, y + 0.35, z + r]); H.window(0, 1.5, 0, 0.6, 0.6, 1, true); mb.pop(); };
+      // the first deck wraps the trunk, reached by a ramp spiralling up
+      mb.cyl(0, 7, 0, 5.6, 5.6, 0.35, 16, C(BC.woodL));
+      for (let k = 0; k < 20; k++) { const a0 = k / 20 * 6.28, a1 = (k + 1) / 20 * 6.28, y0 = k / 20 * 7, y1 = (k + 1) / 20 * 7, P = (a, r, y) => [Math.cos(a) * r, y, Math.sin(a) * r]; mb.quad(P(a0, 3.6, y0), P(a0, 5.6, y0), P(a1, 5.6, y1), P(a1, 3.6, y1), shadeC(C(BC.woodL), k % 2 ? 0.9 : 1)); mb.quad(P(a0, 3.6, y0 - 0.25), P(a1, 3.6, y1 - 0.25), P(a1, 5.6, y1 - 0.25), P(a0, 5.6, y0 - 0.25), C(BC.woodD)); if (k % 2) mb.box(P(a0, 5.5, 0)[0] - 0.06, y0, P(a0, 5.5, 0)[2] - 0.06, P(a0, 5.5, 0)[0] + 0.06, y0 + 1, P(a0, 5.5, 0)[2] + 0.06, C(BC.woodD), true, true); }
+      pod(10, 9, 3, 1.8, BC.roofR); pod(-8, 11, -6.5, 1.6, BC.roofB);
+      X.ramp([[5.3, 7.35, 1.2], [8.2, 9.35, 2.6]], 1.4, BC.woodL, true); X.ramp([[-3.8, 7.35, -3.6], [-6.5, 11.35, -5.6]], 1.4, BC.woodL, true);
+      mb.cyl(10, -0.5, 3, 0.4, 0.3, 9.6, 6, barkD); mb.cyl(-8, -0.5, -6.5, 0.4, 0.3, 11.6, 6, barkD);
+      for (const [x, y, z] of [[4, 8.6, -4], [-5, 8.6, 3], [10, 10.6, 5]]) { mb.cyl(x, y, z, 0.03, 0.03, 0.6, 3, C('#3a3f55')); mb.box(x - 0.15, y - 0.3, z - 0.15, x + 0.15, y, z + 0.15, glowC(C('#ffe08a'))); }
+      s.lights.push({ p: L(0, 9, 4), r: 10, c: [1, 0.8, 0.45] }, { p: L(10, 11, 3), r: 7, c: [1, 0.8, 0.45] }); item('relic', -8, 11.9, -4.2); break;
     }
-    case 'stilts': { // a swamp hut on braced stilts: plank walls, a layered thatch roof, a porch, a dock with a rowboat, a fishing net and lanterns
-      for (const [x, z] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) mb.cyl(x, -2, z, 0.3, 0.25, 4.6, 7, C('#4a3a2a'));
-      for (const [a, b] of [[[-3, -3], [3, -3]], [[-3, 3], [3, 3]], [[-3, -3], [-3, 3]], [[3, -3], [3, 3]]]) { mb.caps([a[0], 0.3, a[1]], [b[0], 2.3, b[1]], 0.1, 0.1, 5, C('#5a4632')); mb.caps([b[0], 0.3, b[1]], [a[0], 2.3, a[1]], 0.1, 0.1, 5, C('#5a4632')); }
-      H.flatBox(-3.6, 2.5, -3.6, 3.6, 2.8, 3.6, BC.wood); for (let k = 0; k < 12; k++) H.deco(-3.6 + k * 0.6, 2.79, -3.6, -3.06 + k * 0.6, 2.82, 3.6, shadeC(C(BC.woodL), 0.88 + (k % 3) * 0.06));
-      H.flatBox(-2.8, 2.8, -2.8, 2.8, 5.2, 2.8, '#8a7a52'); for (let k = 0; k < 6; k++) for (const sd of [-1, 1]) { H.deco(-2.82, 2.9 + k * 0.4, sd * 2.8 - 0.04, 2.82, 2.95 + k * 0.4, sd * 2.8 + 0.04, '#6a5a3a'); H.deco(sd * 2.8 - 0.04, 2.9 + k * 0.4, -2.82, sd * 2.8 + 0.04, 2.95 + k * 0.4, 2.82, '#6a5a3a'); }
-      for (let k = 0; k < 4; k++) mb.cyl(0, 5.0 + k * 0.55, 0, 4.4 - k * 0.95, 3.6 - k * 0.95, 0.75, 8, shadeC(C(BC.thatch), k % 2 ? 0.9 : 1), true, 0.39 + k * 0.2);
-      mb.cyl(0, 7.2, 0, 0.6, 0.0, 0.8, 8, shadeC(C(BC.thatch), 0.8));
-      mb.push([0, 2.8, 0]); H.door(0, 2.8, 1, 1.9); H.window(-1.8, 1.5, 2.8, 0.7, 0.6, 1, true); H.window(1.8, 1.5, 2.8, 0.7, 0.6, 1, true); mb.pop();
-      for (let x = -3.4; x <= 3.4; x += 0.85) H.flatBox(x - 0.05, 2.8, 3.45, x + 0.05, 3.7, 3.55, BC.woodD); H.flatBox(-3.6, 3.65, 3.43, -1.1, 3.75, 3.57, BC.woodL); H.flatBox(1.1, 3.65, 3.43, 3.6, 3.75, 3.57, BC.woodL);
-      mb.quad([-1, 0, 9], [1, 0, 9], [1, 2.8, 3.6], [-1, 2.8, 3.6], C(BC.woodL));
-      for (let k = 0; k < 6; k++) H.flatBox(-1.1, 0.05 + k * 0.47, 8.5 - k * 0.9, 1.1, 0.12 + k * 0.47, 8.8 - k * 0.9, BC.woodD);
-      // a dock to the side with a rowboat tied up
-      H.flatBox(3.6, 0.3, -1, 9, 0.5, 1, BC.woodL); for (const x of [4.5, 6.5, 8.5]) for (const z of [-1.05, 1.05]) mb.cyl(x, -1.5, z, 0.12, 0.12, 2.6, 5, C('#4a3a2a'));
-      mb.push([7, -0.15, 2.3], M4.rotY(0.15)); mb.lathe([[0, 0], [0.55, 0.05], [0.7, 0.45]], 10, C('#7a5a3a'), 0); mb.lathe([[0.66, 0.45], [0.51, 0.09], [0, 0.05]], 10, C('#5a4028'), 0); mb.pop(); mb.push([7, -0.15, 2.3], M4.rotY(0.15)); H.deco(-0.5, 0.25, -0.05, 0.5, 0.32, 0.05, BC.woodL); mb.pop();
-      mb.caps([8.5, 0.6, 1.05], [7.2, 0.35, 2.1], 0.02, 0.02, 3, C('#d8c8a0'));
-      // a fishing net hung on two poles
-      for (const z of [-1.5, 1.5]) mb.cyl(-5, -0.5, z, 0.06, 0.06, 2.6, 4, C(BC.woodD)); for (let k = 0; k < 6; k++) { mb.caps([-5, 0.6 + k * 0.3, -1.5], [-5, 0.5 + k * 0.3, 1.5], 0.012, 0.012, 3, C('#c8b890')); mb.caps([-5, 0.4, -1.5 + k * 0.6], [-5, 2.0, -1.5 + k * 0.6], 0.012, 0.012, 3, C('#c8b890')); }
-      H.lantern(3.4, 3.8, 3.4); H.barrel(-2.4, 3.15, 2.8); s.lights.push({ p: L(3.4, 4, 3.4), r: 9, c: [1, 0.8, 0.45] });
-      item('mushroom', 0, 3.4, 0); break;
+    case 'cabin': { // A-frame lodge: two steep roof sides down to the ground, a big glass front, a deck on posts, a fire pit with log seats, a canoe on a rack and an outhouse
+      const D = 4.5, W = 4.6, Hh = 7.4;
+      mb.quad([W, 0, D], [W, 0, -D], [0, Hh, -D], [0, Hh, D], C('#4a3a34')); mb.quad([-W, 0, -D], [-W, 0, D], [0, Hh, D], [0, Hh, -D], C('#4a3a34'));
+      for (const sd of [-1, 1]) for (let k = 1; k < 9; k++) { const t = k / 9; mb.box(sd * W * (1 - t) - 0.15, Hh * t - 0.05, -D - 0.25, sd * W * (1 - t) + 0.15, Hh * t + 0.05, D + 0.25, C('#3a2c28'), true, true); }
+      mb.box(-0.3, Hh - 0.2, -D - 0.3, 0.3, Hh + 0.2, D + 0.3, C('#2c2220'));
+      mb.tri([-W, 0, -D], [0, Hh, -D], [W, 0, -D], C(BC.woodL));
+      mb.tri([W - 0.3, 0.3, D - 0.2], [0, Hh - 0.5, D - 0.2], [-W + 0.3, 0.3, D - 0.2], glowC(C('#ffd890')));
+      for (let k = -2; k <= 2; k++) { const x = k * 1.4; mb.box(x - 0.08, 0.3, D - 0.15, x + 0.08, Hh - 0.5 - Math.abs(x) * Hh / W, D - 0.05, C(BC.woodD), true, true); } for (const y of [2.2, 4.4]) mb.box(-W * (1 - y / Hh) + 0.3, y - 0.07, D - 0.15, W * (1 - y / Hh) - 0.3, y + 0.07, D - 0.05, C(BC.woodD), true, true);
+      mb.box(-0.6, 0, D - 0.3, 0.6, 2.1, D - 0.1, C(BC.door), true, true);
+      mb.cyl(-2.2, 4.5, -1.5, 0.22, 0.22, 4, 8, C(BC.metalD)); mb.cyl(-2.2, 8.5, -1.5, 0.4, 0, 0.4, 8, C(BC.metalD));
+      // the deck on posts with a railing and steps
+      H.flatBox(-W, 0.6, D, W, 0.85, D + 3.4, BC.woodL); for (const x of [-W + 0.2, 0, W - 0.2]) for (const z of [D + 0.2, D + 3.2]) mb.box(x - 0.12, -0.5, z - 0.12, x + 0.12, 0.6, z + 0.12, C(BC.woodD));
+      for (const [x0, x1] of [[-W, -0.9], [0.9, W]]) { H.flatBox(x0, 1.7, D + 3.3, x1, 1.82, D + 3.42, BC.woodL); for (let x = x0; x <= x1; x += 0.5) H.deco(x - 0.04, 0.85, D + 3.32, x + 0.04, 1.7, D + 3.4, BC.woodL); }
+      for (let k = 0; k < 3; k++) H.flatBox(-0.9, -0.2, D + 3.4 + k * 0.45, 0.9, 0.6 - k * 0.22, D + 3.85 + k * 0.45, BC.woodD);
+      // a fire pit with log seats
+      for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283; mb.ico(5 + Math.cos(a) * 1.0, 0.1, 9 + Math.sin(a) * 1.0, [0.3, 0.22, 0.25], 0, () => C('#7a7a80')); }
+      mb.cone(5, 0.1, 9, 0.5, 1.0, 6, glowC(C('#ffa03a'))); mb.cone(5, 0.15, 9, 0.28, 0.7, 5, glowC(C('#fff0a0')));
+      for (const a of [0.3, 2.4, 4.4]) { mb.push([5 + Math.cos(a) * 2.6, 0.3, 9 + Math.sin(a) * 2.6], M4.mul3(M4.rotY(-a), M4.rotX(Math.PI / 2))); mb.cyl(0, -0.8, 0, 0.3, 0.3, 1.6, 8, C(BC.wood)); mb.pop(); }
+      // the canoe on its rack, and the outhouse
+      for (const z of [-1, 1]) { H.flatBox(-8.2 + z * 0, -0.4, -2.6 + z * 0.9, -8.0, 1.2, -2.4 + z * 0.9, BC.woodD); H.flatBox(-6.2, -0.4, -2.6 + z * 0.9, -6.0, 1.2, -2.4 + z * 0.9, BC.woodD); }
+      H.flatBox(-8.3, 1.1, -3.6, -5.9, 1.25, -1.4, BC.woodD);
+      mb.push([-7.1, 1.25, -2.5], M4.mul3(M4.rotY(Math.PI / 2), M4.rotZ(Math.PI / 2)), [1, 1, 1]); mb.push([0, 0, 0], null, [0.5, 1, 0.45]); mb.lathe([[0, -2.6], [0.45, -1.8], [0.7, 0], [0.45, 1.8], [0, 2.6]], 10, smoothC(C('#d8483a')), 0); mb.pop(); mb.pop();
+      mb.push([-6, 0, -7], M4.rotY(0.6)); H.flatBox(-0.8, -0.3, -0.8, 0.8, 2.4, 0.8, BC.wood); X.pyroof(0, 2.4, 0, 0.8, 0.9, '#4a3a34', 0.2); H.deco(-0.5, 0, 0.8, 0.5, 2.0, 0.86, BC.door); mb.ico(0, 1.7, 0.88, [0.1, 0.14, 0.02], 0, () => glowC(C('#ffe08a'))); mb.pop();
+      s.lights.push({ p: L(0, 2.5, D + 1), r: 10, c: [1, 0.8, 0.45] }, { p: L(5, 1, 9), r: 8, c: [1, 0.6, 0.3] }); item('mushroom', 5, 0.6, 12); break;
     }
-    case 'arch': { // a glowing crystal arch on two pillars of stacked rock, floating crystals and a ring of runes
-      for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) mb.ico(sx * 9 + (rnd(k + sx * 3) - 0.5) * 0.6, 0.3 + k * 1.1, (rnd(k + 7) - 0.5) * 0.6, [2.1 - k * 0.25, 0.75, 1.9 - k * 0.2], 1, (q, w) => shadeC(C('#6a5a7a'), 0.82 + w * 0.22 + (k % 2) * 0.05));
-      for (let k = 0; k <= 16; k++) { const a = k / 16 * Math.PI, x = Math.cos(a) * 9, y = 3.6 + Math.sin(a) * 8.4; mb.push([x, y, 0], M4.rotZ(a + Math.PI / 2)); mb.cyl(0, -0.75, 0, 0.75 + (k % 2) * 0.2, 0.75 + ((k + 1) % 2) * 0.2, 1.5, 6, glowC(C(k % 2 ? '#c08fff' : '#8ff6ff')), true, k * 0.5); for (const sd of [-1, 1]) { mb.push([0, 0, sd * 0.6], M4.rotX(sd * 0.8)); mb.cyl(0, 0, 0, 0.18, 0, 0.8, 5, glowC(C('#e8d8ff'))); mb.pop(); } mb.pop(); }
-      for (let k = 0; k < 8; k++) { const a = rnd(k) * 6.28, d = 3 + rnd(k + 8) * 5; mb.push([Math.cos(a) * d, -0.3, Math.sin(a) * d], M4.rotZ((rnd(k + 2) - 0.5) * 0.6)); mb.cyl(0, 0, 0, 0.35, 0, 1.6 + rnd(k) * 1.5, 6, glowC(C(k % 2 ? '#c08fff' : '#8ff6ff'))); mb.pop(); }
-      for (let k = 0; k < 5; k++) { const a = k * 1.256; mb.ico(Math.cos(a) * 3, 4 + (k % 3) * 1.2, Math.sin(a) * 3, [0.3, 0.55, 0.3], 0, () => glowC(C(k % 2 ? '#e8d8ff' : '#8ff6ff'))); }
-      mb.tor([0, 0.05, 0], 5, 0.08, 30, 3, glowC(C('#c08fff'))); for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; H.deco(Math.cos(a) * 5.6 - 0.15, 0.02, Math.sin(a) * 5.6 - 0.15, Math.cos(a) * 5.6 + 0.15, 0.08, Math.sin(a) * 5.6 + 0.15, glowC(C('#8ff6ff'))); }
-      s.lights.push({ p: L(0, 9, 0), r: 14, c: [0.7, 0.5, 1] }); item('crystal', 0, 0.6, 0); item('gem', 3, 0.6, 2); break;
+    case 'pyramid': { // sun temple: a big plinth with steps, a hall under a golden-banded dome, four slim minarets, an arched porch and a pool with palms
+      const sd = BC.sandD, sa = BC.sand;
+      H.box(-13, -1.2, -13, 13, 1.2, 13, sd); for (let k = 0; k < 4; k++) H.flatBox(-4, -1, 13 + k * 0.7, 4, 1.2 - (k + 1) * 0.5, 13.7 + k * 0.7, sa);
+      H.flatBox(-6.5, 1.2, -6.5, 6.5, 7.5, 6.5, '#e8cc90'); for (let k = 0; k < 6; k++) H.deco(-6.55, 2 + k, -6.55, 6.55, 2.08 + k, 6.55, sd);
+      mb.cyl(0, 7.5, 0, 6.8, 6.8, 0.6, 16, C(sd)); mb.push([0, 8.1, 0]); mb.lathe([[6.2, 0], [6.1, 1.6], [5.4, 3.4], [4.0, 4.9], [2.2, 5.8], [0, 6.1]], 18, (t, ph) => smoothC(t > 0.28 && t < 0.36 ? C(BC.gold) : C('#f0dca8')), 0); mb.pop();
+      mb.cyl(0, 14.2, 0, 0.7, 0.5, 1.2, 8, C(sa)); mb.cyl(0, 15.4, 0, 0.6, 0, 1.4, 8, glowC(C(BC.gold)));
+      for (const [x, z] of [[-11, -11], [11, -11], [-11, 11], [11, 11]]) { mb.cyl(x, 1.2, z, 1.2, 0.9, 13, 10, C('#ecd49a')); mb.cyl(x, 10, z, 1.6, 1.6, 0.35, 10, C(sd)); for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; H.deco(x + Math.cos(a) * 1.5 - 0.05, 10.35, z + Math.sin(a) * 1.5 - 0.05, x + Math.cos(a) * 1.5 + 0.05, 10.9, z + Math.sin(a) * 1.5 + 0.05, sd); }
+        mb.push([x, 14.2, z]); mb.lathe([[1.0, 0], [1.05, 0.5], [0.7, 1.2], [0, 1.6]], 10, smoothC(C(BC.gold)), 0); mb.pop(); mb.cyl(x, 15.7, z, 0.05, 0.05, 0.9, 4, C(BC.gold)); }
+      for (let k = 0; k < 5; k++) { const x = -5.2 + k * 2.6; mb.cyl(x - 1.3, 1.2, 8.2, 0.35, 0.32, 3.4, 8, C(sa)); X.arch(x, 4.6, 7.8, 8.6, 1.0, 0.45, sa, 7); } mb.cyl(5.2 + 1.3, 1.2, 8.2, 0.35, 0.32, 3.4, 8, C(sa)); H.box(-6.9, 6.0, 7.6, 6.9, 6.6, 8.8, sd); H.flatBox(-6.5, 1.2, 6.5, 6.5, 1.3, 8.8, sa);
+      H.flatBox(-1.4, 1.2, 6.49, 1.4, 4.4, 6.55, '#2a2016'); X.arch(0, 4.4, 6.45, 6.6, 1.3, 0.35, sd, 7); mb.ico(0, 5.0, 6.6, [0.4, 0.3, 0.05], 0, () => glowC(C('#5ae8d8')));
+      H.box(-3.5, 1.15, 9.6, 3.5, 1.5, 12.4, sd); mb.box(-3.1, 1.45, 10, 3.1, 1.48, 12, glowC(C('#4ab8e8')));
+      X.palm(-5, 10.5, 5, 0.8); X.palm(5, 11.5, 4.5, -0.7); X.palm(-9, 3, 5.5, 0.5);
+      for (const sx of [-1, 1]) H.torch(sx * 4.5, 13.5, 1.8);
+      s.lights.push({ p: L(0, 15, 0), r: 12, c: [1, 0.8, 0.3] }, { p: L(0, 3, 9), r: 9, c: [1, 0.7, 0.3] }); item('gem', 0, 1.9, 11); item('coin', 9, 1.9, 9); break;
     }
-    case 'shroomring': { // a fairy ring of giant mushrooms, little mushrooms, a stump table with toadstool seats, glowing lights and spores
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.28; giantShroom(mb, Math.cos(a) * 10, 0, Math.sin(a) * 10, 1 + rnd(k) * 0.6, rnd(k + 1)); }
-      for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283 + 0.2, r = 7.5 + (k % 3) * 0.6, h = 0.4 + (k % 3) * 0.25, col = C(k % 2 ? '#e8504a' : '#c88aff'); mb.cyl(Math.cos(a) * r, -0.05, Math.sin(a) * r, 0.1, 0.08, h, 5, C('#f4ead8'), false); mb.cyl(Math.cos(a) * r, h - 0.05, Math.sin(a) * r, 0.35, 0.0, 0.28, 7, col); }
-      for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283; mb.ico(Math.cos(a) * 6, 0.25, Math.sin(a) * 6, 0.12, 0, () => glowC(C(k % 3 ? '#fff2a8' : '#ff9ad8'))); }
-      for (let k = 0; k < 20; k++) { const a = rnd(k + 40) * 6.283, r = 2 + rnd(k + 41) * 6; mb.ico(Math.cos(a) * r, 1 + rnd(k + 42) * 4, Math.sin(a) * r, 0.06, 0, () => glowC(C('#e8ffb0'))); }
-      mb.lathe([[1.3, -0.3], [1.15, 0.2], [1.05, 0.7], [1.08, 0.72], [0, 0.73]], 10, (t) => t > 0.95 ? C('#d8b080') : C('#6a4a32'), 0); for (let k = 0; k < 3; k++) mb.tor([0, 0.725, 0], 0.3 + k * 0.25, 0.015, 12, 3, C('#a8805a'));
-      mb.cyl(0, 0.73, 0, 0.15, 0.15, 0.06, 6, C('#ffffff')); mb.ico(0.4, 0.8, 0.2, 0.08, 0, () => C('#ff5a5a'));
-      for (let k = 0; k < 4; k++) { const a = k * 1.571 + 0.4; mb.cyl(Math.cos(a) * 2.2, -0.05, Math.sin(a) * 2.2, 0.15, 0.13, 0.4, 6, C('#f4ead8'), false); mb.cyl(Math.cos(a) * 2.2, 0.32, Math.sin(a) * 2.2, 0.45, 0.35, 0.18, 8, C('#e8504a')); }
-      item('mushroom', 0, 1.3, 0); item('crystal', 2, 0.6, 1); break;
-    }
-    case 'wreck': { // a shipwreck half sunk in the sand: a tilted hull with portholes, a broken bow showing its ribs, a snapped mast, a torn sail, an anchor, cannons and treasure
-      mb.push([0, -1.1, 0], M4.mul3(M4.rotZ(0.06), M4.rotX(0.32)));
-      boatHull(mb, 17, 6, 2.6, 0.78);
-      mb.cyl(-1, 2.2, 0, 0.32, 0.27, 7.5, 8, C(BC.woodD)); for (const y of [3.4, 5.6]) mb.tor([-1, y, 0], 0.33, 0.05, 10, 3, C(BC.metalD));
-      mb.push([-1, 7.4, 0], M4.rotZ(1.9)); mb.cyl(0, 0, 0, 0.26, 0.2, 4.5, 8, C(BC.woodD)); mb.pop();
-      mb.push([-1, 6.2, 0], M4.rotX(Math.PI / 2)); mb.cyl(0, -2.4, 0, 0.1, 0.1, 4.8, 5, C(BC.woodD)); mb.pop();
-      for (let k = 0; k < 4; k++) { const z0 = -2.2 + k * 1.1, z1 = z0 + 1.1, tear = k === 2 ? 1.2 : 0; mb.tri2([-0.8, 6.1, z0], [-0.8, 6.1, z1], [-0.6, 3.0 + tear, z1 * 0.9], C(k % 2 ? '#e8e0cc' : '#d8d0bc')); mb.tri2([-0.8, 6.1, z0], [-0.6, 3.0 + tear, z1 * 0.9], [-0.6, 3.0, z0 * 0.9], C(k % 2 ? '#d8d0bc' : '#e8e0cc')); }
-      for (let k = 0; k < 3; k++) mb.caps([-1, 7.2, 0], [4 - k * 1.3, 2.6, (k - 1) * 2.2], 0.025, 0.025, 3, C('#c8b890'));
-      mb.box(-7.4, 2.5, -1.6, -5, 4.3, 1.6, C(BC.wood)); H.roof(-7.4, -5, -1.6, 1.6, 4.3, 0.9, BC.woodD, 0.2, 3); H.window(-5, 3.4, 0, 0.6, 0.6, 1); H.window(-6.2, 3.4, 1.6, 0.5, 0.5, 1); H.window(-6.2, 3.4, -1.6, 0.5, 0.5, -1);
-      for (const sd of [-1, 1]) for (const x of [-3, 1]) { mb.push([x, 2.4, sd * 2.6], M4.rotX(sd * Math.PI / 2)); mb.cyl(0, 0, 0, 0.18, 0.14, 1.0, 8, C('#2a2a30')); mb.tor([0, 1.0, 0], 0.15, 0.04, 8, 3, C('#2a2a30')); mb.pop(); }
+    case 'pod': { // crashed starship: a long hull broken in two, wings, glowing engines, a cracked cockpit, a scorched trench behind it, a survival tent and a blinking beacon
+      const hull = C('#d4d8e0'), hd = C('#8a92a0'), acc = C('#e85a3a');
+      for (let k = 0; k < 14; k++) { const x = -26 + k * 1.6; mb.box(x, -0.3, -1.6 - k * 0.04, x + 1.6, 0.02, 1.6 + k * 0.04, C('#3a3028'), true); mb.ico(x + 0.8, 0.2, 2.6 + k * 0.05, [1, 0.5 + (k % 3) * 0.2, 0.8], 0, () => C('#7a6a58')); mb.ico(x + 0.8, 0.2, -2.6 - k * 0.05, [1, 0.5 + (k % 2) * 0.3, 0.8], 0, () => C('#7a6a58')); }
+      const fus = (x0, x1, r0, r1) => { mb.push([0, 0, 0], M4.rotZ(-Math.PI / 2), [1, 1, 0.75]); mb.lathe([[r0, x0], [r0 * 1.05, x0 + (x1 - x0) * 0.3], [r1 * 1.1, x0 + (x1 - x0) * 0.7], [r1, x1]], 12, (t, ph) => Math.floor(t * 6) % 2 && Math.cos(ph * 2) > 0.85 ? hd : Math.abs(Math.sin(ph)) < 0.12 ? acc : hull, 0); mb.pop(); };
+      // the back half: engines and wings
+      mb.push([-4.5, 1.6, 0], M4.mul3(M4.rotY(0.12), M4.rotZ(0.05))); fus(-5, 1, 1.9, 2.1);
+      for (const sd of [-1, 1]) { mb.push([-5.0, -0.3, sd * 1.2], M4.rotZ(Math.PI / 2)); mb.cyl(0, 0, 0, 0.8, 0.65, 1.0, 12, hd); mb.cyl(0, -0.02, 0, 0.6, 0.6, 0.04, 12, glowC(C('#5ae8ff'))); mb.pop();
+        mb.quad([-3.5, -0.4, sd * 1.4], [0.5, -0.4, sd * 1.6], [-1.5, -0.6, sd * 7.5], [-4.2, -0.6, sd * 7.5], hull); mb.quad([-4.2, -0.75, sd * 7.5], [-1.5, -0.75, sd * 7.5], [0.5, -0.55, sd * 1.6], [-3.5, -0.55, sd * 1.4], hd); mb.quad([-4.2, -0.6, sd * 7.5], [-1.5, -0.6, sd * 7.5], [-1.5, -0.75, sd * 7.5], [-4.2, -0.75, sd * 7.5], acc);
+        mb.box(-4.4, -0.65, sd * 7.5 - 0.15, -1.4, 0.5, sd * 7.5 + 0.15, acc); }
+      mb.quad([-4.5, 1.6, 0], [-2, 1.6, 0], [-3.8, 4.4, 0], [-4.8, 4.4, 0], hull); mb.quad([-2, 1.6, 0], [-4.5, 1.6, 0], [-4.8, 4.4, 0], [-3.8, 4.4, 0], hd);
       mb.pop();
-      // the anchor lying in the sand, with its chain
-      mb.push([-9, 0.15, 2.5], M4.mul3(M4.rotY(0.7), M4.rotZ(Math.PI / 2 - 0.15))); mb.cyl(0, -1.4, 0, 0.12, 0.12, 2.6, 6, C(BC.metalD)); mb.tor([0, 1.35, 0], 0.25, 0.06, 10, 4, C(BC.metalD)); H.deco(-0.7, 0.7, -0.08, 0.7, 0.85, 0.08, BC.metalD); MB.tube(mb, [[-0.9, -0.9, 0], [-0.6, -1.4, 0], [0, -1.55, 0], [0.6, -1.4, 0], [0.9, -0.9, 0]], 0.1, 5, C(BC.metalD)); for (const sx of [-1, 1]) mb.cyl(sx * 0.95, -0.95, 0, 0.18, 0, 0.4, 4, C(BC.metalD)); mb.pop();
-      for (let k = 0; k < 8; k++) mb.tor([-8.4 + k * 0.5, 0.05, 1.6 - k * 0.35], 0.16, 0.05, 8, 3, C('#5a5a60'));
-      H.barrel(5, 5.4); H.barrel(6.2, 4.8); mb.push([4.2, 0.45, 6.6], M4.rotZ(Math.PI / 2)); H.barrel(0, 0); mb.pop();
-      H.crate(-5, 6); H.crate(-6.1, 6.5, 0.6); mb.ico(-2, 0.1, 6.5, [1.2, 0.4, 0.9], 0, () => C('#d8c48f'));
-      for (let k = 0; k < 6; k++) { const a = rnd(k + 60) * 6.28, d = 9 + rnd(k + 61) * 3; mb.push([Math.cos(a) * d, 0.05, Math.sin(a) * d], M4.rotY(a)); H.deco(-0.9, 0, -0.12, 0.9, 0.08, 0.12, BC.wood); mb.pop(); }
-      mb.push([8, 0.15, -3], M4.rotY(0.4)); H.flatBox(-0.8, -0.1, -0.6, 0.8, 0.5, 0.6, '#7a4a2a'); mb.push([0, 0.5, -0.6], M4.rotX(-0.9)); mb.lathe([[0.62, 0], [0.5, 0.35], [0, 0.45]], 8, C('#9a6a3a'), 0); mb.pop();
-      for (const sx of [-0.8, 0.8]) H.deco(sx - 0.05, -0.1, -0.62, sx + 0.05, 0.5, 0.62, BC.gold); for (let k = 0; k < 6; k++) mb.cyl(-0.5 + k * 0.2, 0.5, -0.2 + (k % 2) * 0.3, 0.1, 0.1, 0.06, 8, glowC(C(BC.gold))); mb.pop();
-      s.lights.push({ p: L(8, 1, -3), r: 6, c: [1, 0.85, 0.4] }); item('shell', 4, 0.6, 7); item('coin', 8, 1, -3); break;
+      // the front half, tipped nose-down into the sand with a cracked canopy
+      mb.push([4.8, 1.0, 1.0], M4.mul3(M4.rotY(-0.35), M4.rotZ(-0.22))); fus(-1, 6, 2.0, 0.2);
+      mb.push([1.6, 1.2, 0], null, [1.4, 0.7, 0.9]); mb.sph([0, 0, 0], 1.0, 12, (x, y) => y > 0 ? C('#4ab8e8') : hd, 0); mb.pop();
+      for (let k = 0; k < 4; k++) mb.caps([1.2 + k * 0.3, 1.9, -0.6 + k * 0.4], [1.8 + k * 0.2, 1.7, -0.2 + k * 0.3], 0.02, 0.02, 3, C('#ffffff'));
+      for (let k = 0; k < 5; k++) mb.box(-1.1, -1.2 + k * 0.5, -1.5, -0.95, -1.0 + k * 0.5, 1.5, glowC(C(k % 2 ? '#ff7a3a' : '#5ae8ff')), true, true);
+      mb.pop();
+      for (let k = 0; k < 10; k++) { const a = rnd(k) * 6.28, d = 7 + rnd(k + 9) * 6; mb.push([Math.cos(a) * d, 0.1, Math.sin(a) * d], M4.mul3(M4.rotY(a), M4.rotZ((rnd(k + 2) - 0.5) * 0.8))); mb.box(-0.6, -0.1, -0.4, 0.6, 0.1, 0.4, k % 3 ? hull : hd); mb.pop(); }
+      // the survival camp: a tent, crates, and a beacon with a blinking light
+      mb.push([6, 0, 9], M4.rotY(-0.5)); mb.quad([-1.4, 0, 1.2], [1.4, 0, 1.2], [1.4, 1.8, 0], [-1.4, 1.8, 0], C('#ff8a2a')); mb.quad([1.4, 0, -1.2], [-1.4, 0, -1.2], [-1.4, 1.8, 0], [1.4, 1.8, 0], C('#e8702a')); mb.tri([-1.4, 0, 1.2], [-1.4, 1.8, 0], [-1.4, 0, -1.2], C('#c85a1a')); mb.tri([1.4, 0, -1.2], [1.4, 1.8, 0], [1.4, 0, 1.2], C('#c85a1a')); mb.pop();
+      H.crate(3.4, 10.5); H.crate(3.9, 11.4, 0.6); mb.cyl(9, 0, 6, 0.1, 0.06, 3.2, 5, C(BC.metalD)); for (let k = 0; k < 3; k++) mb.caps([9, 0, 6], [9 + Math.cos(k * 2.1) * 1.1, 0, 6 + Math.sin(k * 2.1) * 1.1], 0.05, 0.05, 3, C(BC.metalD)); mb.ico(9, 3.35, 6, 0.22, 1, () => glowC(C('#ff3a4a')));
+      s.lights.push({ p: L(-9, 1.2, 0), r: 8, c: [0.4, 0.9, 1] }, { p: L(9, 3.4, 6), r: 8, c: [1, 0.3, 0.3] }); item('relic', 6, 0.6, 12); break;
     }
-    case 'lighthouse': { // a striped lighthouse on a stone base: windows, a door with steps, a railed balcony, a framed glass lamp room, a keeper's cottage, rocks and a little dock
-      H.box(-4, -0.8, -4, 4, 0.4, 4, BC.stoneD); H.blockWall(-4, 4, -0.6, 0.4, 3.98, 4.04, BC.stone, rnd, 5);
-      for (let k = 0; k < 6; k++) mb.cyl(0, 0.4 + k * 2.8, 0, 3 - k * 0.25, 2.75 - k * 0.25, 2.8, 14, k % 2 ? C('#eef3fb') : C('#d0503c'));
-      for (let k = 0; k < 5; k++) mb.tor([0, 3.2 + k * 2.8, 0], 2.78 - k * 0.25, 0.05, 20, 3, C('#3a3f55'));
-      mb.cyl(0, 17.2, 0, 2.7, 2.6, 0.35, 14, C('#3a3f55'));
-      for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; H.flatBox(Math.cos(a) * 2.5 - 0.05, 17.5, Math.sin(a) * 2.5 - 0.05, Math.cos(a) * 2.5 + 0.05, 18.4, Math.sin(a) * 2.5 + 0.05, '#3a3f55'); }
-      mb.tor([0, 18.4, 0], 2.5, 0.06, 24, 3, C('#3a3f55'));
-      mb.cyl(0, 17.5, 0, 1.6, 1.6, 2.2, 8, glowC(C('#fff2a8'))); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * 6.283; H.deco(Math.cos(a) * 1.62 - 0.05, 17.5, Math.sin(a) * 1.62 - 0.05, Math.cos(a) * 1.62 + 0.05, 19.7, Math.sin(a) * 1.62 + 0.05, '#2a2e3a'); }
-      mb.cyl(0, 19.7, 0, 2.1, 0, 1.9, 8, C('#3a3f55')); mb.ico(0, 21.7, 0, 0.25, 0, () => C(BC.gold)); mb.cyl(0, 21.9, 0, 0.04, 0.04, 0.8, 4, C('#3a3f55'));
-      for (const [y, r] of [[6, 2.5], [11.5, 2.0], [14.5, 1.8]]) H.window(0, y, r + 0.02, 0.6, 0.9, 1, true); H.window(0, 8.8, -2.3, 0.6, 0.9, -1, true);
-      mb.push([0, 0.4, 3.0]); H.door(0, 0, 1.1, 2.1); mb.pop(); H.stairs(0, 5.2, 1.6, 1, 0.4, 0.8, BC.stone);
-      for (let k = 0; k < 2; k++) mb.tor([2.9 + k * 0.05, 1.6 + k * 0.1, 0], 0.32, 0.08, 12, 4, (a) => Math.floor(a * 2) % 2 ? C('#ffffff') : C('#e8343a'));
-      cottage(mb, H, 7, 0, Math.PI / 2, 4.6, 3.8, 2.8, BC.roofB, BC.plaster, rnd);
-      H.rocks(-6, 4, 7, '#8a857c', 1.2, rnd); H.rocks(-5, -5, 5, '#7a756c', 1.0, k => rnd(k + 90));
-      H.flatBox(-4, 0.1, -8.5, -2.6, 0.3, -3.8, BC.woodL); for (const z of [-8.3, -6.3]) for (const x of [-3.9, -2.7]) mb.cyl(x, -1.5, z, 0.1, 0.1, 2.1, 5, C(BC.woodD));
-      s.lights.push({ p: L(0, 18.5, 0), r: 24, c: [1, 0.9, 0.6] }); item('shell', 5, 0.6, -5); break;
+    case 'igloo': { // snow fort: block walls with battlements, two round snow towers with flags, a gate, a little igloo inside, snowball piles and a snowman guard
+      const sn = '#eef4fc', sb = '#dce8f6';
+      const blocks = (x0, z0, x1, z1) => X.wall(x0, z0, x1, z1, 1.0, () => 2.2, sn, 2.2);
+      blocks(-7, -7, 7, -7); blocks(-7, -7, -7, 7); blocks(7, -7, 7, 7); X.wall(-7, 7, 7, 7, 1.0, () => 2.2, sn, 2.2, t => Math.abs(t - 0.5) < 0.12);
+      for (const sx of [-1, 1]) { const x = sx * 7, z = 7; mb.cyl(x, -0.5, z, 1.9, 1.7, 4.5, 12, C(sb)); for (let k = 0; k < 7; k++) mb.cyl(x, k * 0.6, z, 1.92 - k * 0.03, 1.92 - k * 0.03, 0.05, 12, C('#c8d8ec'), false); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; if (k % 2) mb.box(x + Math.cos(a) * 1.6 - 0.35, 4, z + Math.sin(a) * 1.6 - 0.35, x + Math.cos(a) * 1.6 + 0.35, 4.7, z + Math.sin(a) * 1.6 + 0.35, C(sn)); }
+        mb.cyl(x, 4, z, 0.05, 0.05, 2.4, 4, C(BC.woodD)); mb.tri2([x, 6.3, z], [x + 1.2, 6.0, z], [x, 5.6, z], C(sx > 0 ? '#3a8ae8' : '#e8343a')); }
+      mb.ico(-2, -0.4, -3, 2.6, 2, (x, y, z) => { const a = Math.atan2(z, x), row = Math.floor((y + 0.1) * 5); return shadeC(C(sn), (Math.floor(a * 3 + (row % 2) * 0.5) + row) % 2 ? 0.93 : 1.0); }, false, m => m[1] > -0.1);
+      mb.push([-2, -0.4, -0.3]); mb.lathe([[1.1, 0], [1.1, 0.9], [0.7, 1.45], [0, 1.6]], 10, C(sb)); mb.pop(); H.flatBox(-2.5, -0.4, 0.75, -1.5, 0.9, 0.82, '#2a3a4a');
+      for (const [x, z] of [[3, -4], [4.5, 2]]) for (let k = 0; k < 10; k++) { const lv = k < 6 ? 0 : k < 9 ? 1 : 2, i = lv === 0 ? k : lv === 1 ? k - 6 : 0; mb.sph([x + (i % 3) * 0.42 - 0.42 + lv * 0.21, 0.2 + lv * 0.36, z + Math.floor(i / 3) * 0.42 - 0.2 + lv * 0.2], 0.22, 6, C('#ffffff'), 0); }
+      const sx2 = 3.2, sz2 = 8.6; mb.ico(sx2, 0.5, sz2, 0.9, 1, () => C(BC.snow)); mb.ico(sx2, 1.75, sz2, 0.62, 1, () => C(BC.snow)); mb.ico(sx2, 2.7, sz2, 0.42, 1, () => C(BC.snow));
+      mb.cyl(sx2, 3.0, sz2, 0.32, 0.38, 0.45, 8, C('#8a8f98')); for (const ex of [-0.15, 0.15]) mb.ico(sx2 + ex, 2.82, sz2 + 0.38, 0.05, 0, () => C('#22262e')); mb.push([sx2, 2.7, sz2 + 0.42], M4.rotX(Math.PI / 2)); mb.cyl(0, 0, 0, 0.07, 0, 0.4, 5, C('#ff8a3a')); mb.pop();
+      MB.tube(mb, [[sx2 + 0.55, 1.8, sz2], [sx2 + 1.0, 1.6, sz2 + 0.4], [sx2 + 1.1, 3.0, sz2 + 0.5]], 0.05, 4, C(BC.woodD)); mb.box(sx2 + 0.9, 2.5, sz2 + 0.35, sx2 + 1.3, 2.56, sz2 + 0.65, C(BC.woodD));
+      s.lights.push({ p: L(-2, 1, 0.5), r: 7, c: [1, 0.8, 0.5] }); item('crystal', -2, 0.6, 2); break;
     }
-    case 'cave': { // a mine entrance in a rocky outcrop: a timber frame with braces, rails with a minecart, lanterns, crystals, a sign and a pickaxe
-      const rc = '#77736e';
-      mb.ico(-4.2, 2, 0, [3.2, 3.4, 3], 1, (q, w) => shadeC(C(rc), 0.82 + w * 0.2)); mb.ico(4.2, 2, 0, [3.2, 3.4, 3], 1, (q, w) => shadeC(C(rc), 0.82 + w * 0.2));
-      mb.ico(0, 6.2, -0.4, [5.2, 3, 3.6], 1, (q, w) => shadeC(C(rc), 0.8 + w * 0.22));
-      for (let k = 0; k < 6; k++) { const a = k * 1.1; mb.ico(Math.cos(a) * 6.5, 0.3, Math.sin(a) * 2.5 - 1.5, [1 + rnd(k) * 0.8, 0.8, 1], 0, (q, w) => shadeC(C('#8a857c'), 0.85 + w * 0.2)); }
-      mb.quad([-2.4, -0.5, 0.25], [2.4, -0.5, 0.25], [2.4, 4.4, 0.25], [-2.4, 4.4, 0.25], C('#05070c'), true);
-      for (const sx of [-1, 1]) H.flatBox(sx * 2.4 - 0.22, -0.5, 0.3, sx * 2.4 + 0.22, 4.4, 0.74, BC.woodD);
-      H.flatBox(-2.9, 4.2, 0.25, 2.9, 4.75, 0.78, BC.woodD); for (const sx of [-1, 1]) { mb.push([sx * 1.9, 3.7, 0.55], M4.rotZ(sx * 0.8)); H.deco(-0.08, -0.6, -0.08, 0.08, 0.6, 0.08, BC.woodD); mb.pop(); }
-      for (let k = 0; k < 4; k++) H.deco(-2.2 + k * 1.4, 4.2, 0.78, -1.6 + k * 1.4, 4.75, 0.82, BC.metalD);
-      H.lantern(-3.4, 2.4, 1.6); H.lantern(3.4, 2.4, 1.6);
-      for (const [x, z, c, h] of [[-3, 2.5, '#8ff6ff', 1.5], [3.2, 2.6, '#c08fff', 1.2], [-3.6, 3.2, '#c08fff', 0.8], [3.8, 1.9, '#8ff6ff', 0.9]]) { mb.cyl(x, -0.5, z, 0.3, 0, h, 6, glowC(C(c))); mb.cyl(x + 0.3, -0.5, z + 0.1, 0.18, 0, h * 0.6, 6, glowC(C(c))); }
-      for (let k = 0; k < 8; k++) H.flatBox(-0.75, -0.45, 0.6 + k * 0.85, 0.75, -0.38, 0.85 + k * 0.85, BC.woodD);
-      for (const sx of [-0.55, 0.55]) H.flatBox(sx - 0.05, -0.38, 0.5, sx + 0.05, -0.3, 7.4, BC.metalD);
-      // the minecart on the rails, loaded with ore
-      mb.push([0, -0.3, 5.2]); H.flatBox(-0.75, 0.25, -0.9, 0.75, 1.1, 0.9, '#6a5a4a'); for (const z of [-0.9, 0.9]) H.deco(-0.78, 0.3, z - 0.03, 0.78, 1.05, z + 0.03, BC.metalD); for (const sx of [-0.58, 0.58]) for (const z of [-0.55, 0.55]) { mb.push([sx, 0.2, z], M4.rotZ(Math.PI / 2)); mb.cyl(0, -0.06, 0, 0.2, 0.2, 0.12, 8, C('#3a3a40')); mb.pop(); }
-      for (let k = 0; k < 6; k++) mb.ico(-0.4 + (k % 3) * 0.4, 1.15, -0.4 + Math.floor(k / 3) * 0.6, 0.25, 0, () => k % 3 === 1 ? glowC(C('#8ff6ff')) : C('#5a5658')); mb.pop();
-      H.flatBox(3.6, -0.5, 4.5, 3.75, 1.6, 4.65, BC.wood); H.flatBox(3.0, 1.2, 4.52, 4.4, 1.8, 4.6, BC.woodL);
-      mb.push([-3.2, 0.1, 4.5], M4.rotZ(0.5)); mb.cyl(0, 0, 0, 0.04, 0.04, 1.2, 5, C(BC.woodD)); mb.push([0, 1.15, 0], M4.rotZ(Math.PI / 2)); mb.caps([0, -0.4, 0], [0, 0.4, 0], 0.05, 0.02, 5, C(BC.metal)); mb.pop(); mb.pop();
-      s.triggers.push({ kind: 'cave', p: L(0, 1, 0.8), r: 2.2, cave: p.key, out: L(0, 1.5, 4) });
-      s.lights.push({ p: L(0, 1.5, 2), r: 7, c: [1, 0.8, 0.45] }); break;
+    case 'frozen': { // ice palace: a hexagon floor of ice, six tall pointed spires joined by ice arches, and a glowing frozen throne in the middle
+      const ice = C('#bfe0f8'), iceL = C('#e4f4ff');
+      mb.cyl(0, -0.6, 0, 9.5, 9.8, 1.4, 6, C('#d8ecfa'), true, 0.52); mb.cyl(0, 0.79, 0, 8.6, 8.6, 0.03, 6, glowC(C('#9ad8ff')), true, 0.52);
+      for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + 0.52, x = Math.cos(a) * 8, z = Math.sin(a) * 8, h = 7 + (k % 3) * 2.5;
+        mb.cyl(x, 0.8, z, 1.1, 0.8, h, 6, ice, true, a); mb.cyl(x, 0.8 + h, z, 0.8, 0, 3.2, 6, iceL, true, a); mb.cyl(x, 1, z, 0.35, 0.25, h, 6, glowC(C('#8ff6ff')), true, a + 0.3);
+        const b = (k + 1) / 6 * 6.283 + 0.52, nx = Math.cos(b) * 8, nz = Math.sin(b) * 8, mx = (x + nx) / 2, mz = (z + nz) / 2; mb.push([mx, 5.2, mz], M4.rotY(-Math.atan2(nz - z, nx - x))); X.arch(0, 0, -0.35, 0.35, 3.3, 0.5, '#d4ecfc', 9); mb.pop();
+        for (let q = 0; q < 4; q++) mb.cyl(mx + (q - 1.5) * (nx - x) / 6, 4.6 - (q % 2) * 0.4, mz + (q - 1.5) * (nz - z) / 6, 0, 0.12, 0.8, 4, glowC(iceL)); }
+      mb.box(-1.4, 0.8, -1.2, 1.4, 1.8, 1.2, ice); mb.box(-1.4, 1.8, -1.2, 1.4, 5, -0.7, ice); for (let k = 0; k < 5; k++) mb.cyl(-1.1 + k * 0.55, 5, -0.95, 0.2, 0, 1 + (k % 2 ? 0.4 : 1.1), 4, glowC(C('#8ff6ff'))); for (const sx of [-1.4, 1.1]) mb.box(sx, 1.8, -1.2, sx + 0.3, 2.6, 1.2, iceL);
+      for (let k = 0; k < 5; k++) { const a = k * 1.256 + 0.3; mb.ico(Math.cos(a) * 12, -0.3, Math.sin(a) * 12, [2.5, 0.8, 1.6], 1, () => C(BC.snow)); }
+      s.lights.push({ p: L(0, 4, 0), r: 14, c: [0.5, 0.85, 1] }); item('gem', 0, 2.4, 0.4); break;
+    }
+    case 'stilts': { // swamp witch house: a crooked two-floor house on a giant stump, a twisted roof and chimney, a zig-zag boardwalk, a glowing cauldron and green lanterns
+      const bark = C('#5a4430');
+      mb.lathe([[4.6, -1], [3.6, 0.4], [3.3, 2], [3.4, 3.4], [0, 3.5]], 12, (t, ph) => shadeC(bark, 0.82 + 0.18 * Math.cos(ph * 8)), 0.1); for (let k = 0; k < 6; k++) { const a = k * 1.05; MB.tube(mb, [[Math.cos(a) * 3, 1, Math.sin(a) * 3], [Math.cos(a) * 4.6, -0.2, Math.sin(a) * 4.6], [Math.cos(a) * 5.8, -0.6, Math.sin(a) * 5.8]], t => 0.6 - t * 0.4, 6, bark); }
+      mb.cyl(0, 3.45, 0, 3.0, 3.0, 0.04, 12, C('#c8a070'), true); for (let k = 0; k < 4; k++) mb.tor([0, 3.5, 0], 0.7 + k * 0.6, 0.02, 14, 3, C('#a8805a'));
+      mb.push([0, 3.5, 0], M4.rotY(0.15)); H.flatBox(-2.4, 0, -2.2, 2.4, 2.8, 2.2, '#6a7a5a'); for (let k = 0; k < 7; k++) H.deco(-2.42, 0.1 + k * 0.4, 2.2, 2.42, 0.14 + k * 0.4, 2.26, '#4a5a3a'); H.door(0, 2.2, 1.0, 2.0); mb.ico(-1.4, 1.6, 2.24, [0.4, 0.4, 0.04], 0, () => glowC(C('#9aff6a'))); mb.pop();
+      mb.push([0.2, 6.3, 0], M4.mul3(M4.rotY(-0.25), M4.rotZ(0.08))); H.flatBox(-2, 0, -1.8, 2, 2.2, 1.8, '#7a8a62'); mb.ico(0, 1.2, 1.84, [0.4, 0.4, 0.04], 0, () => glowC(C('#9aff6a'))); mb.pop();
+      mb.push([0.4, 8.5, 0], M4.mul3(M4.rotY(0.3), M4.rotZ(-0.12))); X.pyroof(0, 0, 0, 2.2, 4.2, '#3a3448', 0.4); mb.pop();
+      MB.tube(mb, [[1.4, 8, -1], [1.6, 10, -1.1], [1.2, 11.2, -0.8], [1.5, 12, -0.6]], 0.28, 6, C('#6a5a5a')); mb.cyl(1.5, 12, -0.6, 0.38, 0.38, 0.2, 6, C('#4a3a3a'));
+      X.ramp([[8, 0, 6], [3.5, 1.8, 6], [3.5, 3.5, 2.7]], 1.4, '#7a6a4a', true); for (const [x, z] of [[6.5, 5.5], [5, 6.6], [3, 5], [4, 4]]) mb.box(x - 0.08, -0.6, z - 0.08, x + 0.08, 2, z + 0.08, C('#4a3a2a'));
+      mb.push([-5, 0, 4]); mb.lathe([[0, 0], [0.7, 0.15], [0.85, 0.6], [0.7, 0.95]], 10, C('#2a2a30'), 0); mb.cyl(0, 0.85, 0, 0.66, 0.66, 0.04, 10, glowC(C('#7aff5a'))); for (let k = 0; k < 4; k++) mb.sph([Math.cos(k * 1.6) * 0.3, 0.95, Math.sin(k * 1.6) * 0.3], 0.1 + (k % 2) * 0.05, 6, glowC(C('#b8ff9a')), 0); for (let k = 0; k < 3; k++) { const a = k * 2.1; mb.caps([Math.cos(a) * 0.75, 0.6, Math.sin(a) * 0.75], [Math.cos(a) * 1.0, -0.1, Math.sin(a) * 1.0], 0.06, 0.05, 4, C('#2a2a30')); } mb.pop();
+      for (let k = 0; k < 5; k++) { const a = k * 1.4 + 0.5; mb.cone(-5 + Math.cos(a) * 1.4, -0.1, 4 + Math.sin(a) * 1.4, 0.18, 0.6, 5, C('#4a3a2a')); }
+      for (const [x, y, z] of [[2.6, 6, 2.4], [-2.6, 7, 1.8], [7.6, 2.2, 6.5]]) { mb.cyl(x, y, z, 0.03, 0.03, 0.6, 3, C('#2a2a30')); mb.box(x - 0.16, y - 0.36, z - 0.16, x + 0.16, y, z + 0.16, glowC(C('#9aff6a'))); }
+      for (let k = 0; k < 3; k++) { const x = -3 + k * 1.1, z = -3.5 - k * 0.6; mb.sph([x, 0.3, z], [0.45, 0.35, 0.45], 8, (nx, ny, nz) => smoothC(shadeC(C('#ff8a2a'), 0.85 + Math.abs(Math.cos(Math.atan2(nz, nx) * 4)) * 0.2)), 0); mb.cyl(x, 0.6, z, 0.05, 0.04, 0.2, 4, C('#4a7a3a')); }
+      mb.push([2.6, 3.5, 2.6], M4.rotZ(0.25)); mb.cyl(0, 0, 0, 0.04, 0.04, 2, 4, C(BC.woodD)); for (let k = 0; k < 8; k++) mb.caps([0, 0.15, 0], [Math.cos(k) * 0.2, -0.35, Math.sin(k) * 0.2], 0.02, 0.01, 3, C('#c8a050')); mb.pop();
+      s.lights.push({ p: L(-5, 1.5, 4), r: 8, c: [0.5, 1, 0.4] }, { p: L(0, 6, 3), r: 8, c: [0.5, 1, 0.4] }); item('mushroom', 0, 4.2, 1.6); break;
+    }
+    case 'arch': { // floating crystals: three rock islands hanging in the air with crystals on top, light beams down to a ring of crystal pillars and a tall crystal in the middle
+      const isl = (x, y, z, r) => { mb.ico(x, y, z, [r, r * 0.35, r], 1, (q, w) => w > 0.3 ? C('#6aa85a') : shadeC(C('#6a5a7a'), 0.85 + w * 0.2), false, m => m[1] > 0); mb.push([x, y, z]); mb.lathe([[0, -r * 1.6], [r * 0.4, -r * 1.0], [r * 0.85, -r * 0.4], [r, 0]], 8, (t, ph) => shadeC(C('#5a4a6a'), 0.8 + t * 0.25 + Math.cos(ph * 5) * 0.05), 0); mb.pop();
+        for (let k = 0; k < 5; k++) { const a = k * 1.3, d = k ? r * 0.45 : 0; mb.push([x + Math.cos(a) * d, y + r * 0.3, z + Math.sin(a) * d], M4.rotZ(k ? (k % 2 ? 0.3 : -0.3) : 0)); mb.cyl(0, 0, 0, r * 0.14, r * 0.15, r * (k ? 0.6 : 1.1), 6, glowC(C(k % 2 ? '#c08fff' : '#8ff6ff')), false, k); mb.cyl(0, r * (k ? 0.6 : 1.1), 0, r * 0.15, 0, r * 0.3, 6, glowC(C('#f0e8ff')), true, k); mb.pop(); } };
+      isl(-7, 9, -3, 3.2); isl(6, 12, -5, 2.6); isl(1, 15, 6, 2.2);
+      for (const [x, y, z] of [[-7, 4, -3], [6, 7, -5], [1, 11.2, 6]]) mb.cyl(x, 0, z, 0.08, 0.08, y, 5, glowC(C('#c8a8ff')));
+      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; mb.push([Math.cos(a) * 10, -0.3, Math.sin(a) * 10], M4.rotZ(Math.sin(a) * 0.15)); mb.cyl(0, 0, 0, 0.6, 0.45, 2.5 + (k % 3) * 1.2, 6, glowC(C(k % 2 ? '#c08fff' : '#8ff6ff')), false, k); mb.cyl(0, 2.5 + (k % 3) * 1.2, 0, 0.45, 0, 1, 6, glowC(C('#f0e8ff')), true, k); mb.pop(); }
+      mb.ico(0, 0.3, 0, [2.2, 0.8, 2.2], 1, (q, w) => shadeC(C('#6a5a7a'), 0.85 + w * 0.2)); mb.cyl(0, 0.6, 0, 0.9, 0.7, 6, 6, glowC(C('#8ff6ff'))); mb.cyl(0, 6.6, 0, 0.7, 0, 2.4, 6, glowC(C('#f0e8ff')));
+      s.lights.push({ p: L(0, 6, 0), r: 14, c: [0.7, 0.5, 1] }); item('crystal', 3, 0.6, 3); item('gem', -3, 0.6, 2); break;
+    }
+    case 'shroomring': { // mushroom house: a giant red-and-white mushroom with a home in its stem, a ramp curling up to a balcony, a chimney through the cap and a glowing garden
+      const stem = C('#f2e8d8');
+      mb.lathe([[3.2, -0.6], [2.7, 1], [2.4, 4], [2.6, 7], [3.2, 7.6], [0, 7.7]], 16, (t, ph) => shadeC(stem, 0.9 + 0.1 * Math.cos(ph * 10)), 0.1);
+      mb.push([0, 7.4, 0]); mb.lathe([[3.4, 0], [5.8, -0.2], [7.0, 0.4]], 18, smoothC(C('#f4e8d0')), 0); mb.lathe([[7.0, 0.4], [7.1, 0.9], [6.4, 2.4], [4.8, 3.8], [2.6, 4.7], [0, 5.0]], 20, smoothC(C('#d8342a')), 0.1); mb.pop();
+      for (let k = 0; k < 14; k++) { const a = k * 2.39996, r = 1.4 + (k % 5) * 1.1, y = 7.4 + 5.0 - (r / 7) * (r / 7) * 4.5; mb.sph([Math.cos(a) * r, y, Math.sin(a) * r], [0.55, 0.18, 0.55], 8, smoothC(C('#ffffff')), 0); }
+      mb.push([0, 0, 2.55]); H.door(0, 0.02, 1.2, 2.2); mb.pop(); for (const [a, y] of [[0.6, 3.2], [2.4, 2.4], [4.1, 4.8], [5.4, 2.8]]) { mb.push([Math.cos(a) * 2.42, 0, Math.sin(a) * 2.42], M4.rotY(Math.PI / 2 - a)); H.window(0, y, 0, 0.6, 0.6, 1, true); mb.pop(); }
+      for (let k = 0; k < 20; k++) { const a0 = k / 20 * 6.28 + 1.6, a1 = (k + 1) / 20 * 6.28 + 1.6, y0 = k / 20 * 5.6, y1 = (k + 1) / 20 * 5.6, P = (a, r, y) => [Math.cos(a) * r, y, Math.sin(a) * r]; mb.quad(P(a0, 2.6, y0), P(a0, 4.2, y0), P(a1, 4.2, y1), P(a1, 2.6, y1), shadeC(C(BC.woodL), k % 2 ? 0.9 : 1)); mb.quad(P(a0, 2.6, y0 - 0.2), P(a1, 2.6, y1 - 0.2), P(a1, 4.2, y1 - 0.2), P(a0, 4.2, y0 - 0.2), C(BC.woodD)); if (k % 2) mb.box(P(a0, 4.1, 0)[0] - 0.05, y0, P(a0, 4.1, 0)[2] - 0.05, P(a0, 4.1, 0)[0] + 0.05, y0 + 0.9, P(a0, 4.1, 0)[2] + 0.05, C(BC.woodD), true, true); }
+      mb.cyl(0, 5.6, 0, 4.4, 4.4, 0.3, 16, C(BC.woodL)); for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; mb.box(Math.cos(a) * 4.3 - 0.05, 5.9, Math.sin(a) * 4.3 - 0.05, Math.cos(a) * 4.3 + 0.05, 6.8, Math.sin(a) * 4.3 + 0.05, C(BC.woodD), true, true); } mb.tor([0, 6.8, 0], 4.3, 0.06, 20, 3, C(BC.woodL));
+      mb.cyl(2.2, 10, -2, 0.35, 0.35, 3.2, 8, C('#8a7a6a')); mb.cyl(2.2, 13.2, -2, 0.5, 0.5, 0.2, 8, C('#6a5a4a'));
+      for (let k = 0; k < 18; k++) { const a = k / 18 * 6.283 + rnd(k) * 0.3, r = 6 + rnd(k + 5) * 4, h = 0.3 + rnd(k + 9) * 0.6, col = k % 3 ? '#9aff6a' : '#ff9ad8'; mb.cyl(Math.cos(a) * r, -0.05, Math.sin(a) * r, 0.07, 0.06, h, 5, C('#f4ead8'), false); mb.push([Math.cos(a) * r, h - 0.05, Math.sin(a) * r]); mb.lathe([[0.3, 0], [0.25, 0.15], [0, 0.22]], 7, glowC(C(col)), 0); mb.pop(); }
+      for (let k = 0; k < 7; k++) mb.cyl(0, -0.05, 3.5 + k * 1.1, 0.45, 0.45, 0.1, 7, C('#b8b0a0'), true, k);
+      mb.cyl(1.8, 0, 9, 0.08, 0.08, 1.1, 5, C(BC.woodD)); mb.push([1.8, 1.1, 9]); mb.lathe([[0.3, 0], [0.32, 0.15], [0.2, 0.35], [0, 0.4]], 8, smoothC(C('#d8342a')), 0); mb.pop();
+      s.lights.push({ p: L(0, 3, 3.5), r: 9, c: [1, 0.85, 0.5] }); item('mushroom', 3.4, 6.4, 0); item('crystal', 6, 0.6, 3); break;
+    }
+    case 'wreck': { // pirate wreck: a big ship lying on its side in the sand with its masts flat along the beach, torn sails, a camp with a fire, a map table and treasure
+      mb.push([0, 0.8, 0], M4.mul3(M4.rotX(1.2), M4.rotZ(0.05)));
+      boatHull(mb, 20, 7, 3, 1);
+      for (const [x, h] of [[-4, 10], [3, 12]]) { mb.cyl(x, 3, 0, 0.35, 0.28, h, 8, C(BC.woodD)); mb.push([x, 3 + h * 0.7, 0], M4.rotX(Math.PI / 2)); mb.cyl(0, -2.6, 0, 0.12, 0.12, 5.2, 5, C(BC.woodD)); mb.pop();
+        for (let k = 0; k < 4; k++) { const z0 = -2.5 + k * 1.25, z1 = z0 + 1.25, cut = k === 1 || k === 3 ? 1.5 : 0; mb.tri2([x + 0.2, 3 + h * 0.7, z0], [x + 0.2, 3 + h * 0.7, z1], [x + 0.6, 3 + h * 0.3 + cut, z1 * 0.9], C(k % 2 ? '#ece4d0' : '#d8d0bc')); mb.tri2([x + 0.2, 3 + h * 0.7, z0], [x + 0.6, 3 + h * 0.3 + cut, z1 * 0.9], [x + 0.6, 3 + h * 0.3, z0 * 0.9], C(k % 2 ? '#d8d0bc' : '#ece4d0')); }
+        mb.tor([x, 3 + h, 0], 0.6, 0.12, 10, 4, C(BC.woodL)); }
+      mb.box(-10.5, 3.2, -2.4, -7, 5.4, 2.4, C(BC.wood)); for (let k = 0; k < 3; k++) H.window(-7, 4.3, -1.4 + k * 1.4, 0.6, 0.6, 1, k === 1);
+      mb.push([10.5, 3.6, 0], M4.rotZ(-0.5)); mb.cyl(0, 0, 0, 0.18, 0.08, 4, 6, C(BC.woodD)); mb.pop();
+      mb.tri2([-10.6, 5.4, -0.3], [-10.6, 7.4, -0.3], [-12, 6.6, -0.3], C('#1a1a22')); mb.ico(-11.2, 6.5, -0.32, [0.25, 0.25, 0.02], 0, () => C('#ffffff'));
+      mb.pop();
+      // a beach camp: tent, fire, a table with a map, barrels and the treasure chest
+      mb.push([-4, 0, 9], M4.rotY(0.4)); mb.quad([1.6, 0, 1.4], [1.6, 0, -1.4], [0, 2, -1.4], [0, 2, 1.4], C('#d8c8a8')); mb.quad([-1.6, 0, -1.4], [-1.6, 0, 1.4], [0, 2, 1.4], [0, 2, -1.4], C('#c8b898')); mb.cyl(0, 0, 1.6, 0.05, 0.05, 2.4, 4, C(BC.woodD)); mb.pop();
+      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; mb.ico(2 + Math.cos(a) * 0.9, 0.1, 10 + Math.sin(a) * 0.9, [0.25, 0.18, 0.2], 0, () => C('#8a8478')); } mb.cone(2, 0.1, 10, 0.45, 1.0, 6, glowC(C('#ffa03a'))); mb.cone(2, 0.15, 10, 0.25, 0.7, 5, glowC(C('#fff0a0')));
+      mb.push([5, 0, 7.5], M4.rotY(-0.3)); H.flatBox(-1, 0.8, -0.6, 1, 0.9, 0.6, BC.woodL); for (const [x, z] of [[-0.85, -0.45], [0.85, -0.45], [-0.85, 0.45], [0.85, 0.45]]) H.flatBox(x - 0.05, 0, z - 0.05, x + 0.05, 0.8, z + 0.05, BC.woodD); H.deco(-0.6, 0.9, -0.4, 0.6, 0.92, 0.4, '#f0e2b8'); mb.caps([-0.3, 0.93, -0.2], [0.1, 0.93, 0.1], 0.015, 0.015, 3, C('#c8343a')); mb.caps([0.1, 0.93, -0.1], [0.3, 0.93, 0.1], 0.015, 0.015, 3, C('#c8343a')); mb.caps([0.1, 0.93, 0.1], [0.3, 0.93, -0.1], 0.015, 0.015, 3, C('#c8343a')); mb.pop();
+      H.barrel(8, 4); H.barrel(8.8, 5.1); H.crate(7, 2.5);
+      mb.push([-9, 0.15, 6], M4.rotY(0.6)); H.flatBox(-0.8, -0.1, -0.6, 0.8, 0.5, 0.6, '#7a4a2a'); mb.push([0, 0.5, -0.6], M4.rotX(-0.9)); mb.lathe([[0.62, 0], [0.5, 0.35], [0, 0.45]], 8, C('#9a6a3a'), 0); mb.pop(); for (const sx of [-0.8, 0.8]) H.deco(sx - 0.05, -0.1, -0.62, sx + 0.05, 0.5, 0.62, BC.gold); for (let k = 0; k < 6; k++) mb.cyl(-0.5 + k * 0.2, 0.5, -0.2 + (k % 2) * 0.3, 0.1, 0.1, 0.06, 8, glowC(C(BC.gold))); mb.pop();
+      s.lights.push({ p: L(2, 1, 10), r: 8, c: [1, 0.6, 0.3] }, { p: L(-9, 1, 6), r: 6, c: [1, 0.85, 0.4] }); item('shell', 4, 0.6, 12); item('coin', -9, 1, 6); break;
+    }
+    case 'lighthouse': { // harbour beacon: a tall open steel tower with criss-cross braces and stairs inside, a lamp cabin on top, a boathouse with a slipway and a lifeboat
+      const red = C('#d8443a'), wht = C('#f2f4f8');
+      H.box(-4, -0.8, -4, 4, 0.5, 4, '#8a8a90');
+      const top = 18, w0 = 3.2, w1 = 1.4, at = (sx, sz, t) => [sx * (w0 + (w1 - w0) * t), 0.5 + (top - 0.5) * t, sz * (w0 + (w1 - w0) * t)];
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) for (let k = 0; k < 6; k++) mb.caps(at(sx, sz, k / 6), at(sx, sz, (k + 1) / 6), 0.18, 0.18, 6, k % 2 ? wht : red);
+      for (let k = 0; k < 6; k++) { const t0 = k / 6, t1 = (k + 1) / 6, cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; for (let q = 0; q < 4; q++) { const [ax, az] = cs[q], [bx2, bz] = cs[(q + 1) % 4]; mb.caps(at(ax, az, t0), at(bx2, bz, t1), 0.07, 0.07, 4, C('#3a3f55')); mb.caps(at(bx2, bz, t0), at(ax, az, t1), 0.07, 0.07, 4, C('#3a3f55')); mb.caps(at(ax, az, t1), at(bx2, bz, t1), 0.1, 0.1, 4, k % 2 ? red : wht); } }
+      for (let k = 0; k < 12; k++) { const a0 = k * 1.1, y0 = 0.5 + k * 1.45, y1 = y0 + 1.45, r = 0.9; X.ramp([[Math.cos(a0) * r, y0, Math.sin(a0) * r], [Math.cos(a0 + 1.1) * r, y1, Math.sin(a0 + 1.1) * r]], 0.7, '#5a6070'); }
+      mb.cyl(0, 0.5, 0, 0.15, 0.15, top, 6, C('#3a3f55'));
+      mb.cyl(0, top, 0, 2.6, 2.6, 0.4, 12, C('#3a3f55')); for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; mb.box(Math.cos(a) * 2.45 - 0.04, top + 0.4, Math.sin(a) * 2.45 - 0.04, Math.cos(a) * 2.45 + 0.04, top + 1.4, Math.sin(a) * 2.45 + 0.04, C('#3a3f55')); } mb.tor([0, top + 1.4, 0], 2.45, 0.06, 24, 3, C('#3a3f55'));
+      mb.box(-1.5, top + 0.4, -1.5, 1.5, top + 1.4, 1.5, red); mb.cyl(0, top + 1.4, 0, 1.3, 1.3, 1.8, 8, glowC(C('#fff2a8'))); for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * 6.283; mb.box(Math.cos(a) * 1.32 - 0.05, top + 1.4, Math.sin(a) * 1.32 - 0.05, Math.cos(a) * 1.32 + 0.05, top + 3.2, Math.sin(a) * 1.32 + 0.05, C('#2a2e3a'), true, true); } mb.cyl(0, top + 3.2, 0, 1.7, 0, 1.4, 8, red); mb.cyl(0, top + 4.6, 0, 0.04, 0.04, 1, 4, C('#3a3f55'));
+      // the boathouse with a slipway and a lifeboat
+      mb.push([8, 0, 2], M4.rotY(Math.PI / 2)); H.flatBox(-3, -0.4, -2.5, 3, 3.2, 2.5, '#e8e4dc'); for (let k = 0; k < 7; k++) H.deco(-3.02, 0.2 + k * 0.45, 2.5, 3.02, 0.24 + k * 0.45, 2.56, '#c8c4bc'); H.roof(-3, 3, -2.5, 2.5, 3.2, 1.8, '#d8443a', 0.4, 5); H.deco(-1.5, 0, 2.5, 1.5, 2.6, 2.6, '#3a5a7a'); H.window(-2.2, 2, 2.5, 0.5, 0.5, 1, true); mb.pop();
+      mb.quad([9.5, 0.05, -1.5], [6.5, 0.05, -1.5], [6.5, -1.2, -10], [9.5, -1.2, -10], C(BC.woodL)); for (let k = 0; k < 10; k++) H.deco(6.5, 0.06 - k * 0.13, -1.5 - k * 0.85, 9.5, 0.1 - k * 0.13, -1.3 - k * 0.85, BC.woodD);
+      mb.push([8, 0.3, -4], M4.rotY(Math.PI / 2)); mb.push([0, 0, 0], null, [1, 1, 0.55]); mb.lathe([[0, 0], [0.9, 0.1], [1.1, 0.7]], 12, C('#ff8a2a'), 0); mb.lathe([[1.05, 0.7], [0.85, 0.14], [0, 0.06]], 12, C('#f2f2f2'), 0); mb.pop(); mb.pop();
+      for (let k = 0; k < 2; k++) mb.tor([4.1, 1.5 + k * 0.1, -3 + k * 0.6], 0.32, 0.08, 12, 4, (a) => Math.floor(a * 2) % 2 ? C('#ffffff') : C('#e8343a'));
+      H.rocks(-6, 4, 7, '#8a857c', 1.2, rnd);
+      s.lights.push({ p: L(0, top + 2.3, 0), r: 26, c: [1, 0.9, 0.6] }); item('shell', -4, 0.6, -6); break;
+    }
+    case 'cave': { // crystal mine: a craggy rocky hill, a tall jagged opening with stalactites, crystals spilling out, a headframe tower with a wheel, rails and an ore cart
+      const crag = (x, y, z, sx, sy, sz, sd, col) => mb.ico(x, y, z, [sx, sy, sz], 2, (a, b2) => b2 > 0.62 ? rockC(shadeC(C('#6aa85a'), 0.9 + a * 0.08)) : rockC(shadeC(C(col), 0.76 + b2 * 0.2 + a * 0.05)), false, null, (a, b2, c2) => 0.2 * Math.sin(a * 4 + sd) * Math.cos(c2 * 5 + sd * 1.7) + 0.12 * Math.sin(b2 * 7 + sd * 2.3));
+      crag(0, 2.6, -6.5, 9.5, 7.5, 6, 1, '#7a7570'); crag(-3, 9, -7, 4, 3.4, 3.4, 5, '#8a847c'); crag(3.5, 9.8, -7.5, 3.4, 3.2, 3, 6, '#6f6a64');
+      crag(-5.4, 1.6, -0.6, 3.9, 4.4, 3.6, 2, '#857f78'); crag(5.4, 1.4, -0.7, 3.8, 4.0, 3.4, 3, '#6f6a64'); crag(0, 6.0, -1.8, 4.6, 2.4, 3.2, 4, '#7a7570');
+      for (let k = 0; k < 7; k++) { const a = k * 0.9 + 0.4, d = 9 + rnd(k) * 3; crag(Math.cos(a) * d, 0.1, Math.sin(a) * d * 0.6 - 2, 0.7 + rnd(k + 3), 0.5 + rnd(k + 4) * 0.5, 0.7 + rnd(k + 5) * 0.8, k + 9, '#7d7872'); }
+      // the opening: a dark jagged hole in the rock with a dark tunnel behind it
+      const hole = [[-1.9, -0.5], [-1.5, 2.8], [-0.7, 4.0], [0.3, 4.5], [1.1, 3.9], [1.7, 2.6], [1.9, -0.5]], hz = 1.2;
+      for (let k = 1; k < hole.length - 1; k++) mb.tri([0, 1.5, hz], [hole[k + 1][0], hole[k + 1][1], hz], [hole[k][0], hole[k][1], hz], C('#05070c'), true);
+      mb.box(-1.9, -0.5, -4, 1.9, 4.5, hz - 0.02, C('#0a0c12'), true, true);
+      for (let k = 0; k < 7; k++) { const x = -1.3 + k * 0.42, top = 3.6 + Math.sin(k * 1.7) * 0.6; mb.cyl(x, top - 0.6 - (k % 3) * 0.3, hz + 0.15, 0, 0.13, 0.7 + (k % 3) * 0.3, 5, rockC(C('#6a655f'))); }
+      for (const sx of [-1, 1]) H.flatBox(sx * 1.85 - 0.2, -0.5, hz + 0.05, sx * 1.85 + 0.2, 3.2, hz + 0.45, BC.woodD); H.flatBox(-2.3, 3.0, hz + 0.05, 2.3, 3.5, hz + 0.5, BC.woodD);
+      for (const sx of [-1, 1]) { mb.push([sx * 1.3, 2.6, hz + 0.3], M4.rotZ(sx * 0.75)); H.deco(-0.07, -0.55, -0.07, 0.07, 0.55, 0.07, BC.woodD); mb.pop(); }
+      mb.push([3.8, 2.2, hz + 1.6]); H.flatBox(-0.05, -2.6, -0.05, 0.05, 0.3, 0.05, BC.wood); H.flatBox(-0.7, 0, -0.04, 0.7, 0.5, 0.04, BC.woodL); mb.pop();
+      for (const [x, z, c, h] of [[-2.6, 3.4, '#8ff6ff', 1.6], [2.8, 3.2, '#c08fff', 1.3], [-1.3, 4.6, '#c08fff', 0.9], [1.5, 4.8, '#8ff6ff', 1.0], [-3.8, 2.6, '#8ff6ff', 0.9], [-0.6, -1.5, '#8ff6ff', 1.2], [0.8, -2.5, '#c08fff', 1.0]]) for (let q = 0; q < 3; q++) { mb.push([x + q * 0.25, -0.5, z + (q % 2) * 0.2], M4.rotZ((q - 1) * 0.35)); mb.cyl(0, 0, 0, 0.22 - q * 0.04, 0, h - q * 0.25, 6, glowC(C(c)), true, q); mb.pop(); }
+      // the headframe tower: four legs, cross braces, a platform and a big wheel
+      const hx = 7.5, hz2 = 5; for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) mb.caps([hx + sx * 1.6, -0.5, hz2 + sz * 1.6], [hx + sx * 0.9, 7.5, hz2 + sz * 0.9], 0.15, 0.13, 5, C(BC.woodD));
+      for (let k = 0; k < 3; k++) { const y0 = k * 2.5, y1 = y0 + 2.5, f = t => 1.6 - (t / 8) * 0.7; mb.caps([hx - f(y0), y0, hz2 + f(y0)], [hx + f(y1), y1, hz2 + f(y1)], 0.06, 0.06, 4, C(BC.wood)); mb.caps([hx + f(y0), y0, hz2 + f(y0)], [hx - f(y1), y1, hz2 + f(y1)], 0.06, 0.06, 4, C(BC.wood)); }
+      mb.box(hx - 1.2, 7.5, hz2 - 1.2, hx + 1.2, 7.75, hz2 + 1.2, C(BC.woodL)); mb.push([hx, 8.9, hz2], M4.rotX(Math.PI / 2)); mb.tor([0, 0, 0], 1.0, 0.1, 16, 4, C(BC.metalD)); for (let k = 0; k < 4; k++) { mb.push([0, 0, 0], M4.rotY(k * 0.785)); mb.box(-0.98, -0.04, -0.04, 0.98, 0.04, 0.04, C(BC.metalD)); mb.pop(); } mb.pop(); mb.cyl(hx, 2, hz2 + 0.9, 0.02, 0.02, 6.9, 3, C('#c8c0b0'));
+      for (let k = 0; k < 9; k++) H.flatBox(-0.75, -0.45, 1.6 + k * 0.9, 0.75, -0.38, 1.85 + k * 0.9, BC.woodD); for (const sx of [-0.55, 0.55]) H.flatBox(sx - 0.05, -0.38, 1.2, sx + 0.05, -0.3, 9.8, BC.metalD);
+      mb.push([0, -0.3, 7.2]); H.flatBox(-0.75, 0.25, -0.9, 0.75, 1.1, 0.9, '#6a5a4a'); for (const sx of [-0.58, 0.58]) for (const z of [-0.55, 0.55]) { mb.push([sx, 0.2, z], M4.rotZ(Math.PI / 2)); mb.cyl(0, -0.06, 0, 0.2, 0.2, 0.12, 8, C('#3a3a40')); mb.pop(); } for (let k = 0; k < 6; k++) mb.ico(-0.4 + (k % 3) * 0.4, 1.15, -0.4 + Math.floor(k / 3) * 0.6, 0.25, 0, () => k % 3 === 1 ? glowC(C('#8ff6ff')) : rockC(C('#5a5658'))); mb.pop();
+      H.lantern(-2.6, 2.6, 2.4); H.lantern(2.6, 2.6, 2.4);
+      s.triggers.push({ kind: 'cave', p: L(0, 1, 1.8), r: 2.2, cave: p.key, out: L(0, 1.5, 6) });
+      s.lights.push({ p: L(0, 1.5, 3), r: 8, c: [0.6, 0.9, 1] }); break;
     }
   }
 }
