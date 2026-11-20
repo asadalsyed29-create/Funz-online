@@ -227,3 +227,5 @@ body.touch #banner .t2{font-size:22px}
 .gLink.hidden{display:none}
 
 body.noBuild #buildBar,body.noBuild #buildToggle{display:none!important}
+
+#nailBtn.on{background:#ff8a7a;color:#2a0a06}

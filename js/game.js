@@ -400,6 +400,7 @@ class Game {
     }
     if (insideStation(c.target)) { const R = STATION.R - 2, cc = [STATION.x, STATION.ground, STATION.z]; while (d > 1 && Math.hypot(c.target[0] + dir[0] * d - cc[0], c.target[1] + dir[1] * d - cc[1], c.target[2] + dir[2] * d - cc[2]) > R) d -= 0.5; }
     c.eye = [c.target[0] + dir[0] * d, c.target[1] + dir[1] * d, c.target[2] + dir[2] * d];
+    if (this.shake > 0.01) { const s = this.shake, tt = performance.now() / 1000; c.eye = c.eye.map((v, i) => v + (Math.sin(tt * (31 + i * 7)) * 0.6 + (Math.random() - 0.5) * 0.8) * s * 0.55); }
   }
   forward() { return [-Math.sin(this.cam.yaw), -Math.cos(this.cam.yaw)]; }
   ray(sx, sy) {
@@ -607,6 +608,7 @@ class Game {
     if (!this.under) for (const bo of this.St.boosts) if (vis(bo.p[0], bo.p[2], far)) G.draw(this.ringNext, M4.model(bo.p, M4.rotY(bo.yaw), 1.7), 1, null, 0.6);
     if (!this.under) {
       this.rings.forEach((r, i) => { if (!vis(r.x, r.z, far)) return; const m = o.race ? (i === o.race.next ? this.ringNext : i < o.race.next ? this.ringDone : this.ringM) : this.ringM; G.draw(m, M4.model([r.x, r.y, r.z], M4.rotY(r.yaw)), 1, null, 0.6); });
+      { const cp = CHASE_START, cy = this.T.ground(cp[0], cp[2]) + 0.2; G.draw(o.chase ? this.ringDone : this.ringM, M4.model([cp[0], cy, cp[2]], [1, 0, 0, 0, 0, 1, 0, -1, 0], 0.7), 1, [0.75, 0.6, 1], 0.6); }
       const rs = this.raceStart; G.draw(o.race ? this.ringDone : this.ringNext, M4.model([rs[0], rs[1], rs[2]], [1, 0, 0, 0, 0, 1, 0, -1, 0], 0.7), 1, null, 0.6);
     }
     this.stat('rings');
@@ -627,6 +629,7 @@ class Game {
       drawRig(G, this.creatureFor(cr.type), M4.model(cr.p, M4.rotY(-cr.yaw)), st, vis(cr.p[0], cr.p[2], 26));
     }
     if (!this.under && o.dark < 0.5) for (const b of this.birds) { const a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
+    if (o.chase) o.chase.draw(G, t, me);
     this.stat('creatures');
     // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
     const clear = [];
@@ -679,6 +682,7 @@ class Game {
       G.depthWrite(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 6500)); G.blend(true);
       G.fog();
     }
+    if (o.chase) o.chase.drawFunnel(G, t);
     if (!this.under && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }
     G.mat(0, 0.1, 0.3); G.tex(0);
     if (RL && RL.lake) G.draw(RL.lake, null, 1, null, 0.8);
@@ -712,6 +716,8 @@ class Game {
       const pk = this.landmarks[1]; sign(pk.start[0], pk.start[1] + 2.5, pk.start[2], 'Parkour climb: trophy at the top', '#b8a8ff', 50);
       if (!o.race) sign(this.raceStart[0], this.raceStart[1] + 1.6, this.raceStart[2], 'Ring race: roll here to start', '#ffc45a', 45);
       else { const r = this.rings[o.race.next]; if (r) { const s = this.project(r.x, r.y + 2.2, r.z); if (s) { g.font = '800 16px system-ui'; g.fillStyle = '#ffc45a'; g.fillText(String(o.race.next + 1), s[0], s[1]); } } }
+      if (!o.chase) sign(CHASE_START[0], this.T.ground(CHASE_START[0], CHASE_START[2]) + 1.8, CHASE_START[2], 'Storm chase: roll here to start', '#c9a8ff', 45);
+      else if (o.chase.alive > 0.05) sign(o.chase.p[0], o.chase.p[1] + 30, o.chase.p[2], EF_NAMES[o.chase.ef] + ' tornado · ' + Math.round(o.chase.near) + ' m', '#ff8a7a', 3000);
       for (const pt of this.portals) sign(pt.p[0], pt.p[1] + 3.2, pt.p[2], pt.label, pt.col, 90);
       for (const cn of this.cannons) if (cn.name) sign(cn.p[0], cn.p[1] + 3.4, cn.p[2], cn.name, '#ffc45a', 50);
     } else if (this.realm) sign(this.realm.exit[0], this.realm.exit[1] + 2.6, this.realm.exit[2], 'Way back', '#ffc45a', 60);

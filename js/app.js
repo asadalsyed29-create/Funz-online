@@ -227,7 +227,8 @@
   $('adminBtn').innerHTML = icon('star', 15) + ' Admin';
   $('bagBtn').innerHTML = icon('bag', 22);
   $('wardBtn').innerHTML = icon('shirt', 22);
-  $('shipBtn').innerHTML = icon('ship', 24);
+  $('shipBtn').innerHTML = icon('ship', 24); $('nailBtn').innerHTML = icon('nail', 24);
+  $('nailBtn').onclick = () => toggleNail();
   $('wardClose').innerHTML = icon('close', 18); $('bagClose').innerHTML = icon('close', 18);
   $('gateInstall').innerHTML = icon('down', 22) + ' Install Funz Online'; document.querySelectorAll('#gateIos .gIc').forEach(e => { e.innerHTML = icon('share', 16); });
   $('shipBtn').onclick = () => toggleShip();
@@ -818,6 +819,25 @@
       default: reply('Unknown command. Type /help');
     }
   }
+  // ---------- storm chase minigame ----------
+  function startChase(now) {
+    G.chase = new StormChase(G.game, now); G.nail = false; $('nailBtn').classList.remove('hidden');
+    showToast('Storm chase! A supercell is building. Find the tornado, get close, and press N (or the nail) inside it to intercept', 5200);
+    banner('Storm chase', 'Chase the tornado!'); Sound.play('quest'); prog.add('chases'); questCheck();
+  }
+  function endChase() {
+    const C = G.chase; if (!C) return;
+    const coins = Math.round(C.score / 8);
+    prog.give(coins); if (C.intercepted) prog.add('intercepts'); questCheck(); prog.save();
+    showToast('Chase over! ' + Math.floor(C.score) + ' points' + (C.intercepted ? ' · intercept at ' + Math.round(C.best) + ' km/h' : '') + ' · +' + coins + ' coins', 5000);
+    const L = G.game.extraClouds; if (L) { const i = L.indexOf(C.cloud); if (i >= 0) L.splice(i, 1); }
+    G.chase = null; G.nail = false; G.chaseCool = performance.now() + 5000; G.game.shake = 0; $('nailBtn').classList.add('hidden'); $('nailBtn').classList.remove('on');
+  }
+  function toggleNail() {
+    if (!G || !G.chase) return;
+    G.nail = !G.nail; $('nailBtn').classList.toggle('on', G.nail);
+    showToast(G.nail ? 'Nail down: you are stuck to the ground' : 'Nail up: you can roll again', 1200);
+  }
   function syncDrops() { if (G) G.game.drops = [...G.drops.values()]; }
   const WX = { auto: null, clear: 0.15, cloudy: 0.58, rain: 0.75, storm: 0.92 };
   function setWeather(mode) { if (!G) return; G.wx = WX[mode] !== undefined ? mode : 'auto'; G.game.setWeather(WX[G.wx]); if ($('adminPanel') && !$('adminPanel').classList.contains('hidden')) renderAdmin(); }
@@ -1057,6 +1077,7 @@
     if (k === 'r') { respawn(); return; }
     if (k === 'o') { $('wardBtn').click(); return; }
     if (k === 'v') { toggleShip(); return; }
+    if (k === 'n') { toggleNail(); return; }
     if (k === 'm') { $('musicBtn').click(); return; }
     if (k === ' ') e.preventDefault();
     keys.add(k);
@@ -1168,6 +1189,9 @@
     }
     // parkour checkpoints
     for (const cp of game.landmarks[1].checkpoints) if (Math.hypot(b.p[0] - cp[0], b.p[1] - cp[1], b.p[2] - cp[2]) < 2 && G.lastSpawnPad !== cp.join()) { G.lastSpawnPad = cp.join(); G.spawn = [...cp]; store.set('spawn5', JSON.stringify(G.spawn)); showToast('Checkpoint! You\'ll respawn here', 1500); }
+    // storm chase
+    { const cp = CHASE_START, gy = game.T.ground(cp[0], cp[2]);
+      if (!G.chase && !G.race && now > (G.chaseCool || 0) && Math.hypot(b.p[0] - cp[0], b.p[2] - cp[2]) < 1.8 && Math.abs(b.p[1] - gy) < 2.5) startChase(now); }
     const rs = game.raceStart; // ring race
     if (!G.race && now > G.raceCool && Math.hypot(b.p[0] - rs[0], b.p[2] - rs[2]) < 1.6 && Math.abs(b.p[1] - rs[1]) < 2) {
       G.race = { next: 0, start: now }; showToast('Race! Roll through all 12 rings', 2200);
@@ -1252,7 +1276,9 @@
     const gset = new Set(m.gadget && m.gadget !== 'none' ? [m.gadget] : []);
     if (G.ship && G.ship.st === 'fly') { ix = stick.id !== null ? stick.x : ix; }
     for (const k of m.og || []) gset.add(k);
+    if (G.chase && !G.chase.update(dt, b, now, G.nail)) endChase();
     if (!shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx });
+    if (G.chase && G.chase.anchor) { b.p = [...G.chase.anchor]; b.v = [0, 0, 0]; }
     const RR = G.game.realmAt(b.p);
     if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
     else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
@@ -1296,6 +1322,7 @@
     $('clockT').textContent = String(Math.floor(hrs)).padStart(2, '0') + ':' + String(Math.floor((hrs % 1) * 60)).padStart(2, '0');
     if ($('placeT').textContent !== (G.game.place || '')) $('placeT').textContent = G.game.place || '';
     const chips = Object.entries(G.effects).map(([k, t]) => ({ fast: 'Speed', big: 'Big', superJump: 'Super jump', glow: 'Glow' }[k] + ' ' + Math.ceil((t - now) / 1000) + 's'));
+    if (G.chase) { const C = G.chase, left = Math.max(0, C.T - (now - C.t0) / 1000); chips.unshift((C.alive > 0.05 ? EF_NAMES[C.ef] + ' tornado ' + Math.round(C.near) + ' m' : 'Storm chase · a tornado is forming…') + ' · ' + Math.floor(C.score) + ' pts · ' + Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') + (G.nail ? ' · nailed down' : '')); if (C.msg) chips.unshift(C.msg.text); }
     if (G.race) chips.unshift('Race ' + ((now - G.race.start) / 1000).toFixed(1) + 's · ring ' + (G.race.next + 1) + '/12');
     const ct = chips.join('  ·  '); if ($('effects').textContent !== ct) $('effects').textContent = ct;
     $('effects').classList.toggle('hidden', !ct);
@@ -1304,7 +1331,7 @@
     let cursor = null;
     if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
     const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
-    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
+    if (!NO_RENDER) G.game.render([...G.players.values()], m, { now, dt, dark, chase: G.chase, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();

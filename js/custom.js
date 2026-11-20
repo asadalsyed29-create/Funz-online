@@ -91,6 +91,8 @@ const QUESTS = [
   { id: 'ways', name: 'Pathfinder', desc: 'Wake up 5 waystones', stat: 'ways', goal: 5, coins: 60 },
   { id: 'trophy', name: 'Parkour champion', desc: 'Get the trophy at the top of the parkour climb', stat: 'trophy', goal: 1, coins: 80 },
   { id: 'race', name: 'Ring racer', desc: 'Finish the ring race', stat: 'races', goal: 1, coins: 60 },
+  { id: 'chaser', name: 'Storm chaser', desc: 'Go on a storm chase', stat: 'chases', goal: 1, coins: 40 },
+  { id: 'intercept', name: 'Intercept!', desc: 'Nail yourself down inside a tornado', stat: 'intercepts', goal: 1, coins: 150 },
   { id: 'night', name: 'Night owl', desc: 'Stay out for a whole night', stat: 'nights', goal: 1, coins: 30 },
   { id: 'friends', name: 'Animal friend', desc: 'Get close enough to touch 5 creatures', stat: 'touched', goal: 5, coins: 40 },
   { id: 'space', name: 'Into space', desc: 'Ride the space elevator next to the station', stat: 'realm_space', goal: 1, coins: 80 },

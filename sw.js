@@ -1,8 +1,8 @@
 // Lets Funz Online install and open even with a weak connection.
-const VERSION = '5.3';
+const VERSION = '5.4';
 const CACHE = 'funz-online-' + VERSION;
 const FILES = ['./', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/icons.js', 'js/device.js', 'js/gl.js', 'js/lib/three.min.js', 'js/lib/three-post.js', 'js/textures.js', 'js/gl3.js', 'js/terrain.js', 'js/structures.js', 'js/buildings.js', 'js/sky.js', 'js/realms.js', 'js/parts.js', 'js/custom.js', 'js/models.js', 'js/fx.js', 'js/sound.js', 'js/game.js', 'js/net.js', 'js/app.js',
+  'js/icons.js', 'js/device.js', 'js/gl.js', 'js/lib/three.min.js', 'js/lib/three-post.js', 'js/textures.js', 'js/gl3.js', 'js/terrain.js', 'js/structures.js', 'js/buildings.js', 'js/sky.js', 'js/realms.js', 'js/parts.js', 'js/custom.js', 'js/models.js', 'js/fx.js', 'js/sound.js', 'js/chase.js', 'js/game.js', 'js/net.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon.png',
   'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
 

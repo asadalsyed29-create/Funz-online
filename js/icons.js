@@ -42,6 +42,8 @@ const ICON_PATHS = {
   smile: F('M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z') + '<circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5a5 5 0 0 0 9 0"/><circle cx="8.8" cy="9.5" r="1" fill="currentColor"/><circle cx="15.2" cy="9.5" r="1" fill="currentColor"/>',
   map: F('M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z') + '<path d="M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 3.5V18M15 6v14.5"/>',
   speed: F('M13 2L4 14h7l-1 8 9-12h-7z') + '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  nail: '<path d="M6 4h12"/><path d="M9 4l1.5 2h3L15 4"/><path d="M12 6v12l-1 3"/><path d="M12 6v13"/>',
+  tornado: '<path d="M3 4h18"/><path d="M5 8h14"/><path d="M8 12h9"/><path d="M10 16h5"/><path d="M12 20h1"/>',
   ship: F('M2.5 13.5c0-2 4.3-3.5 9.5-3.5s9.5 1.5 9.5 3.5-4.3 3.5-9.5 3.5-9.5-1.5-9.5-3.5z') + '<ellipse cx="12" cy="13.5" rx="9.5" ry="3.5"/><path d="M7.3 10.6a4.7 4.7 0 0 1 9.4 0"/><path d="M8 19.5l-1 2M16 19.5l1 2M12 17.5v3"/>',
   cloud: F('M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.5 3.5 0 0 0 7 18.5z') + '<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.5 3.5 0 0 0 7 18.5z"/>',
   share: F('M6 10h12v11H6z') + '<path d="M12 3v12M8 7l4-4 4 4"/><path d="M9 10H6v11h12V10h-3"/>',
