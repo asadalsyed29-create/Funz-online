@@ -403,140 +403,221 @@ const CREATURES = {
 // A part: { m: mesh, at: pivot (in its parent), parent: index or -1, anim: how it moves, ph: phase, amp: how much }
 function creatureRig(gl, type) {
   const parts = [], C = hex;
-  const add = (anim, parent, at, fn, o = {}) => { const mb = new MeshBuilder(); mb.segK = 0.65; fn(mb); parts.push({ m: mb.build(gl), at, parent, anim, ...o }); return parts.length - 1; };
+  const add = (anim, parent, at, fn, o = {}) => { const mb = new MeshBuilder(); mb.lowpoly = false; mb.segK = 0.62; fn(mb); parts.push({ m: mb.build(gl), at, parent, anim, ...o }); return parts.length - 1; };
   const eyes = (parent, at, s, size) => add('eyes', parent, at, mb => MB.eyes(mb, 0, 0, 0, s, size));
-  const leg = (parent, at, len, r, col, ph, foot) => add('leg', parent, at, mb => { mb.caps([0, 0, 0], [0, -len, 0], r * 1.15, r, 8, col); if (foot) mb.sph([0.02, -len, 0], [r * 1.5, r * 0.9, r * 1.3], 8, foot, 0); }, { ph, amp: 0.55 });
-  // a four-legged animal: body, legs, neck+head, tail
-  const quad = (o) => {
-    const body = add('body', -1, [0, o.h, 0], mb => { mb.sph([0, 0, 0], o.body, 16, (x, y) => (y < -0.35 && o.belly) ? o.belly : o.col, 0.12); if (o.spots) for (const sp of o.spots) mb.sph(sp, 0.04, 6, o.spotCol, 0); });
-    for (const [x, z, ph] of [[o.lx, o.lz, 0], [o.lx, -o.lz, Math.PI], [-o.lx, o.lz, Math.PI], [-o.lx, -o.lz, 0]]) leg(body, [x, -o.body[1] * 0.45, z], o.h - o.body[1] * 0.55, o.legR, o.legCol, ph, o.hoof);
-    const head = add('head', body, o.neckAt, o.head);
-    eyes(head, o.eyeAt, o.eyeS, o.eyeSize);
-    if (o.ears) for (const k of [-1, 1]) add('ear', head, [o.ears[0], o.ears[1], o.ears[2] * k], mb => o.ear(mb, k), { side: k });
-    if (o.tail) add('tail', body, o.tailAt, o.tail);
-    return body;
+  // fur with a soft, uneven shade so it never looks like flat plastic
+  const fur = (a, b, k = 0.07, cut = -0.35) => (x, y, z) => shadeC(b && y < cut ? b : a, 1 + Math.sin(x * 29 + y * 17) * Math.sin(z * 23 - y * 13) * k);
+  // a leg in two parts (thigh and shin) so it bends at the knee, with a foot at the end
+  const leg2 = (parent, at, l1, l2, r, col, ph, foot, o = {}) => {
+    const up = add('leg', parent, at, mb => mb.caps([0, 0, 0], [0, -l1, 0], r * (o.thick || 1.4), r, 10, col), { ph, amp: o.amp || 0.5 });
+    add('knee', up, [0, -l1, 0], mb => { const e = [o.bend || 0, -l2, 0]; mb.caps([0, 0, 0], e, r, r * 0.82, 10, o.low || col); if (foot) foot(mb, e, r); }, { ph });
+    return up;
   };
+  const hoof = col => (mb, e, r) => { mb.cyl(e[0], e[1] - r * 0.9, e[2], r * 1.05, r * 0.95, r * 1.2, 10, col); mb.box(e[0] + r * 0.4, e[1] - r * 0.95, e[2] - r * 0.08, e[0] + r * 1.1, e[1] + r * 0.2, e[2] + r * 0.08, shadeC(col, 0.6), false, true); };
+  const paw = col => (mb, e, r) => { mb.sph([e[0] + r * 0.5, e[1] - r * 0.4, e[2]], [r * 1.6, r * 0.75, r * 1.35], 10, col, 0); for (const z of [-0.6, 0, 0.6]) mb.sph([e[0] + r * 1.75, e[1] - r * 0.55, e[2] + z * r], r * 0.42, 6, shadeC(col, 0.92), 0); };
+  const webbed = col => (mb, e, r) => { for (const a of [-0.55, 0, 0.55]) { mb.caps([e[0], e[1] - r * 0.3, e[2]], [e[0] + Math.cos(a) * r * 3, e[1] - r * 0.5, e[2] + Math.sin(a) * r * 3], r * 0.5, r * 0.4, 6, col); mb.sph([e[0] + Math.cos(a) * r * 3.1, e[1] - r * 0.5, e[2] + Math.sin(a) * r * 3.1], r * 0.55, 6, col, 0); } mb.tri2([e[0], e[1] - r * 0.45, e[2]], [e[0] + Math.cos(-0.55) * r * 3, e[1] - r * 0.5, e[2] + Math.sin(-0.55) * r * 3], [e[0] + r * 3, e[1] - r * 0.5, e[2]], col); mb.tri2([e[0], e[1] - r * 0.45, e[2]], [e[0] + r * 3, e[1] - r * 0.5, e[2]], [e[0] + Math.cos(0.55) * r * 3, e[1] - r * 0.5, e[2] + Math.sin(0.55) * r * 3], col); };
+  const whiskers = (mb, x, y, len, col = '#f8f4ee') => { for (const k of [-1, 1]) for (const a of [-0.25, 0, 0.25]) mb.caps([x, y, 0.04 * k], [x - 0.02, y + a * len * 0.5, (0.04 + len) * k], 0.004, 0.003, 4, C(col)); };
+  const tube2 = (mb, pts, r, seg, colFn) => { for (let k = 0; k < pts.length - 1; k++) mb.caps(pts[k], pts[k + 1], r(k / (pts.length - 1)), r((k + 1) / (pts.length - 1)), seg, colFn(k)); };
   switch (type) {
-    case 'hopper': {
-      const c = C('#f6eee6'), pink = C('#ffb8c8');
-      const body = add('hopbody', -1, [0, 0.26, 0], mb => { mb.sph([0, 0, 0], [0.29, 0.26, 0.25], 16, c, 0.18); mb.sph([0.1, -0.05, 0], [0.19, 0.17, 0.2], 12, C('#fffaf4'), 0.05); mb.sph([-0.3, 0.05, 0], 0.09, 10, C('#ffffff'), 0); });
-      const head = add('head', body, [0.22, 0.2, 0], mb => { mb.sph([0.03, 0.02, 0], [0.19, 0.17, 0.18], 14, c, 0.1); mb.sph([0.16, -0.04, 0], [0.07, 0.06, 0.09], 10, C('#fffaf4'), 0); mb.sph([0.21, -0.01, 0], 0.025, 6, pink, 0); MB.cheeks(mb, 0.15, -0.03, 0, 0.11); });
-      eyes(head, [0.15, 0.05, 0], 0.08, 0.045);
-      for (const k of [-1, 1]) add('ear', head, [-0.02, 0.13, 0.07 * k], mb => { mb.push([0, 0, 0], M4.rotX(k * 0.2)); mb.sph([0, 0.17, 0], [0.05, 0.19, 0.065], 10, c, 0); mb.sph([0.025, 0.17, 0], [0.035, 0.15, 0.045], 8, pink, 0); mb.pop(); }, { side: k });
-      for (const k of [-1, 1]) { add('hopleg', body, [0.15, -0.18, 0.1 * k], mb => mb.sph([0.03, -0.04, 0], [0.07, 0.05, 0.05], 8, c, 0)); add('hopback', body, [-0.13, -0.17, 0.14 * k], mb => mb.sph([0.06, -0.04, 0], [0.13, 0.06, 0.07], 8, c, 0)); }
-      break;
-    }
-    case 'deer': {
-      const c = C('#b8804c'), cream = C('#f2e2c4');
-      quad({ h: 0.68, body: [0.44, 0.23, 0.21], col: c, belly: cream, spots: [[0.1, 0.2, 0.12], [-0.15, 0.2, -0.1], [-0.25, 0.18, 0.13], [0.05, 0.22, -0.13]], spotCol: cream, lx: 0.28, lz: 0.11, legR: 0.045, legCol: C('#9a663a'), hoof: C('#3a2a22'),
-        neckAt: [0.32, 0.08, 0], head: mb => { mb.caps([0, 0, 0], [0.12, 0.26, 0], 0.1, 0.085, 10, c); mb.sph([0.2, 0.34, 0], [0.18, 0.14, 0.14], 14, c, 0.1); mb.sph([0.35, 0.3, 0], [0.08, 0.07, 0.08], 10, cream, 0); mb.sph([0.42, 0.31, 0], 0.035, 6, C('#2a1e1a'), 0);
-          for (const k of [-1, 1]) { MB.tube(mb, [[0.14, 0.45, 0.06 * k], [0.12, 0.64, 0.13 * k], [0.06, 0.78, 0.2 * k]], 0.02, 6, cream); MB.tube(mb, [[0.13, 0.6, 0.12 * k], [0.24, 0.7, 0.15 * k]], 0.016, 6, cream); MB.tube(mb, [[0.09, 0.72, 0.17 * k], [0.15, 0.84, 0.18 * k]], 0.014, 6, cream); } },
-        eyeAt: [0.28, 0.38, 0], eyeS: 0.085, eyeSize: 0.042,
-        ears: [0.1, 0.42, 0.13], ear: (mb, k) => { mb.push([0, 0, 0], M4.rotX(-k * 0.9)); mb.sph([0, 0.05, 0], [0.035, 0.07, 0.03], 8, c, 0); mb.pop(); },
-        tailAt: [-0.42, 0.08, 0], tail: mb => mb.sph([-0.04, 0.03, 0], [0.06, 0.08, 0.05], 8, C('#ffffff'), 0) });
-      break;
-    }
-    case 'fox': {
-      const c = C('#f07a2a'), w = C('#fff4e8'), dark = C('#3a2a22');
-      quad({ h: 0.42, body: [0.34, 0.19, 0.17], col: c, belly: w, lx: 0.21, lz: 0.09, legR: 0.038, legCol: dark, hoof: dark,
-        neckAt: [0.3, 0.1, 0], head: mb => { mb.sph([0.06, 0.06, 0], [0.17, 0.15, 0.16], 14, c, 0.1); mb.sph([0.08, -0.0, 0], [0.13, 0.08, 0.13], 10, w, 0); mb.caps([0.14, 0.03, 0], [0.3, 0.01, 0], 0.07, 0.025, 10, w); mb.sph([0.32, 0.01, 0], 0.028, 6, dark, 0); },
-        eyeAt: [0.17, 0.11, 0], eyeS: 0.07, eyeSize: 0.036,
-        ears: [0.03, 0.17, 0.08], ear: (mb, k) => { mb.push([0, 0, 0], M4.rotX(-k * 0.25)); mb.caps([0, 0, 0], [0, 0.16, 0], 0.06, 0.008, 6, c); mb.caps([0.02, 0.01, 0], [0.02, 0.12, 0], 0.035, 0.005, 6, dark); mb.pop(); },
-        tailAt: [-0.32, 0.04, 0], tail: mb => { MB.tube(mb, [[0, 0, 0], [-0.18, 0.06, 0], [-0.32, 0.16, 0]], t => 0.06 + Math.sin(t * Math.PI) * 0.07, 12, c); mb.sph([-0.36, 0.2, 0], 0.075, 10, w, 0); } });
-      break;
-    }
-    case 'goat': {
-      const c = C('#efebe3');
-      quad({ h: 0.55, body: [0.38, 0.21, 0.19], col: c, lx: 0.24, lz: 0.1, legR: 0.042, legCol: C('#8a8478'), hoof: C('#4a453e'),
-        neckAt: [0.3, 0.08, 0], head: mb => { mb.caps([0, 0, 0], [0.12, 0.2, 0], 0.09, 0.08, 10, c); mb.sph([0.2, 0.28, 0], [0.16, 0.12, 0.12], 14, c, 0.1); mb.sph([0.33, 0.24, 0], [0.07, 0.06, 0.07], 8, C('#e8ddd0'), 0); mb.caps([0.24, 0.17, 0], [0.24, 0.07, 0], 0.03, 0.01, 6, C('#d8d0c0'));
-          for (const k of [-1, 1]) MB.tube(mb, [[0.14, 0.38, 0.05 * k], [0.08, 0.5, 0.09 * k], [-0.04, 0.53, 0.11 * k], [-0.1, 0.43, 0.12 * k]], t => 0.04 * (1 - t) + 0.01, 8, C('#6a6458')); },
-        eyeAt: [0.27, 0.32, 0], eyeS: 0.075, eyeSize: 0.036,
-        ears: [0.12, 0.32, 0.12], ear: (mb, k) => mb.sph([0, 0, 0.05 * k], [0.03, 0.03, 0.08], 6, c, 0),
-        tailAt: [-0.38, 0.1, 0], tail: mb => mb.sph([-0.03, 0.04, 0], [0.04, 0.07, 0.04], 6, c, 0) });
-      break;
-    }
-    case 'crab': {
-      const c = C('#ec5a44');
-      const body = add('body', -1, [0, 0.2, 0], mb => { mb.sph([0, 0, 0], [0.24, 0.14, 0.32], 16, c, 0.25); mb.sph([0, 0.05, 0], [0.18, 0.08, 0.24], 12, C('#f57a62'), 0); });
+    case 'hopper': { // a fluffy bunny
+      const c = C('#f4ebe2'), cream = C('#fffaf3'), pink = C('#ffb3c4'), F = fur(c);
+      const body = add('hopbody', -1, [0, 0.27, 0], mb => {
+        mb.sph([-0.07, 0, 0], [0.27, 0.25, 0.25], 16, F, 0.15); mb.sph([0.1, 0.05, 0], [0.19, 0.2, 0.19], 14, F, 0.1); mb.sph([0.14, -0.02, 0], [0.13, 0.15, 0.15], 12, cream, 0);
+        for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; mb.sph([-0.33 + Math.cos(a) * 0.025, 0.07 + Math.sin(a) * 0.035, Math.sin(a * 1.7) * 0.035], 0.055, 8, cream, 0); }
+        for (let k = 0; k < 5; k++) mb.sph([0.12 + k * 0.012, 0.16 + Math.sin(k) * 0.02, (k - 2) * 0.05], 0.05, 6, cream, 0); });
+      const head = add('head', body, [0.2, 0.22, 0], mb => {
+        mb.sph([0.04, 0.03, 0], [0.17, 0.15, 0.155], 16, F, 0.08); for (const k of [-1, 1]) mb.sph([0.1, -0.02, 0.075 * k], [0.085, 0.075, 0.075], 10, cream, 0);
+        mb.sph([0.17, -0.02, 0], [0.07, 0.055, 0.075], 10, cream, 0); mb.box(0.205, -0.088, -0.016, 0.222, -0.05, 0.016, C('#ffffff'), false); mb.box(0.214, -0.088, -0.001, 0.223, -0.05, 0.001, C('#d8ccc0'), false, true);
+        mb.caps([0.218, -0.04, -0.022], [0.212, -0.05, 0.022], 0.006, 0.006, 5, C('#c88a9a')); MB.cheeks(mb, 0.15, -0.02, 0, 0.1); whiskers(mb, 0.21, -0.025, 0.14); });
+      add('nose', head, [0.228, 0.0, 0], mb => mb.sph([0, 0, 0], [0.018, 0.016, 0.027], 8, pink, 0));
+      eyes(head, [0.145, 0.065, 0], 0.085, 0.046);
+      for (const k of [-1, 1]) add('ear', head, [-0.03, 0.13, 0.07 * k], mb => { mb.push([0, 0, 0], M4.mul3(M4.rotX(k * 0.22), M4.rotZ(k > 0 ? -0.1 : 0.15))); mb.caps([0, 0, 0], [0, 0.32, 0], 0.045, 0.05, 10, F); mb.sph([0, 0.29, 0], [0.05, 0.08, 0.06], 10, F, 0); mb.sph([0.028, 0.18, 0], [0.025, 0.13, 0.036], 8, pink, 0); mb.pop(); }, { side: k });
       for (const k of [-1, 1]) {
-        add('claw', body, [0.12, 0, 0.25 * k], mb => { MB.tube(mb, [[0, 0, 0], [0.16, 0.05, 0.1 * k], [0.26, 0.08, 0.05 * k]], 0.035, 6, c); mb.sph([0.32, 0.09, 0.04 * k], [0.1, 0.07, 0.07], 10, c, 0.1); mb.caps([0.38, 0.1, 0.04 * k], [0.46, 0.13, 0.02 * k], 0.03, 0.01, 6, c); }, { side: k });
-        for (let q = 0; q < 3; q++) add('crableg', body, [-0.1 + q * 0.1, -0.03, 0.26 * k], mb => MB.tube(mb, [[0, 0, 0], [-0.02, -0.02, 0.14 * k], [-0.04, -0.17, 0.2 * k]], 0.022, 5, shadeC(c, 0.85)), { ph: q * 2 + (k > 0 ? 0 : 1), side: k });
-        add('stalk', body, [0.12, 0.1, 0.07 * k], mb => { mb.caps([0, 0, 0], [0.02, 0.12, 0], 0.016, 0.016, 5, c); });
+        add('hopleg', body, [0.15, -0.16, 0.08 * k], mb => { mb.caps([0, 0.02, 0], [0.02, -0.07, 0], 0.045, 0.04, 8, F); mb.sph([0.045, -0.08, 0], [0.06, 0.035, 0.045], 8, cream, 0); });
+        add('hopback', body, [-0.13, -0.12, 0.15 * k], mb => { mb.sph([0, 0, 0], [0.13, 0.11, 0.07], 10, F, 0.1); mb.sph([0.07, -0.11, 0.01 * k], [0.15, 0.04, 0.06], 10, cream, 0); for (const z of [-0.025, 0.025]) mb.sph([0.21, -0.12, z], 0.02, 5, C('#efe2d6'), 0); });
       }
-      eyes(body, [0.16, 0.25, 0], 0.075, 0.04);
       break;
     }
-    case 'turtle': {
-      const shell = C('#4f9a52'), skin = C('#8ac078');
-      const body = add('body', -1, [0, 0.2, 0], mb => { mb.sph([0, 0, 0], [0.38, 0.2, 0.3], 16, (x, y, z) => y > 0.15 ? shadeC(shell, 0.88 + 0.22 * ((Math.floor((Math.atan2(z, x) + 3.2) * 1.1) + Math.floor(y * 3)) % 2)) : C('#d8c48a'), 0.2); mb.tor([0, -0.02, 0], 0.32, 0.04, 24, 6, C('#3f7a42')); });
-      const head = add('peek', body, [0.36, 0.02, 0], mb => { mb.caps([-0.1, 0, 0], [0.06, 0.02, 0], 0.07, 0.07, 8, skin); mb.sph([0.1, 0.04, 0], [0.11, 0.09, 0.09], 12, skin, 0.1); MB.cheeks(mb, 0.18, 0.02, 0, 0.07, '#ff9fb0'); });
-      eyes(head, [0.15, 0.08, 0], 0.055, 0.03);
-      for (const [x, z, ph] of [[0.22, 0.24, 0], [-0.22, 0.24, Math.PI], [0.22, -0.24, Math.PI], [-0.22, -0.24, 0]]) add('paddle', body, [x, -0.1, z], mb => mb.sph([0.02, -0.03, 0.04 * Math.sign(z)], [0.09, 0.05, 0.07], 8, skin, 0), { ph });
-      add('tail', body, [-0.36, -0.04, 0], mb => mb.caps([0, 0, 0], [-0.1, -0.02, 0], 0.035, 0.01, 6, skin));
+    case 'deer': { // antlerbuck: slim legs with knees, spots, a big rack of antlers
+      const c = C('#b8794a'), cream = C('#f4e6cc'), dark = C('#2a1e18'), spot = (x, y, z) => y > 0.05 && Math.sin(x * 37) * Math.sin(z * 41 + y * 29) > 0.8;
+      const F = (x, y, z) => x < -0.82 ? C('#fff8ee') : y < -0.4 ? cream : spot(x, y, z) ? cream : shadeC(c, 1 + Math.sin(x * 29 + y * 17) * 0.06);
+      const body = add('body', -1, [0, 0.8, 0], mb => { mb.sph([0.13, 0.02, 0], [0.26, 0.22, 0.2], 16, F, 0.12); mb.sph([-0.15, 0, 0], [0.27, 0.2, 0.19], 16, F, 0.12); mb.sph([-0.02, 0.05, 0], [0.3, 0.18, 0.18], 14, F, 0.1); });
+      for (const [x, z, ph, b] of [[0.24, 0.1, 0, 0.02], [0.24, -0.1, Math.PI, 0.02], [-0.25, 0.1, Math.PI, -0.04], [-0.25, -0.1, 0, -0.04]]) leg2(body, [x, -0.12, z], 0.32, 0.33, 0.04, c, ph, hoof(dark), { bend: b, low: C('#a06a40'), thick: 1.6 });
+      const head = add('head', body, [0.3, 0.1, 0], mb => {
+        mb.caps([0, 0, 0], [0.12, 0.3, 0], 0.1, 0.075, 12, C('#b07448')); mb.sph([0.1, 0.18, 0], [0.06, 0.09, 0.075], 10, cream, 0);
+        mb.sph([0.18, 0.36, 0], [0.15, 0.115, 0.115], 16, fur(c), 0.08); mb.caps([0.24, 0.35, 0], [0.4, 0.29, 0], 0.08, 0.055, 12, C('#a8704a')); mb.sph([0.32, 0.29, 0], [0.07, 0.04, 0.06], 8, cream, 0);
+        mb.sph([0.43, 0.3, 0], [0.035, 0.03, 0.045], 8, dark, 0); mb.caps([0.36, 0.26, -0.03], [0.36, 0.26, 0.03], 0.005, 0.005, 4, dark);
+        for (const k of [-1, 1]) { const A = C('#efe2c6'); tube2(mb, [[0.13, 0.45, 0.05 * k], [0.1, 0.62, 0.13 * k], [0.02, 0.78, 0.21 * k], [-0.04, 0.9, 0.24 * k]], t => 0.024 - t * 0.012, 6, () => A);
+          for (const [p, q] of [[[0.1, 0.6, 0.12 * k], [0.24, 0.72, 0.14 * k]], [[0.04, 0.74, 0.19 * k], [0.13, 0.88, 0.2 * k]], [[-0.02, 0.86, 0.23 * k], [-0.12, 0.96, 0.27 * k]], [[0.12, 0.52, 0.09 * k], [0.18, 0.56, 0.05 * k]]]) mb.caps(p, q, 0.016, 0.008, 6, A); } });
+      eyes(head, [0.26, 0.4, 0], 0.09, 0.04);
+      for (const k of [-1, 1]) add('ear', head, [0.1, 0.42, 0.12 * k], mb => { mb.push([0, 0, 0], M4.rotX(-k * 1.0)); mb.sph([0, 0.07, 0], [0.04, 0.09, 0.028], 10, c, 0); mb.sph([0.012, 0.07, 0], [0.022, 0.065, 0.018], 8, C('#e8b0a0'), 0); mb.pop(); }, { side: k });
+      add('tail', body, [-0.4, 0.08, 0], mb => { mb.sph([-0.04, 0.03, 0], [0.05, 0.08, 0.05], 8, c, 0); mb.sph([-0.07, 0.01, 0], [0.025, 0.07, 0.045], 8, C('#ffffff'), 0); });
       break;
     }
-    case 'lizard': {
-      const c = C('#d8a33a');
-      const body = add('wiggle', -1, [0, 0.12, 0], mb => { mb.sph([0, 0, 0], [0.24, 0.08, 0.1], 12, c, 0.2); for (let k = 0; k < 4; k++) mb.sph([0.15 - k * 0.1, 0.07, 0], 0.025, 5, C('#a8622a'), 0); });
-      const head = add('head', body, [0.22, 0.01, 0], mb => mb.sph([0.08, 0.01, 0], [0.11, 0.07, 0.08], 10, c, 0.2));
-      eyes(head, [0.11, 0.06, 0], 0.05, 0.028);
-      for (const [x, z, ph] of [[0.13, 1, 0], [0.13, -1, Math.PI], [-0.13, 1, Math.PI], [-0.13, -1, 0]]) add('crableg', body, [x, 0, 0.07 * z], mb => MB.tube(mb, [[0, 0, 0], [0.03, -0.04, 0.11 * z], [0.06, -0.12, 0.13 * z]], 0.022, 5, c), { ph, side: z });
-      add('tail', body, [-0.22, 0, 0], mb => MB.tube(mb, [[0, 0, 0], [-0.18, -0.02, 0.04], [-0.34, -0.06, 0]], t => 0.06 * (1 - t) + 0.01, 8, c));
+    case 'fox': { // orange coat, white chest and cheeks, black socks, a big bushy tail
+      const c = C('#ee7426'), w = C('#fff4e6'), dark = C('#2c201c'), F = fur(c, w, 0.07, -0.25);
+      const body = add('body', -1, [0, 0.42, 0], mb => { mb.sph([0.1, 0.02, 0], [0.2, 0.17, 0.15], 14, F, 0.1); mb.sph([-0.13, 0, 0], [0.22, 0.15, 0.14], 14, F, 0.1); mb.sph([0.2, -0.02, 0], [0.1, 0.13, 0.11], 10, w, 0); });
+      for (const [x, z, ph] of [[0.17, 0.08, 0], [0.17, -0.08, Math.PI], [-0.19, 0.08, Math.PI], [-0.19, -0.08, 0]]) leg2(body, [x, -0.08, z], 0.17, 0.17, 0.032, c, ph, paw(dark), { low: dark, bend: x < 0 ? -0.03 : 0.01 });
+      const head = add('head', body, [0.27, 0.1, 0], mb => {
+        mb.sph([0.05, 0.05, 0], [0.15, 0.13, 0.15], 16, fur(c), 0.08); for (const k of [-1, 1]) { mb.sph([0.07, 0.0, 0.09 * k], [0.09, 0.07, 0.07], 10, w, 0); mb.caps([0.04, -0.01, 0.12 * k], [-0.03, -0.03, 0.17 * k], 0.04, 0.008, 6, w); }
+        mb.caps([0.12, 0.05, 0], [0.29, 0.02, 0], 0.065, 0.028, 12, c); mb.caps([0.12, 0.0, 0], [0.28, 0.0, 0], 0.055, 0.025, 10, w);
+        mb.sph([0.305, 0.022, 0], [0.026, 0.022, 0.03], 8, dark, 0); mb.caps([0.22, -0.02, -0.03], [0.22, -0.02, 0.03], 0.004, 0.004, 4, dark); whiskers(mb, 0.26, 0.0, 0.12, '#3a2c26'); });
+      eyes(head, [0.15, 0.09, 0], 0.068, 0.034);
+      for (const k of [-1, 1]) add('ear', head, [0.0, 0.15, 0.075 * k], mb => { mb.push([0, 0, 0], M4.rotX(-k * 0.28)); mb.caps([0, 0, 0], [0, 0.16, 0], 0.065, 0.006, 8, c); mb.caps([0.012, 0.01, 0], [0.012, 0.13, 0], 0.04, 0.004, 6, w); mb.caps([-0.012, 0.005, 0], [-0.012, 0.15, 0], 0.06, 0.005, 6, dark); mb.pop(); }, { side: k });
+      const t1 = add('tailseg', body, [-0.31, 0.06, 0], mb => tube2(mb, [[0, 0, 0], [-0.12, 0.04, 0], [-0.24, 0.07, 0]], t => 0.05 + t * 0.06, 12, () => c), { ph: 0 });
+      add('tailseg', t1, [-0.24, 0.07, 0], mb => { tube2(mb, [[0, 0, 0], [-0.1, 0.03, 0], [-0.19, 0.08, 0]], t => 0.11 - t * 0.04, 12, k => k ? w : c); mb.sph([-0.21, 0.09, 0], 0.06, 10, w, 0); }, { ph: 0.8 });
       break;
     }
-    case 'penguin': {
-      const dark = C('#2c3140'), w = C('#ffffff'), org = C('#ffa63a');
-      const body = add('waddle', -1, [0, 0.05, 0], mb => { mb.sph([0, 0.33, 0], [0.3, 0.36, 0.28], 16, (x, y) => x > 0.35 && y < 0.62 ? w : dark, 0.1); mb.caps([0.27, 0.5, 0], [0.4, 0.48, 0], 0.05, 0.012, 8, org); MB.cheeks(mb, 0.27, 0.48, 0, 0.16); });
+    case 'goat': { // shaggy cliff goat with a beard and ridged curly horns
+      const c = C('#efeae1'), sh = C('#ddd5c6'), F = fur(c, null, 0.09);
+      const body = add('body', -1, [0, 0.64, 0], mb => { mb.sph([0.09, 0.02, 0], [0.23, 0.21, 0.19], 14, F, 0.1); mb.sph([-0.14, 0, 0], [0.25, 0.2, 0.19], 14, F, 0.1);
+        for (let k = 0; k < 14; k++) { const x = -0.33 + k * 0.05, z = (k % 2 ? 1 : -1) * 0.15; mb.sph([x, -0.13 - (k % 3) * 0.02, z], [0.06, 0.09, 0.05], 8, sh, 0); mb.sph([x + 0.02, -0.15, -z], [0.05, 0.08, 0.05], 8, sh, 0); } });
+      for (const [x, z, ph] of [[0.2, 0.09, 0], [0.2, -0.09, Math.PI], [-0.22, 0.09, Math.PI], [-0.22, -0.09, 0]]) leg2(body, [x, -0.12, z], 0.24, 0.26, 0.038, c, ph, hoof(C('#3e3a34')), { low: C('#c8c2b6'), thick: 1.7 });
+      const head = add('head', body, [0.27, 0.1, 0], mb => {
+        mb.caps([0, 0, 0], [0.1, 0.2, 0], 0.09, 0.075, 12, F); mb.sph([0.17, 0.26, 0], [0.14, 0.11, 0.11], 14, F, 0.08); mb.caps([0.2, 0.25, 0], [0.33, 0.19, 0], 0.07, 0.05, 10, c); mb.sph([0.345, 0.2, 0], [0.025, 0.03, 0.04], 8, C('#c0a8a0'), 0);
+        for (let k = 0; k < 4; k++) mb.caps([0.25 + k * 0.005, 0.16, (k - 1.5) * 0.012], [0.22 + k * 0.01, 0.0 - k * 0.01, (k - 1.5) * 0.015], 0.025, 0.008, 6, sh);
+        for (const k of [-1, 1]) { const pts = [[0.12, 0.36, 0.05 * k], [0.08, 0.46, 0.08 * k], [-0.02, 0.51, 0.1 * k], [-0.1, 0.46, 0.12 * k], [-0.11, 0.37, 0.13 * k], [-0.06, 0.32, 0.13 * k]]; tube2(mb, pts, t => 0.04 * (1 - t) + 0.012, 8, i => i % 2 ? C('#5e574c') : C('#7a7264')); } });
+      eyes(head, [0.24, 0.3, 0], 0.075, 0.035);
+      for (const k of [-1, 1]) add('ear', head, [0.1, 0.3, 0.1 * k], mb => { mb.push([0, 0, 0], M4.rotX(k * 1.25)); mb.sph([0, 0.06, 0], [0.03, 0.075, 0.022], 8, c, 0); mb.sph([0.01, 0.06, 0], [0.018, 0.055, 0.014], 6, C('#e8c0b0'), 0); mb.pop(); }, { side: k });
+      add('tail', body, [-0.37, 0.12, 0], mb => mb.sph([-0.02, 0.05, 0], [0.035, 0.07, 0.035], 8, c, 0));
+      break;
+    }
+    case 'crab': { // bumpy shell, jointed legs, claws that open and close, eyes on stalks
+      const c = C('#e4513c'), lite = C('#f58466'), under = C('#f4c0a0');
+      const body = add('body', -1, [0, 0.22, 0], mb => { mb.sph([0, 0, 0], [0.22, 0.13, 0.3], 18, (x, y) => y < -0.4 ? under : shadeC(c, 1 + Math.sin(x * 20) * Math.sin(y * 9 + 1) * 0.05), 0.2);
+        for (let k = 0; k < 9; k++) { const a = k / 9 * Math.PI - Math.PI / 2; mb.sph([Math.cos(a) * 0.12 - 0.02, 0.1 + Math.sin(k) * 0.01, Math.sin(a) * 0.18], 0.03, 6, lite, 0); }
+        for (const k of [-1, 1]) for (let q = 0; q < 3; q++) mb.cone(0.13 - q * 0.04, 0.0, (0.25 + q * 0.015) * k, 0.025, 0.04, 5, lite);
+        mb.sph([0.2, -0.04, 0], [0.03, 0.025, 0.06], 6, C('#7a2a22'), 0); });
+      for (const k of [-1, 1]) {
+        const arm = add('claw', body, [0.13, 0, 0.24 * k], mb => { tube2(mb, [[0, 0, 0], [0.12, 0.05, 0.09 * k], [0.22, 0.08, 0.06 * k]], t => 0.035 - t * 0.005, 8, () => c); mb.sph([0.28, 0.09, 0.05 * k], [0.1, 0.075, 0.075], 12, c, 0.1); mb.caps([0.34, 0.08, 0.05 * k], [0.45, 0.08, 0.03 * k], 0.035, 0.012, 8, lite); });
+        add('pincer', arm, [0.33, 0.12, 0.05 * k], mb => mb.caps([0, 0, 0], [0.11, -0.01, -0.02 * k], 0.026, 0.009, 8, lite), { side: k });
+        for (let q = 0; q < 4; q++) { const up = add('crableg', body, [-0.13 + q * 0.07, -0.03, 0.27 * k], mb => mb.caps([0, 0, 0], [-0.02, 0.06, 0.13 * k], 0.024, 0.02, 6, c), { ph: q * 1.6 + (k > 0 ? 0 : 0.8), side: k });
+          add('still', up, [-0.02, 0.06, 0.13 * k], mb => { mb.caps([0, 0, 0], [-0.04, -0.2, 0.08 * k], 0.02, 0.008, 6, shadeC(c, 0.9)); }); }
+        const stalk = add('antenna', body, [0.15, 0.1, 0.065 * k], mb => mb.caps([0, 0, 0], [0.02, 0.12, 0.01 * k], 0.016, 0.014, 6, c), { side: k });
+        add('eyes', stalk, [0.03, 0.14, 0.01 * k], mb => { mb.sph([0, 0, 0], 0.035, 8, C('#ffffff'), 0); mb.sph([0.02, 0.005, 0], [0.02, 0.026, 0.024], 8, C('#1a1a26'), 0); mb.sph([0.03, 0.017, -0.006], 0.007, 4, [1, 1, 1, 1], 0); });
+      }
+      break;
+    }
+    case 'turtle': { // a domed shell made of plates, flippers, a beaky head
+      const shell = C('#4a8f4c'), plate = C('#5aa65a'), rim = C('#3a6e3c'), skin = C('#93c47e');
+      const body = add('body', -1, [0, 0.2, 0], mb => {
+        mb.sph([0, 0, 0], [0.37, 0.2, 0.3], 18, (x, y) => y < 0.1 ? C('#e2cf96') : shell, 0.2); mb.sph([0, -0.06, 0], [0.33, 0.07, 0.27], 12, C('#e2cf96'), 0);
+        const pl = [[0.15, 0.17, 0], [-0.02, 0.2, 0], [-0.19, 0.16, 0], [0.12, 0.13, 0.15], [0.12, 0.13, -0.15], [-0.08, 0.15, 0.16], [-0.08, 0.15, -0.16], [-0.24, 0.1, 0.12], [-0.24, 0.1, -0.12]];
+        for (const p of pl) { const ny = p[1] / 0.2; mb.push(p, null); mb.sph([0, 0, 0], [0.085, 0.03 + ny * 0.01, 0.075], 10, (x, y) => y > 0.4 ? plate : shadeC(plate, 0.75), 0); mb.pop(); }
+        for (let k = 0; k < 22; k++) { const a = k / 22 * 6.283; mb.sph([Math.cos(a) * 0.35, -0.02, Math.sin(a) * 0.28], [0.05, 0.03, 0.05], 6, k % 2 ? rim : shadeC(rim, 1.15), 0); } });
+      const head = add('peek', body, [0.34, 0.03, 0], mb => { mb.caps([-0.1, 0, 0], [0.06, 0.03, 0], 0.07, 0.065, 10, skin); mb.sph([0.11, 0.05, 0], [0.11, 0.09, 0.085], 14, (x, y, z) => Math.sin(x * 30) * Math.sin(z * 30) > 0.7 ? shadeC(skin, 0.85) : skin, 0.1);
+        mb.caps([0.18, 0.02, 0], [0.22, 0.0, 0], 0.04, 0.012, 8, C('#6a7a4a')); mb.caps([0.17, 0.0, -0.05], [0.17, 0.0, 0.05], 0.005, 0.005, 4, C('#3a4a2a')); MB.cheeks(mb, 0.17, 0.03, 0, 0.065, '#ff9fb0'); });
+      eyes(head, [0.15, 0.09, 0], 0.055, 0.03);
+      for (const [x, z, ph, s] of [[0.22, 0.24, 0, 1.2], [-0.22, 0.24, Math.PI, 0.8], [0.22, -0.24, Math.PI, 1.2], [-0.22, -0.24, 0, 0.8]]) add('paddle', body, [x, -0.08, z], mb => { const k = Math.sign(z); mb.push([0, 0, 0], M4.rotY(-k * (x > 0 ? 0.5 : -0.4))); mb.sph([0.03, -0.03, 0.07 * k * s], [0.07, 0.035, 0.11 * s], 10, (xx, yy, zz) => Math.sin(xx * 40 + zz * 30) > 0.6 ? shadeC(skin, 0.82) : skin, 0); mb.pop(); }, { ph });
+      add('tail', body, [-0.34, -0.04, 0], mb => mb.caps([0, 0, 0], [-0.1, -0.02, 0], 0.035, 0.008, 6, skin));
+      break;
+    }
+    case 'lizard': { // sun lizard: banded, a crest of spikes, sprawled legs with toes, a long swishy tail
+      const c = C('#e0a83a'), band = C('#b4602a'), belly = C('#f6dca0'), crest = C('#e8502a');
+      const F = (x, y, z) => y < -0.4 ? belly : Math.sin(x * 14) > 0.55 ? band : shadeC(c, 1 + Math.sin(z * 30) * 0.04);
+      const body = add('wiggle', -1, [0, 0.12, 0], mb => { mb.sph([0.03, 0, 0], [0.22, 0.075, 0.1], 14, F, 0.2); mb.sph([-0.12, 0, 0], [0.12, 0.065, 0.085], 10, F, 0.2); for (let k = 0; k < 6; k++) mb.cone(0.15 - k * 0.06, 0.06, 0, 0.022, 0.05 - Math.abs(k - 2) * 0.006, 4, crest); });
+      const head = add('head', body, [0.2, 0.01, 0], mb => { mb.sph([0.06, 0.01, 0], [0.09, 0.06, 0.075], 12, c, 0.15); mb.caps([0.08, 0.0, 0], [0.18, -0.01, 0], 0.055, 0.03, 10, c); mb.sph([0.04, -0.05, 0], [0.05, 0.035, 0.045], 8, C('#ff7a3a'), 0); mb.caps([0.16, -0.025, -0.025], [0.16, -0.025, 0.025], 0.004, 0.004, 4, C('#5a3a1a')); for (let k = 0; k < 3; k++) mb.cone(0.02 - k * 0.03, 0.055, 0, 0.015, 0.035, 4, crest); });
+      eyes(head, [0.1, 0.045, 0], 0.05, 0.026);
+      const toes = (mb, e, r) => { for (const a of [-0.6, 0, 0.6]) mb.caps(e, [e[0] + Math.cos(a) * 0.05, e[1] - 0.005, e[2] + Math.sin(a) * 0.05], r * 0.5, r * 0.35, 5, c); };
+      for (const [x, z, ph] of [[0.12, 1, 0], [0.12, -1, Math.PI], [-0.13, 1, Math.PI], [-0.13, -1, 0]]) { const up = add('crableg', body, [x, -0.01, 0.07 * z], mb => mb.caps([0, 0, 0], [0.02, -0.01, 0.1 * z], 0.024, 0.02, 6, c), { ph, side: z }); add('still', up, [0.02, -0.01, 0.1 * z], mb => { mb.caps([0, 0, 0], [0.03, -0.1, 0.03 * z], 0.019, 0.015, 6, c); toes(mb, [0.03, -0.105, 0.03 * z], 0.02); }); }
+      const t1 = add('tailseg', body, [-0.22, 0, 0], mb => tube2(mb, [[0, 0, 0], [-0.14, -0.01, 0]], t => 0.06 - t * 0.02, 8, () => c), { ph: 0 });
+      const t2 = add('tailseg', t1, [-0.14, -0.01, 0], mb => tube2(mb, [[0, 0, 0], [-0.14, -0.02, 0]], t => 0.04 - t * 0.015, 8, () => band), { ph: 0.9 });
+      add('tailseg', t2, [-0.14, -0.02, 0], mb => tube2(mb, [[0, 0, 0], [-0.16, -0.02, 0]], t => 0.025 - t * 0.02, 8, () => c), { ph: 1.8 });
+      break;
+    }
+    case 'penguin': { // snowpuff: fluffy, a wispy tuft, a tiny scarf, webbed feet
+      const dark = C('#2c3142'), w = C('#ffffff'), org = C('#ffa13a');
+      const body = add('waddle', -1, [0, 0.05, 0], mb => { mb.sph([0, 0.33, 0], [0.3, 0.36, 0.28], 18, (x, y) => x > 0.3 && y < 0.6 ? w : shadeC(dark, 1 + Math.sin(y * 20) * 0.04), 0.1);
+        for (let k = 0; k < 10; k++) { const a = (k / 10 - 0.5) * 2.2; mb.sph([Math.cos(a) * 0.26, 0.08, Math.sin(a) * 0.24], 0.06, 6, k > 2 && k < 7 ? w : dark, 0); }
+        mb.caps([0.27, 0.52, 0], [0.37, 0.505, 0], 0.045, 0.012, 8, org); mb.caps([0.27, 0.49, 0], [0.35, 0.485, 0], 0.035, 0.01, 8, shadeC(org, 0.85)); MB.cheeks(mb, 0.27, 0.48, 0, 0.16);
+        mb.tor([0, 0.4, 0], 0.255, 0.04, 22, 6, (a) => Math.floor(a * 3) % 2 ? C('#e8343a') : C('#ffffff')); mb.caps([-0.22, 0.4, 0.1], [-0.3, 0.22, 0.14], 0.04, 0.035, 6, C('#e8343a')); });
+      add('tuft', body, [0.05, 0.68, 0], mb => { for (const [a, b] of [[-0.3, 0.1], [0, 0.13], [0.35, 0.09]]) mb.caps([0, 0, 0], [Math.sin(a) * 0.05 + 0.02, b, Math.sin(a) * 0.04], 0.02, 0.005, 5, dark); });
       eyes(body, [0.24, 0.6, 0], 0.09, 0.045);
-      for (const k of [-1, 1]) { add('flipper', body, [0, 0.45, 0.27 * k], mb => { mb.push([0, 0, 0], M4.rotX(k * 0.2)); mb.sph([0, -0.15, 0.02 * k], [0.11, 0.18, 0.035], 10, dark, 0.1); mb.pop(); }, { side: k }); add('leg', body, [0.08, 0.04, 0.1 * k], mb => mb.sph([0.04, -0.03, 0], [0.11, 0.035, 0.07], 8, org, 0), { ph: k > 0 ? 0 : Math.PI, amp: 0.3 }); }
+      for (const k of [-1, 1]) { add('flipper', body, [0, 0.46, 0.27 * k], mb => { mb.push([0, 0, 0], M4.rotX(k * 0.2)); mb.sph([0, -0.15, 0.02 * k], [0.1, 0.19, 0.03], 12, dark, 0.1); mb.pop(); }, { side: k });
+        add('leg', body, [0.08, 0.05, 0.1 * k], mb => webbed(org)(mb, [0, 0, 0], 0.03), { ph: k > 0 ? 0 : Math.PI, amp: 0.3 }); }
       break;
     }
-    case 'slime': {
-      const body = add('jelly', -1, [0, 0, 0], mb => { mb.sph([0, 0.28, 0], [0.38, 0.3, 0.36], 18, C('#6ed85a', 0.4), 0.1); mb.sph([0, 0.22, 0], 0.15, 10, glowC(C('#c8ff9a')), 0); });
-      eyes(body, [0.33, 0.38, 0], 0.11, 0.055);
+    case 'slime': { // bog blob: see-through jelly with a glowing core, bubbles, drips and a little sprout
+      const body = add('jelly', -1, [0, 0, 0], mb => {
+        mb.sph([0, 0.28, 0], [0.38, 0.3, 0.36], 20, (x, y) => C(y > 0.5 ? '#9af07a' : '#62c84e', 0.55), 0.1);
+        for (let k = 0; k < 5; k++) { const a = k * 1.3; mb.sph([Math.cos(a) * 0.3, 0.05, Math.sin(a) * 0.28], [0.07, 0.06, 0.07], 8, C('#58b844', 0.6), 0); }
+        mb.sph([0, 0.24, 0], 0.13, 10, glowC(C('#d4ff9a')), 0); for (let k = 0; k < 7; k++) mb.sph([Math.sin(k * 2.1) * 0.2, 0.15 + (k % 3) * 0.1, Math.cos(k * 2.1) * 0.18], 0.025 + (k % 2) * 0.012, 6, C('#e8ffd8', 0.8), 0);
+        mb.caps([0, 0.56, 0], [0.02, 0.66, 0], 0.012, 0.01, 5, C('#4a8a2a')); for (const k of [-1, 1]) mb.sph([0.03, 0.68, 0.04 * k], [0.02, 0.012, 0.045], 6, C('#6ad04a'), 0);
+        mb.caps([0.335, 0.27, -0.06], [0.345, 0.25, 0], 0.01, 0.01, 4, C('#1e3a1a')); mb.caps([0.345, 0.25, 0], [0.335, 0.27, 0.06], 0.01, 0.01, 4, C('#1e3a1a')); });
+      eyes(body, [0.32, 0.38, 0], 0.11, 0.055);
       break;
     }
-    case 'frog': {
-      const c = C('#5cc048');
-      const body = add('hopbody', -1, [0, 0.18, 0], mb => { mb.sph([0, 0.02, 0], [0.26, 0.2, 0.24], 14, (x, y) => y < -0.3 ? C('#e8f0a8') : c, 0.15); mb.sph([0.22, 0.05, 0], [0.012, 0.015, 0.12], 6, C('#2a3a22'), 0); for (const k of [-1, 1]) mb.sph([0.16, 0.2, k * 0.12], 0.085, 10, c, 0); });
-      eyes(body, [0.21, 0.23, 0], 0.12, 0.042);
-      for (const k of [-1, 1]) { add('hopback', body, [-0.12, -0.1, 0.2 * k], mb => mb.sph([0.02, -0.02, 0], [0.15, 0.07, 0.08], 10, c, 0.2)); add('hopleg', body, [0.16, -0.12, 0.13 * k], mb => mb.sph([0.03, -0.03, 0], [0.08, 0.035, 0.06], 8, c, 0.2)); }
+    case 'frog': { // big eyes on top, a wide smile, spots, a throat that puffs, webbed feet
+      const c = C('#58b846'), belly = C('#e8f2b0'), spot = C('#3a8a32');
+      const body = add('hopbody', -1, [0, 0.18, 0], mb => { mb.sph([0, 0.02, 0], [0.26, 0.19, 0.24], 16, (x, y, z) => y < -0.3 ? belly : Math.sin(x * 21 + 1) * Math.sin(z * 19) > 0.65 ? spot : c, 0.15);
+        mb.caps([0.235, 0.02, -0.11], [0.255, 0.035, 0], 0.008, 0.008, 4, C('#1e3a1a')); mb.caps([0.255, 0.035, 0], [0.235, 0.02, 0.11], 0.008, 0.008, 4, C('#1e3a1a'));
+        for (const k of [-1, 1]) { mb.sph([0.14, 0.18, k * 0.12], 0.09, 12, c, 0); mb.sph([0.24, 0.07, 0.03 * k], 0.008, 4, C('#1e3a1a'), 0); } });
+      add('throat', body, [0.17, -0.08, 0], mb => mb.sph([0, 0, 0], [0.07, 0.05, 0.08], 10, C('#f4f8c8'), 0));
+      eyes(body, [0.2, 0.22, 0], 0.12, 0.045);
+      for (const k of [-1, 1]) {
+        add('hopback', body, [-0.12, -0.09, 0.19 * k], mb => { mb.sph([0.0, 0, 0], [0.13, 0.075, 0.075], 12, c, 0.2); mb.caps([0.08, -0.03, 0.02 * k], [-0.04, -0.08, 0.05 * k], 0.04, 0.03, 8, c); webbed(c)(mb, [-0.04, -0.08, 0.05 * k], 0.022); });
+        add('hopleg', body, [0.15, -0.1, 0.13 * k], mb => { mb.caps([0, 0, 0], [0.04, -0.07, 0.02 * k], 0.03, 0.025, 8, c); webbed(c)(mb, [0.04, -0.07, 0.02 * k], 0.017); });
+      }
       break;
     }
     case 'moth': case 'butterfly': {
-      const bc = C(type === 'moth' ? '#4a3a5a' : '#2c2c38');
-      const body = add('flybody', -1, [0, 0, 0], mb => { mb.sph([0, 0, 0], [0.13, 0.05, 0.05], 10, bc, 0); for (const k of [-1, 1]) MB.tube(mb, [[0.1, 0.03, 0.02 * k], [0.18, 0.1, 0.06 * k]], 0.006, 4, bc); });
-      for (const k of [-1, 1]) add('wing', body, [0.01, 0.02, 0.03 * k], mb => {
-        if (type === 'moth') mb.sph([0, 0, 0.15 * k], [0.12, 0.012, 0.16], 12, glowC(C('#c8a8ff')), 0);
-        else { mb.sph([0.05, 0, 0.12 * k], [0.09, 0.008, 0.13], 12, (x, y, z) => Math.hypot(x, z) < 0.55 ? C('#ffd24a') : C('#ff7a3a'), 0); mb.sph([-0.07, 0, 0.1 * k], [0.06, 0.008, 0.08], 10, C('#ff7a3a'), 0); }
+      const moth = type === 'moth', bc = C(moth ? '#6a5a7a' : '#2a2a36');
+      const body = add('flybody', -1, [0, 0, 0], mb => { mb.sph([0.04, 0, 0], [0.06, 0.05, 0.05], 10, moth ? C('#e8e0f0') : bc, 0); mb.sph([0.1, 0.005, 0], 0.04, 8, bc, 0);
+        for (let k = 0; k < 4; k++) mb.sph([-0.03 - k * 0.04, -0.005 * k, 0], [0.035, 0.034 - k * 0.006, 0.034 - k * 0.006], 8, moth ? (k % 2 ? C('#8a7a9a') : C('#a898b8')) : bc, 0);
+        for (const k of [-1, 1]) { if (moth) { MB.tube(mb, [[0.12, 0.03, 0.02 * k], [0.17, 0.09, 0.07 * k], [0.2, 0.12, 0.1 * k]], 0.006, 4, C('#d8c8e8')); for (let q = 0; q < 4; q++) { const p = [0.14 + q * 0.018, 0.05 + q * 0.02, (0.04 + q * 0.018) * k]; mb.caps(p, [p[0] + 0.02, p[1] + 0.015, p[2] - 0.012 * k], 0.003, 0.002, 3, C('#d8c8e8')); mb.caps(p, [p[0] - 0.005, p[1] + 0.022, p[2] + 0.015 * k], 0.003, 0.002, 3, C('#d8c8e8')); } }
+          else { MB.tube(mb, [[0.12, 0.03, 0.02 * k], [0.18, 0.11, 0.06 * k], [0.2, 0.15, 0.08 * k]], 0.004, 4, bc); mb.sph([0.205, 0.155, 0.082 * k], 0.012, 5, bc, 0); } } });
+      for (const k of [-1, 1]) add('wing', body, [0.03, 0.02, 0.03 * k], mb => {
+        if (moth) { mb.sph([0.04, 0, 0.13 * k], [0.1, 0.01, 0.15], 14, (x, y, z) => { const r = Math.hypot(x + 0.1, z * k - 0.2); return r < 0.25 ? glowC(C('#fff2a0')) : r < 0.4 ? glowC(C('#ff9af0')) : Math.abs(z) > 0.85 ? glowC(C('#e0c8ff')) : glowC(C('#b090f0')); }, 0); mb.sph([-0.08, -0.005, 0.1 * k], [0.08, 0.009, 0.1], 12, (x, y, z) => Math.hypot(x, z) > 0.8 ? glowC(C('#ffd8f8')) : glowC(C('#c8a8ff')), 0); }
+        else { const F = (x, y, z) => Math.abs(Math.sin(Math.atan2(z, x) * 5)) < 0.12 ? C('#1a1a22') : Math.hypot(x, z) > 0.88 ? (Math.sin(Math.atan2(z, x) * 14) > 0.3 ? C('#ffffff') : C('#1a1a22')) : Math.hypot(x, z) < 0.5 ? C('#ffc83a') : C('#ff7a2a');
+          mb.sph([0.05, 0, 0.12 * k], [0.095, 0.008, 0.135], 14, F, 0); mb.sph([-0.07, 0, 0.09 * k], [0.07, 0.008, 0.09], 12, F, 0); mb.caps([-0.1, 0, 0.13 * k], [-0.16, 0, 0.16 * k], 0.012, 0.004, 4, C('#1a1a22')); }
       }, { side: k, amp: 1.1 });
       break;
     }
-    case 'bird': {
-      const c = C('#4a8ae8');
-      const body = add('flybody', -1, [0, 0, 0], mb => { mb.sph([0, 0, 0], [0.2, 0.14, 0.14], 12, (x, y) => y < -0.3 ? C('#e8f0ff') : c, 0.1); mb.caps([0.17, 0.02, 0], [0.3, 0.0, 0], 0.04, 0.008, 6, C('#ffc45a')); mb.sph([-0.24, 0.02, 0], [0.1, 0.012, 0.08], 8, c, 0); });
-      eyes(body, [0.13, 0.06, 0], 0.07, 0.025);
-      for (const k of [-1, 1]) add('wing', body, [-0.02, 0.05, 0.08 * k], mb => mb.sph([0, 0, 0.17 * k], [0.12, 0.015, 0.2], 12, shadeC(c, 0.92), 0), { side: k, amp: 0.8 });
+    case 'bird': { // a little songbird with a crest, a two-part beak, a fanned tail and feathery wings
+      const c = C('#3f86e6'), br = C('#ffb36a'), w = C('#eef4ff');
+      const body = add('flybody', -1, [0, 0, 0], mb => { mb.sph([0, 0, 0], [0.19, 0.13, 0.13], 14, (x, y) => y < -0.25 ? w : x > 0.4 && y < 0.3 ? br : c, 0.1); mb.sph([0.14, 0.07, 0], [0.09, 0.085, 0.085], 12, c, 0);
+        mb.caps([0.21, 0.075, 0], [0.3, 0.065, 0], 0.028, 0.006, 8, C('#ffc43a')); mb.caps([0.21, 0.055, 0], [0.28, 0.055, 0], 0.02, 0.005, 8, C('#e8a02a'));
+        for (const [a, l] of [[0.5, 0.09], [0.9, 0.11], [1.3, 0.08]]) mb.caps([0.12, 0.14, 0], [0.12 - Math.cos(a) * l, 0.14 + Math.sin(a) * l, 0], 0.015, 0.004, 5, c);
+        for (const z of [-0.06, 0, 0.06]) mb.sph([-0.27, 0.02, z * 1.2], [0.1, 0.01, 0.035], 8, shadeC(c, 0.85), 0);
+        for (const k of [-1, 1]) mb.caps([0.02, -0.12, 0.04 * k], [-0.03, -0.15, 0.04 * k], 0.012, 0.01, 4, C('#d8a050')); });
+      eyes(body, [0.17, 0.09, 0], 0.07, 0.025);
+      for (const k of [-1, 1]) add('wing', body, [-0.02, 0.05, 0.08 * k], mb => { mb.sph([0, 0, 0.13 * k], [0.11, 0.015, 0.15], 12, c, 0); for (let q = 0; q < 4; q++) mb.sph([-0.06 - q * 0.015, -0.003, (0.18 + q * 0.035) * k], [0.07, 0.008, 0.03], 8, q % 2 ? shadeC(c, 0.8) : C('#2a5aa8'), 0); }, { side: k, amp: 0.8 });
       break;
     }
-    case 'fish': {
-      const c = C('#ff9f5a');
-      const body = add('swim', -1, [0, 0, 0], mb => { mb.sph([0, 0, 0], [0.22, 0.13, 0.08], 12, (x, y) => y < -0.3 ? C('#fff0d8') : c, 0.1); mb.sph([0, 0.13, 0], [0.08, 0.05, 0.01], 8, shadeC(c, 0.9), 0); });
-      eyes(body, [0.12, 0.03, 0], 0.06, 0.03);
-      add('tail', body, [-0.2, 0, 0], mb => { mb.push([0, 0, 0], M4.rotY(Math.PI / 2)); mb.sph([0, 0, 0.08], [0.012, 0.12, 0.1], 8, shadeC(c, 0.9), 0); mb.pop(); }, { amp: 1.4 });
+    case 'fish': { // a proper fish shape with stripes and fins
+      const c = C('#ff9a4a'), lite = C('#fff0d8');
+      const body = add('swim', -1, [0, 0, 0], mb => {
+        mb.push([0, 0, 0], M4.rotZ(-Math.PI / 2), [1, 1, 0.48]);
+        mb.lathe([[0, -0.2], [0.04, -0.18], [0.09, -0.08], [0.13, 0.04], [0.12, 0.13], [0.08, 0.2], [0, 0.23]], 16, (t, ph) => Math.sin(ph) < -0.2 && Math.cos(ph) < 0.5 ? lite : (t > 0.35 && t < 0.45) || (t > 0.68 && t < 0.76) ? C('#ffffff') : c, 0);
+        mb.pop();
+        mb.tri2([0.08, 0.1, 0], [-0.1, 0.18, 0], [-0.08, 0.1, 0], shadeC(c, 0.85)); mb.tri2([0.0, -0.1, 0], [-0.12, -0.15, 0], [-0.1, -0.08, 0], shadeC(c, 0.85));
+        for (const k of [-1, 1]) mb.tri2([0.08, -0.03, 0.055 * k], [0.02, -0.08, 0.1 * k], [0.0, -0.02, 0.06 * k], shadeC(c, 0.9));
+        mb.caps([0.22, -0.02, -0.02], [0.22, -0.02, 0.02], 0.005, 0.005, 4, C('#7a3a1a')); });
+      eyes(body, [0.13, 0.03, 0], 0.055, 0.028);
+      add('tail', body, [-0.19, 0, 0], mb => { mb.tri2([0, 0, 0], [-0.13, 0.12, 0], [-0.08, 0, 0], shadeC(c, 0.9)); mb.tri2([0, 0, 0], [-0.08, 0, 0], [-0.13, -0.12, 0], shadeC(c, 0.9)); }, { amp: 1.4 });
       break;
     }
-    case 'jelly': {
-      const body = add('jellyfloat', -1, [0, 0, 0], mb => { mb.lathe([[0.32, 0], [0.34, 0.08], [0.28, 0.22], [0.16, 0.32], [0, 0.35]], 16, [1, 0.6, 0.9, 0.42], 0); mb.sph([0, 0.1, 0], 0.12, 8, glowC(C('#ffc8f0')), 0); });
-      for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; add('tentacle', body, [Math.cos(a) * 0.18, 0, Math.sin(a) * 0.18], mb => MB.tube(mb, [[0, 0, 0], [0.03, -0.25, 0], [-0.02, -0.5, 0.02], [0.02, -0.75, 0]], 0.018, 4, glowC(C('#ff9ad8'))), { ph: k }); }
-      eyes(body, [0.26, 0.12, 0], 0.08, 0.035);
+    case 'jelly': { // a glowing bell with a frilly rim, frilly arms and long thin tentacles
+      const body = add('jellyfloat', -1, [0, 0, 0], mb => {
+        mb.lathe([[0.3, 0], [0.33, 0.07], [0.29, 0.2], [0.18, 0.31], [0, 0.35]], 18, (t) => C(t > 0.6 ? '#ffc8f0' : '#e898e0', 0.5), 0);
+        for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; mb.sph([Math.cos(a) * 0.3, -0.005, Math.sin(a) * 0.3], [0.04, 0.025, 0.04], 6, C('#ffb8f0', 0.6), 0); }
+        for (let k = 0; k < 4; k++) { const a = k / 4 * 6.283 + 0.4; mb.sph([Math.cos(a) * 0.09, 0.17, Math.sin(a) * 0.09], [0.06, 0.02, 0.035], 8, glowC(C('#ffe0fa')), 0); }
+        mb.sph([0, 0.1, 0], 0.08, 8, glowC(C('#ffc8f0')), 0); });
+      for (let k = 0; k < 4; k++) { const a = k / 4 * 6.283; add('tentacle', body, [Math.cos(a) * 0.06, 0, Math.sin(a) * 0.06], mb => { for (let q = 0; q < 6; q++) mb.sph([Math.sin(q * 1.3) * 0.03, -0.06 - q * 0.08, Math.cos(q * 1.1) * 0.03], [0.04 - q * 0.004, 0.05, 0.02], 6, C('#ff9ad8', 0.75), 0); }, { ph: k * 1.5 }); }
+      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + 0.2; add('tentacle', body, [Math.cos(a) * 0.25, 0, Math.sin(a) * 0.25], mb => MB.tube(mb, [[0, 0, 0], [0.03, -0.3, 0], [-0.02, -0.6, 0.02], [0.02, -0.95, 0]], t => 0.012 - t * 0.008, 4, glowC(C('#ff9ad8'))), { ph: k }); }
+      eyes(body, [0.26, 0.13, 0], 0.08, 0.035);
       break;
     }
-    case 'beetle': default: {
-      const body = add('body', -1, [0, 0.14, 0], mb => mb.sph([0, 0, 0], [0.22, 0.13, 0.17], 14, (x, y, z) => y > 0.3 ? (Math.abs(z) < 0.06 ? C('#1a1f2b') : glowC(C('#5ff0e0'))) : C('#2a2f3a'), 0.1));
-      const head = add('head', body, [0.2, -0.04, 0], mb => { mb.sph([0.02, 0, 0], [0.08, 0.07, 0.09], 10, C('#2a2f3a'), 0); for (const k of [-1, 1]) MB.tube(mb, [[0.06, 0.04, 0.04 * k], [0.14, 0.14, 0.1 * k]], 0.008, 4, C('#1a1f2b')); });
-      eyes(head, [0.07, 0.03, 0], 0.05, 0.022);
-      for (let q = 0; q < 3; q++) for (const k of [-1, 1]) add('crableg', body, [-0.1 + q * 0.1, -0.06, 0.12 * k], mb => MB.tube(mb, [[0, 0, 0], [-0.02, -0.02, 0.12 * k], [-0.04, -0.08, 0.15 * k]], 0.015, 4, C('#1a1f2b')), { ph: q * 2 + (k > 0 ? 0 : 1), side: k });
+    case 'beetle': default: { // cave beetle: a horn, a split shell with glowing lines, jointed legs, feelers
+      const dk = C('#20242f'), sh = C('#2c3240');
+      const body = add('body', -1, [0, 0.15, 0], mb => {
+        for (const k of [-1, 1]) mb.sph([-0.04, 0.02, 0.07 * k], [0.19, 0.12, 0.085], 14, (x, y, z) => y > 0.2 && Math.abs(Math.sin(x * 9)) < 0.18 ? glowC(C('#5ff0e0')) : z * k > 0.85 ? glowC(C('#3ac8d8')) : sh, 0.1);
+        mb.sph([0.15, 0.0, 0], [0.08, 0.08, 0.1], 10, dk, 0); mb.caps([-0.04, 0.13, 0], [-0.04, 0.13, 0.001], 0.004, 0.004, 4, dk); mb.sph([-0.04, -0.06, 0], [0.18, 0.05, 0.13], 10, dk, 0); });
+      const head = add('head', body, [0.21, -0.03, 0], mb => { mb.sph([0.02, 0, 0], [0.07, 0.06, 0.08], 10, dk, 0); mb.caps([0.05, 0.03, 0], [0.12, 0.12, 0], 0.025, 0.008, 6, C('#3a4252')); mb.caps([0.12, 0.12, 0], [0.1, 0.17, 0], 0.008, 0.004, 5, C('#3a4252')); });
+      eyes(head, [0.07, 0.02, 0], 0.05, 0.02);
+      for (const k of [-1, 1]) add('antenna', head, [0.06, 0.04, 0.04 * k], mb => MB.tube(mb, [[0, 0, 0], [0.05, 0.07, 0.04 * k], [0.12, 0.1, 0.08 * k]], 0.006, 4, dk), { side: k });
+      for (let q = 0; q < 3; q++) for (const k of [-1, 1]) { const up = add('crableg', body, [0.08 - q * 0.08, -0.05, 0.1 * k], mb => mb.caps([0, 0, 0], [0.0, 0.03, 0.1 * k], 0.016, 0.013, 5, dk), { ph: q * 2 + (k > 0 ? 0 : 1), side: k });
+        add('still', up, [0, 0.03, 0.1 * k], mb => { mb.caps([0, 0, 0], [(q - 1) * 0.03, -0.13, 0.06 * k], 0.012, 0.006, 5, dk); }); }
     }
   }
   return { parts };
@@ -567,6 +648,12 @@ function rigPose(part, s) {
     case 'swim': return { R: M4.rotY(Math.sin(t * 6 + s.seed) * 0.12) };
     case 'jellyfloat': { const q = Math.sin(t * 2.2 + s.seed); return { p: [0, q * 0.1, 0], s: [1 + q * 0.08, 1 - q * 0.1, 1 + q * 0.08] }; }
     case 'tentacle': return { R: M4.mul3(M4.rotZ(Math.sin(t * 2.2 + (part.ph || 0)) * 0.3), M4.rotX(Math.cos(t * 1.7 + (part.ph || 0)) * 0.2)) };
+    case 'nose': { const q = Math.max(0, Math.sin(t * 11 + s.seed)) * (Math.sin(t * 0.8 + s.seed) > 0 ? 1 : 0); return { s: [1, 1 + q * 0.18, 1 + q * 0.12] }; }
+    case 'tailseg': return { R: M4.mul3(M4.rotY(Math.sin(t * (mv > 0.5 ? 7 : 2.6) - (part.ph || 0) + s.seed) * (0.18 + mv * 0.2) * (part.amp || 1)), M4.rotZ(Math.sin(t * 1.3 - (part.ph || 0)) * 0.06)) };
+    case 'pincer': return { R: M4.rotY(-k * (0.05 + Math.max(0, Math.sin(t * 3 + s.seed + k)) * 0.5)) };
+    case 'throat': { const q = (Math.sin(t * 6 + s.seed) * 0.5 + 0.5) * (Math.sin(t * 0.9 + s.seed) > 0.3 ? 1 : 0); return { s: [1 + q * 0.5, 1 + q * 0.7, 1 + q * 0.5] }; }
+    case 'antenna': return { R: M4.mul3(M4.rotX(Math.sin(t * 2.6 + s.seed + k) * 0.18), M4.rotZ(Math.sin(t * 1.9 + s.seed) * 0.12)) };
+    case 'tuft': return { R: M4.rotX(Math.sin(t * 2.2 + s.seed) * 0.15) };
     case 'knee': return { R: M4.rotZ(-Math.max(0, Math.sin(w + 1.2)) * 0.6 * mv) };
     case 'shoulder': return { R: M4.mul3(M4.rotX(Math.sin(t * 2.2) * 0.25), M4.rotZ(Math.sin(t * 1.3) * 0.2)) };
     case 'elbow': return { R: M4.rotZ(0.3 + Math.sin(t * 4) * 0.45) };

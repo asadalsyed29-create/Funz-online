@@ -327,23 +327,61 @@ function rock(mb, x, y, z, s, c, r2 = 0.5) {
   }
 }
 function flowers(mb, x, y, z, r) {
-  const cols = ['#ff8fb1', '#ffe066', '#ffffff', '#b28dff', '#ff9f5a', '#6fc8ff'];
-  for (let k = 0; k < 3; k++) {
-    const a = r * 20 + k * 2.1, px = x + Math.cos(a) * 0.5, pz = z + Math.sin(a) * 0.5, c = hex(cols[(Math.floor(r * 60) + k) % 6]);
-    mb.cyl(px, y - 0.1, pz, 0.025, 0.02, 0.5, 3, hex('#3f8a3a'), false);
-    mb.up = true; for (let q = 0; q < 5; q++) { const b = q / 5 * 6.283 + a; mb.tri([px, y + 0.42, pz], [px + Math.cos(b - 0.45) * 0.17, y + 0.46, pz + Math.sin(b - 0.45) * 0.17], [px + Math.cos(b + 0.45) * 0.17, y + 0.46, pz + Math.sin(b + 0.45) * 0.17], c, true); mb.tri([px, y + 0.42, pz], [px + Math.cos(b + 0.45) * 0.17, y + 0.46, pz + Math.sin(b + 0.45) * 0.17], [px + Math.cos(b - 0.45) * 0.17, y + 0.46, pz + Math.sin(b - 0.45) * 0.17], shadeC(c, 0.8), true); }
-    mb.up = false; mb.ico(px, y + 0.47, pz, 0.06, 0, () => hex('#ffcc33'));
+  // a clump of one kind of flower: daisies, tulips, bluebells or poppies, with curvy stems and leaves
+  const kind = Math.floor(r * 40) % 4, n = mb.lod ? 2 : 3, stem = hex('#3f8a3a'), leaf = hex('#4f9a44');
+  const pal = [['#ffffff', '#fff2f6'], ['#ff5a6a', '#ffd23a', '#ff8fb1', '#b28dff'], ['#6f8cff', '#9a7aff'], ['#ff4a32', '#ff8a2a']][kind];
+  for (let k = 0; k < n; k++) {
+    const a = r * 20 + k * 1.7, d = 0.15 + (k % 2) * 0.32, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d, h = 0.38 + ((k * 7 + Math.floor(r * 13)) % 4) * 0.07, c = hex(pal[(k + Math.floor(r * 9)) % pal.length]);
+    const lean = [Math.cos(a + 1) * 0.06, 0, Math.sin(a + 1) * 0.06], top = [px + lean[0], y + h, pz + lean[2]];
+    if (mb.lod) { mb.cyl(px, y - 0.1, pz, 0.025, 0.02, h + 0.1, 3, stem, false); mb.ico(top[0], top[1], top[2], 0.1, 0, () => c); continue; }
+    mb.up = true; for (const [o0, o1] of [[0, 0.5], [0.5, 1]]) { const A = [px + lean[0] * o0 * o0, y - 0.05 + (h + 0.05) * o0, pz + lean[2] * o0 * o0], B = [px + lean[0] * o1 * o1, y - 0.05 + (h + 0.05) * o1, pz + lean[2] * o1 * o1], w = 0.018; mb.tri2([A[0] - w, A[1], A[2]], [A[0] + w, A[1], A[2]], [B[0], B[1], B[2]], stem); mb.tri2([A[0], A[1], A[2] - w], [A[0], A[1], A[2] + w], [B[0], B[1], B[2]], stem); } mb.up = false;
+    mb.up = true; const la = a + 2; mb.tri([px, y + 0.06, pz], [px + Math.cos(la) * 0.2, y + 0.16, pz + Math.sin(la) * 0.2], [px + Math.cos(la + 0.4) * 0.12, y + 0.2, pz + Math.sin(la + 0.4) * 0.12], leaf, true); mb.tri([px, y + 0.06, pz], [px + Math.cos(la + 0.4) * 0.12, y + 0.2, pz + Math.sin(la + 0.4) * 0.12], [px + Math.cos(la) * 0.2, y + 0.16, pz + Math.sin(la) * 0.2], shadeC(leaf, 0.8), true); mb.up = false;
+    const [tx, ty, tz] = top;
+    if (kind === 0) { // daisy: a ring of thin white petals around a yellow middle
+      mb.up = true; for (let q = 0; q < 8; q++) { const b = q / 8 * 6.283 + a; mb.tri([tx, ty, tz], [tx + Math.cos(b - 0.15) * 0.15, ty + 0.03, tz + Math.sin(b - 0.15) * 0.15], [tx + Math.cos(b + 0.15) * 0.15, ty + 0.03, tz + Math.sin(b + 0.15) * 0.15], c, true); mb.tri([tx, ty - 0.005, tz], [tx + Math.cos(b + 0.15) * 0.15, ty + 0.025, tz + Math.sin(b + 0.15) * 0.15], [tx + Math.cos(b - 0.15) * 0.15, ty + 0.025, tz + Math.sin(b - 0.15) * 0.15], shadeC(c, 0.85), true); } mb.up = false;
+      mb.sph([tx, ty + 0.03, tz], [0.05, 0.03, 0.05], 5, hex('#ffc42a'), 0);
+    } else if (kind === 1) { // tulip: a closed cup of petals
+      mb.push([tx, ty - 0.02, tz]); mb.lathe([[0.02, 0], [0.07, 0.04], [0.085, 0.11], [0.07, 0.17], [0.0, 0.15]], 6, (t, ph) => shadeC(c, Math.cos(ph * 3) > 0.6 ? 1.1 : 0.92), 0.25); mb.pop();
+    } else if (kind === 2) { // bluebells: little bells hanging down one side
+      mb.tri2(top, [tx + Math.cos(a) * 0.12, ty + 0.03, tz + Math.sin(a) * 0.12], [tx + Math.cos(a) * 0.12, ty + 0.01, tz + Math.sin(a) * 0.12], stem);
+      for (let q = 0; q < 3; q++) { const bx = tx + Math.cos(a) * (0.03 + q * 0.045), bz = tz + Math.sin(a) * (0.03 + q * 0.045), by = ty - 0.05 - q * 0.02; mb.push([bx, by, bz]); mb.lathe([[0.045, 0], [0.04, 0.01], [0.032, 0.05], [0.0, 0.065]], 6, c, 0.2); mb.pop(); }
+    } else { // poppy: four round floppy petals and a dark middle
+      for (let q = 0; q < 4; q++) { const b = q / 4 * 6.283 + a; mb.sph([tx + Math.cos(b) * 0.07, ty + 0.03, tz + Math.sin(b) * 0.07], [0.08, 0.025, 0.08], 5, c, 0.1); }
+      mb.sph([tx, ty + 0.06, tz], [0.035, 0.03, 0.035], 5, hex('#2a1e2a'), 0);
+    }
   }
 }
 function sunflower(mb, x, y, z, s, rot) {
-  mb.cyl(x, y - 0.1, z, 0.05, 0.04, 1.6 * s, 4, hex('#4f8a3a'), false);
-  const hx = x + Math.cos(rot) * 0.1, hy = y + 1.6 * s, hz = z + Math.sin(rot) * 0.1;
-  for (let q = 0; q < 10; q++) { const b = q / 10 * 6.283; mb.tri([hx, hy + Math.cos(b) * 0.1, hz + Math.sin(b) * 0.1], [hx + 0.02, hy + Math.cos(b - 0.3) * 0.38, hz + Math.sin(b - 0.3) * 0.38], [hx + 0.02, hy + Math.cos(b + 0.3) * 0.38, hz + Math.sin(b + 0.3) * 0.38], hex('#ffd02a'), true); mb.tri([hx, hy + Math.cos(b) * 0.1, hz + Math.sin(b) * 0.1], [hx + 0.02, hy + Math.cos(b + 0.3) * 0.38, hz + Math.sin(b + 0.3) * 0.38], [hx + 0.02, hy + Math.cos(b - 0.3) * 0.38, hz + Math.sin(b - 0.3) * 0.38], hex('#e8a820'), true); }
-  mb.ico(hx + 0.04, hy, hz, [0.06, 0.16, 0.16], 1, () => hex('#5a3a1a'));
+  const st = hex('#4f8a3a'), lf = hex('#5a9a40'), hy = y + 1.6 * s, hx = x + Math.cos(rot) * 0.12, hz = z + Math.sin(rot) * 0.12;
+  mb.caps([x, y - 0.1, z], [x, y + 0.9 * s, z], 0.055, 0.045, 5, st); mb.caps([x, y + 0.9 * s, z], [hx - Math.cos(rot) * 0.05, hy - 0.05, hz - Math.sin(rot) * 0.05], 0.045, 0.04, 5, st);
+  if (!mb.lod) for (const [h, a] of [[0.5, rot + 1.6], [0.95, rot - 1.5]]) { const lx = x + Math.cos(a) * 0.45, lz = z + Math.sin(a) * 0.45; mb.sph([x + Math.cos(a) * 0.25, y + h * s + 0.05, z + Math.sin(a) * 0.25], [0.24, 0.03, 0.14], 5, lf, 0.1); mb.caps([x, y + h * s, z], [lx * 0.5 + x * 0.5, y + h * s + 0.06, lz * 0.5 + z * 0.5], 0.015, 0.012, 3, st); }
+  // the head faces sideways: green back, two rings of petals, a brown seed middle
+  mb.push([hx, hy, hz], M4.rotY(-rot));
+  mb.sph([-0.03, 0, 0], [0.05, 0.2, 0.2], 7, hex('#5a8a3a'), 0);
+  const P = mb.lod ? 10 : 16; for (let ring = 0; ring < (mb.lod ? 1 : 2); ring++) for (let q = 0; q < P; q++) { const b = (q + ring * 0.5) / P * 6.283, L = ring ? 0.36 : 0.42, c = hex(ring ? '#ffb81a' : '#ffd42a'), w = 0.11;
+    mb.tri([0.01 + ring * 0.01, Math.cos(b) * 0.15, Math.sin(b) * 0.15], [0.03 + ring * 0.01, Math.cos(b - w) * L * 0.75, Math.sin(b - w) * L * 0.75], [0.05 + ring * 0.01, Math.cos(b) * L, Math.sin(b) * L], c, true); mb.tri([0.01 + ring * 0.01, Math.cos(b) * 0.15, Math.sin(b) * 0.15], [0.05 + ring * 0.01, Math.cos(b) * L, Math.sin(b) * L], [0.03 + ring * 0.01, Math.cos(b + w) * L * 0.75, Math.sin(b + w) * L * 0.75], shadeC(c, 0.92), true); }
+  mb.sph([0.04, 0, 0], [0.05, 0.17, 0.17], 8, (nx, ny, nz) => Math.sin(Math.atan2(nz, ny) * 8 + Math.hypot(ny, nz) * 20) > 0 ? hex('#5a3418') : hex('#3e2410'), 0);
+  mb.pop();
 }
 function tuft(mb, x, y, z, c, s = 1) { mb.up = true; const g = hex(c), g2 = mixC(g, [0.9, 1, 0.6, 1], 0.25); for (let k = 0; k < 5; k++) { const a = k * 1.26 + x, h = (0.5 + (k % 3) * 0.15) * s, lean = 0.12; const p0 = [x + Math.cos(a) * 0.22, y - 0.05, z + Math.sin(a) * 0.22], p1 = [x + Math.cos(a + 0.5) * 0.22, y - 0.05, z + Math.sin(a + 0.5) * 0.22], tp = [x + Math.cos(a + 0.25) * (0.22 + lean), y + h, z + Math.sin(a + 0.25) * (0.22 + lean)]; mb.tri(p0, p1, tp, k % 2 ? g : g2, true); mb.tri(p1, p0, tp, shadeC(g, 0.85), true); }  mb.up = false; }
 function fern(mb, x, y, z, s, rot) { mb.up = true; const g = hex('#3f9a4e'); for (let k = 0; k < 6; k++) { const a = rot + k / 6 * 6.283, L = 1.1 * s; const tip = [x + Math.cos(a) * L, y + 0.25 * s, z + Math.sin(a) * L], m = [x + Math.cos(a) * L * 0.5, y + 0.55 * s, z + Math.sin(a) * L * 0.5]; const w = 0.18 * s, nx = -Math.sin(a) * w, nz = Math.cos(a) * w; mb.tri([x, y, z], [m[0] + nx, m[1], m[2] + nz], tip, g, true); mb.tri([x, y, z], tip, [m[0] - nx, m[1], m[2] - nz], shadeC(g, 0.9), true); mb.tri([x, y, z], tip, [m[0] + nx, m[1], m[2] + nz], shadeC(g, 0.75), true); mb.tri([x, y, z], [m[0] - nx, m[1], m[2] - nz], tip, shadeC(g, 0.7), true); }  mb.up = false; }
-function shrooms(mb, x, y, z, r) { for (let k = 0; k < 3; k++) { const a = r * 9 + k * 2.2, px = x + Math.cos(a) * 0.35, pz = z + Math.sin(a) * 0.35, h = 0.25 + (k % 2) * 0.15; mb.cyl(px, y - 0.05, pz, 0.06, 0.05, h, 5, hex('#f4ead8'), false); mb.cyl(px, y + h - 0.02, pz, 0.22, 0, 0.18, 7, hex(r > 0.5 ? '#e0443c' : '#c88a4a')); if (r > 0.5) mb.ico(px + 0.06, y + h + 0.08, pz, 0.035, 0, () => hex('#ffffff')); } }
+function shrooms(mb, x, y, z, r) {
+  // fly agarics (red with white spots), brown boletes, or a cluster of tiny bonnets
+  const kind = r < 0.4 ? 0 : r < 0.75 ? 1 : 2, n = kind === 2 ? 6 : 3;
+  for (let k = 0; k < n; k++) {
+    const a = r * 9 + k * (kind === 2 ? 1.05 : 2.2), d = kind === 2 ? 0.12 + (k % 3) * 0.08 : 0.35, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = kind === 2 ? 0.12 + (k % 3) * 0.05 : 0.22 + (k % 2) * 0.16, R = kind === 2 ? 0.06 : kind === 1 ? 0.2 : 0.22 - (k % 2) * 0.04;
+    const stemC = hex(kind === 1 ? '#e8dcc0' : '#f6efe2'), capC = hex(kind === 0 ? '#e23a30' : kind === 1 ? '#8a5a32' : '#d8b48a');
+    if (mb.lod) { mb.cyl(px, y - 0.05, pz, R * 0.3, R * 0.25, h, 4, stemC, false); mb.cyl(px, y + h - 0.02, pz, R, 0, R * 0.8, 5, capC); continue; }
+    mb.push([px, y - 0.05, pz]);
+    mb.lathe([[R * 0.32, 0], [R * (kind === 1 ? 0.45 : 0.28), h * 0.35], [R * 0.24, h]], 6, stemC, 0.1);
+    if (kind === 0) mb.lathe([[R * 0.24, h * 0.7], [R * 0.4, h * 0.66], [R * 0.36, h * 0.74]], 6, hex('#ffffff'), 0);
+    mb.lathe([[R * 0.2, h - 0.01], [R, h + R * 0.05]], 8, hex(kind === 0 ? '#f4ead8' : '#c8b490'), 0); // gills
+    mb.lathe([[R, h + R * 0.05], [R * 0.95, h + R * 0.3], [R * 0.7, h + R * 0.6], [R * 0.3, h + R * (kind === 2 ? 0.95 : 0.78)], [0, h + R * (kind === 2 ? 1.0 : 0.82)]], 8, (t) => shadeC(capC, 0.9 + t * 0.2), 0.15);
+    if (kind === 0) for (let q = 0; q < 6; q++) { const b = q * 1.7 + k, rr = R * (0.35 + (q % 3) * 0.2), yy = h + R * (0.8 - (rr / R) * (rr / R) * 0.6); mb.sph([Math.cos(b) * rr, yy, Math.sin(b) * rr], [R * 0.11, R * 0.06, R * 0.11], 4, hex('#ffffff'), 0); }
+    mb.pop();
+  }
+}
 function log(mb, x, y, z, s, rot) { mb.at([x, y + 0.3 * s, z], M4.rotY(rot)); mb.at([x, y + 0.3 * s, z], M4.mul3(M4.rotY(rot), M4.rotZ(Math.PI / 2))); mb.cyl(0, -1.4 * s, 0, 0.35 * s, 0.33 * s, 2.8 * s, 7, hex('#7a5232')); mb.cyl(0, -1.42 * s, 0, 0.3 * s, 0.3 * s, 0.02, 7, hex('#c8a070')); mb.reset(); mb.ico(x + 0.3, y + 0.62 * s, z, 0.25, 0, () => hex('#4f9a4e')); }
 function palm(mb, x, y, z, s, rot) {
   // a leaning ringed trunk, a crown of long arching fronds made of leaflets, and coconuts
@@ -372,11 +410,27 @@ function palm(mb, x, y, z, s, rot) {
   for (let k = 0; k < 4; k++) mb.sph([px + Math.cos(k * 1.6) * 0.28 * s, py - 0.32 * s, pz + Math.sin(k * 1.6) * 0.28 * s], 0.2 * s, 7, hex(k % 2 ? '#6a4a22' : '#7a5a2a'), 0.2);
 }
 function cactus(mb, x, y, z, s, rot, r2 = 0.5) {
-  const g = hex('#4f9a4a'), ribs = (t, ph) => shadeC(g, 0.86 + 0.14 * Math.cos(ph * 8)), ax = Math.cos(rot), az = Math.sin(rot);
-  const arm = (ox, oz, y0, len, up) => { MB.tube(mb, [[x, y + y0 * s, z], [x + ox * s, y + y0 * s, z + oz * s], [x + ox * s, y + (y0 + up) * s, z + oz * s]], 0.2 * s, 8, g); mb.sph([x + ox * s, y + (y0 + up) * s, z + oz * s], 0.2 * s, 8, g, 0); };
-  mb.push([x, y - 0.3, z]); mb.lathe([[0.42 * s, 0], [0.42 * s, 2.9 * s], [0.3 * s, 3.25 * s], [0, 3.4 * s]], 12, ribs, 0.1); mb.pop();
-  arm(ax * 0.75, az * 0.75, 1.2, 0, 1.1); arm(-ax * 0.65, -az * 0.65, 0.8, 0, 0.8);
-  if (r2 > 0.5) for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; mb.sph([x + Math.cos(a) * 0.12, y + 3.12 * s, z + Math.sin(a) * 0.12], [0.1, 0.05, 0.1], 5, hex(r2 > 0.75 ? '#ff6fae' : '#ffd24a'), 0); }
+  const g = hex('#4f9a4a'), ribs = (t, ph) => shadeC(g, 0.84 + 0.16 * Math.cos(ph * 8)), spine = hex('#f4eccc'), ax = Math.cos(rot), az = Math.sin(rot);
+  const dots = (cx, cy, cz, rad, hgt, n) => { if (mb.lod) return; for (let k = 0; k < n; k++) { const a = k * 2.39996, yy = cy + (k / n) * hgt; mb.sph([cx + Math.cos(a) * rad * 1.02, yy, cz + Math.sin(a) * rad * 1.02], 0.025, 3, spine, 0); } };
+  if (r2 < 0.22) { // a round barrel cactus with a crown of flowers
+    mb.push([x, y - 0.15, z]); mb.lathe([[0.55 * s, 0], [0.68 * s, 0.4 * s], [0.62 * s, 0.85 * s], [0.35 * s, 1.1 * s], [0, 1.15 * s]], 12, ribs, 0.1); mb.pop();
+    dots(x, y + 0.05, z, 0.66 * s, 0.8 * s, 18);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; mb.sph([x + Math.cos(a) * 0.22 * s, y + 0.98 * s, z + Math.sin(a) * 0.22 * s], [0.09, 0.06, 0.09], 5, hex(r2 < 0.11 ? '#ff6fae' : '#ffb03a'), 0); }
+    return;
+  }
+  if (r2 < 0.4) { // prickly pear: flat round paddles stacked on each other, with red fruit on top
+    const pad = (px, py, pz, a, sc) => { mb.push([px, py, pz], M4.mul3(M4.rotY(a), M4.rotZ(0.15))); mb.sph([0, 0.45 * sc, 0], [0.45 * sc, 0.55 * sc, 0.12 * sc], 8, (nx, ny, nz) => shadeC(hex('#5aa04a'), 0.9 + nx * 0.1), 0.15); if (!mb.lod) for (let k = 0; k < 6; k++) mb.sph([Math.cos(k * 2.4) * 0.25 * sc, 0.45 * sc + Math.sin(k * 2.4) * 0.3 * sc, 0.12 * sc], 0.025, 3, spine, 0); mb.pop(); return [px, py + 0.95 * sc, pz]; };
+    const p1 = pad(x, y - 0.1, z, rot, s), p2 = pad(p1[0] + ax * 0.25, p1[1] - 0.15, p1[2] + az * 0.25, rot + 0.8, s * 0.8), p3 = pad(p1[0] - ax * 0.25, p1[1] - 0.2, p1[2] - az * 0.25, rot - 0.6, s * 0.75);
+    for (const p of [p2, p3]) mb.sph([p[0], p[1] + 0.05, p[2]], [0.09, 0.12, 0.09], 5, hex('#d83a5a'), 0);
+    return;
+  }
+  // the tall saguaro: ribbed trunk, arms that bend up, a few spines and sometimes flowers
+  const arm = (ox, oz, y0, up) => { const r = 0.21 * s, P = [[x + ox * 0.35 * s, y + y0 * s, z + oz * 0.35 * s], [x + ox * 0.75 * s, y + (y0 + 0.08) * s, z + oz * 0.75 * s], [x + ox * 0.95 * s, y + (y0 + 0.35) * s, z + oz * 0.95 * s], [x + ox * 0.98 * s, y + (y0 + up) * s, z + oz * 0.98 * s]];
+    MB.tube(mb, P, r, mb.lod ? 5 : 8, g); mb.sph(P[3], r, 6, g, 0); dots(P[3][0], P[2][1], P[3][2], r, (up - 0.35) * s, 6); };
+  mb.push([x, y - 0.3, z]); mb.lathe([[0.42 * s, 0], [0.44 * s, 1.5 * s], [0.42 * s, 2.9 * s], [0.3 * s, 3.3 * s], [0, 3.42 * s]], 12, ribs, 0.1); mb.pop();
+  dots(x, y, z, 0.43 * s, 2.9 * s, 26);
+  arm(ax, az, 1.2, 1.25); arm(-ax * 0.9 + az * 0.4, -az * 0.9 - ax * 0.4, 0.8, 0.9); if (r2 > 0.8) arm(az, -ax, 1.7, 0.7);
+  if (r2 > 0.6) for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; mb.sph([x + Math.cos(a) * 0.14, y + 3.08 * s, z + Math.sin(a) * 0.14], [0.1, 0.06, 0.1], 5, hex(r2 > 0.75 ? '#ff6fae' : '#ffe0f0'), 0); mb.sph([x + Math.cos(a) * 0.14, y + 3.12 * s, z + Math.sin(a) * 0.14], 0.03, 3, hex('#ffd24a'), 0); }
 }
 function deadBush(mb, x, y, z, s) { mb.up = true; const c = hex('#8a6a42'); for (let k = 0; k < 5; k++) { const a = k * 1.3; mb.cyl(x, y - 0.1, z, 0.05, 0.02, 0.9 * s, 3, c, false, a); mb.at([x, y, z], M4.mul3(M4.rotY(a), M4.rotZ(0.6))); mb.cyl(0, 0, 0, 0.04, 0.01, 0.8 * s, 3, c, false); mb.reset(); }  mb.up = false; }
 function bones(mb, x, y, z, rot) { const c = hex('#f2ead8'); mb.at([x, y + 0.15, z], M4.mul3(M4.rotY(rot), M4.rotZ(Math.PI / 2))); for (let k = 0; k < 5; k++) mb.cyl(0, -1 + k * 0.45, 0, 0.08, 0.06, 0.2, 5, c); mb.cyl(0, -1.2, 0, 0.05, 0.05, 2.4, 5, c); mb.reset(); mb.ico(x + Math.cos(rot) * 1.4, y + 0.25, z + Math.sin(rot) * 1.4, 0.32, 1, () => c); }
@@ -384,13 +438,16 @@ function seashell(mb, x, y, z, r) { mb.up = true; const c = hex(r > 0.5 ? '#ffb3
 function iceSpike(mb, x, y, z, s) { mb.cyl(x, y - 0.5, z, 0.8 * s, 0, 5 * s, 6, glowC(hex('#bfe6ff'))); mb.cyl(x + 0.7 * s, y - 0.5, z + 0.3, 0.4 * s, 0, 2.5 * s, 5, hex('#d8f0ff')); mb.cyl(x - 0.5 * s, y - 0.5, z - 0.4, 0.35 * s, 0, 2 * s, 5, hex('#e8f6ff')); }
 function snowBush(mb, x, y, z, s) { puffs(mb, x, y, z, s, '#3f6a4a', 0.5, [[0, 0.4, 0, 0.75], [0.5, 0.3, 0.2, 0.5]]); mb.sph([x, y + 0.85 * s, z], [0.65 * s, 0.25 * s, 0.6 * s], 8, hex('#f4f8fc'), 0.1); }
 function crystals(mb, x, y, z, s, c) {
-  const base = hex(c), tip = mixC(base, [1, 1, 1, 1], 0.55);
-  mb.ico(x, y + 0.05, z, [0.7 * s, 0.25 * s, 0.7 * s], 0, (a, b) => hex('#6a6f80'));
-  for (let k = 0; k < 6; k++) {
-    const a = k * 1.1, h = (0.7 + (k % 3) * 0.55) * s, w = (0.16 + (k % 2) * 0.08) * s;
-    mb.at([x + Math.cos(a) * 0.35 * s * (k ? 1 : 0), y - 0.2, z + Math.sin(a) * 0.35 * s * (k ? 1 : 0)], M4.mul3(M4.rotY(a), M4.rotZ(k ? 0.35 * Math.sin(k * 2.3) : 0)));
-    mb.cyl(0, 0, 0, w, w * 1.05, h, 6, glowC(base), false, k);
-    mb.cyl(0, h, 0, w * 1.05, 0, w * 2.2, 6, glowC(tip), false, k);
+  // a geode-like cluster: rocky base, a few big six-sided crystals with pointed tips, and small shards around
+  const base = hex(c), tip = mixC(base, [1, 1, 1, 1], 0.55), dk = shadeC(base, 0.72);
+  mb.ico(x, y + 0.05, z, [0.85 * s, 0.32 * s, 0.85 * s], 1, (a, b) => b > 0.3 ? hex('#7a7f92') : hex('#5a5f70'));
+  const n = mb.lod ? 4 : 9;
+  for (let k = 0; k < n; k++) {
+    const big = k < 4, a = k * 2.39996, d = k ? (big ? 0.28 : 0.55 + (k % 2) * 0.15) * s : 0, h = big ? (1.0 + (k % 3) * 0.55) * s : (0.35 + (k % 3) * 0.12) * s, w = big ? (0.17 + (k % 2) * 0.07) * s : 0.07 * s;
+    mb.at([x + Math.cos(a) * d, y - 0.15, z + Math.sin(a) * d], M4.mul3(M4.rotY(a), M4.rotZ(k ? (big ? 0.28 : 0.6) * (k % 2 ? 1 : -1) : 0)));
+    mb.cyl(0, 0, 0, w, w * 1.08, h, 6, glowC(k % 2 ? base : dk), false, k);
+    mb.cyl(0, h, 0, w * 1.08, 0, w * 2.4, 6, glowC(tip), false, k);
+    if (big && !mb.lod) mb.cyl(0, h * 0.2, 0, w * 0.55, w * 0.5, h * 0.75, 6, glowC(tip), false, k + 0.5); // a bright core showing through
     mb.reset();
   }
 }
@@ -419,7 +476,43 @@ function giantShroom(mb, x, y, z, s, r) {
   for (let k = 0; k < 7; k++) { const a = k * 0.9 + r * 5, R = (0.6 + (k % 3) * 0.6) * s, yy = y - 0.4 + (5.25 - (R / s) * (R / s) * 0.22) * s; mb.sph([x + Math.cos(a) * R, yy, z + Math.sin(a) * R], [0.22 * s, 0.08 * s, 0.22 * s], 6, glowC(hex('#fff2a8')), 0); }
 }
 function glowGrass(mb, x, y, z, r) { mb.up = true; const c = glowC(hex(r > 0.5 ? '#9ff0ff' : '#e0a8ff')); for (let k = 0; k < 4; k++) { const a = k * 1.6 + r * 7; mb.tri([x + Math.cos(a) * 0.2, y, z + Math.sin(a) * 0.2], [x + Math.cos(a + 1.2) * 0.2, y, z + Math.sin(a + 1.2) * 0.2], [x + Math.cos(a) * 0.05, y + 0.8, z + Math.sin(a) * 0.05], c, true); mb.tri([x + Math.cos(a + 1.2) * 0.2, y, z + Math.sin(a + 1.2) * 0.2], [x + Math.cos(a) * 0.2, y, z + Math.sin(a) * 0.2], [x + Math.cos(a) * 0.05, y + 0.8, z + Math.sin(a) * 0.05], c, true); }  mb.up = false; }
-function glowFlower(mb, x, y, z, r) { mb.cyl(x, y - 0.1, z, 0.04, 0.03, 0.9, 3, hex('#4a6a8a'), false); mb.ico(x, y + 0.95, z, 0.2, 1, () => glowC(hex(r > 0.5 ? '#ff8ff0' : '#8ff6ff'))); }
-function coral(mb, x, y, z, s, r) { if (y > -1.5) return; s = Math.min(s, (-y - 0.5) / 1.6); const c = hex(['#ff7a8a', '#ffb35a', '#c88aff', '#5ad8c8'][Math.floor(r * 4)]); for (let k = 0; k < 4; k++) { const a = k * 1.6 + r * 8; mb.at([x, y - 0.2, z], M4.mul3(M4.rotY(a), M4.rotZ(0.35))); mb.cyl(0, 0, 0, 0.18 * s, 0.1 * s, 1.4 * s, 5, c); mb.ico(0, 1.4 * s, 0, 0.16 * s, 0, () => shadeC(c, 1.1)); mb.reset(); } }
-function seaweed(mb, x, y, z, r) { if (y > -1.6) return; const g = hex('#3a8a5a'); for (let k = 0; k < 3; k++) { const px = x + Math.cos(k * 2 + r * 7) * 0.4, pz = z + Math.sin(k * 2 + r * 7) * 0.4, h = Math.min(2 + r * 2, -y - 0.6); mb.cyl(px, y - 0.2, pz, 0.12, 0.04, h, 4, g, false, k); } }
+function glowFlower(mb, x, y, z, r) {
+  const st = hex('#4a6a8a'), c = r > 0.5 ? '#ff8ff0' : '#8ff6ff';
+  mb.caps([x, y - 0.1, z], [x + 0.08, y + 0.55, z], 0.035, 0.03, 4, st); mb.caps([x + 0.08, y + 0.55, z], [x + 0.02, y + 0.95, z + 0.04], 0.03, 0.025, 4, st);
+  if (!mb.lod) for (const a of [0.5, 3.4]) mb.tri2([x + 0.05, y + 0.3, z], [x + Math.cos(a) * 0.35, y + 0.45, z + Math.sin(a) * 0.35], [x + Math.cos(a + 0.5) * 0.2, y + 0.55, z + Math.sin(a + 0.5) * 0.2], hex('#3a5a7a'));
+  // a glowing tulip-like bulb, open at the top, with little glowing tips sticking out
+  mb.push([x + 0.02, y + 0.88, z + 0.04]); mb.lathe([[0.05, 0], [0.16, 0.08], [0.2, 0.2], [0.16, 0.32], [0.1, 0.36]], 7, glowC(hex(c)), 0); mb.pop();
+  if (!mb.lod) for (let k = 0; k < 3; k++) { const a = k * 2.1; mb.caps([x + 0.02, y + 1.0, z + 0.04], [x + 0.02 + Math.cos(a) * 0.08, y + 1.32, z + 0.04 + Math.sin(a) * 0.08], 0.01, 0.008, 3, glowC(hex('#fff8c0'))); mb.sph([x + 0.02 + Math.cos(a) * 0.08, y + 1.33, z + 0.04 + Math.sin(a) * 0.08], 0.03, 3, glowC(hex('#fff8c0')), 0); }
+}
+function coral(mb, x, y, z, s, r) {
+  if (y > -1.5) return; s = Math.min(s, (-y - 0.5) / 1.6);
+  const c = hex(['#ff7a8a', '#ffb35a', '#c88aff', '#5ad8c8', '#ff9ad0'][Math.floor(r * 5)]), lite = mixC(c, [1, 1, 1, 1], 0.3), kind = Math.floor(r * 13) % 3;
+  if (kind === 0 || mb.lod) { // branching coral: arms that split into twigs with round tips
+    for (let k = 0; k < (mb.lod ? 3 : 4); k++) { const a = k * 1.6 + r * 8; mb.at([x, y - 0.2, z], M4.mul3(M4.rotY(a), M4.rotZ(0.35)));
+      mb.cyl(0, 0, 0, 0.16 * s, 0.1 * s, 0.9 * s, 5, c);
+      if (!mb.lod) for (const b of [-0.5, 0.45]) { mb.push([0, 0.9 * s, 0], M4.rotX(b)); mb.cyl(0, 0, 0, 0.09 * s, 0.06 * s, 0.6 * s, 5, c); mb.sph([0, 0.62 * s, 0], 0.08 * s, 4, lite, 0); mb.pop(); }
+      else mb.ico(0, 0.9 * s, 0, 0.14 * s, 0, () => lite);
+      mb.reset(); }
+  } else if (kind === 1) { // brain coral: a round dome with winding ridges
+    mb.sph([x, y + 0.1 * s, z], [0.75 * s, 0.55 * s, 0.75 * s], 14, (nx, ny, nz) => Math.sin(nx * 14 + Math.sin(nz * 9) * 2) > 0.2 ? lite : shadeC(c, 0.8), 0.2);
+  } else { // a sea fan: a flat lacy fan on a short stalk, plus tube coral
+    mb.at([x, y - 0.1, z], M4.rotY(r * 6)); mb.caps([0, 0, 0], [0, 0.4 * s, 0], 0.06 * s, 0.05 * s, 5, shadeC(c, 0.8));
+    for (let k = 0; k < 7; k++) { const a0 = -1.1 + k * 0.32, a1 = a0 + 0.32; mb.tri2([0, 0.4 * s, 0], [Math.sin(a0) * 1.3 * s, (0.4 + Math.cos(a0) * 1.3) * s, 0], [Math.sin(a1) * 1.3 * s, (0.4 + Math.cos(a1) * 1.3) * s, 0], k % 2 ? c : lite); }
+    mb.reset();
+    for (let k = 0; k < 4; k++) { const a = k * 1.5 + r * 3, px = x + Math.cos(a) * 0.7 * s, pz = z + Math.sin(a) * 0.7 * s, h = (0.4 + (k % 2) * 0.3) * s; mb.cyl(px, y - 0.2, pz, 0.12 * s, 0.14 * s, h, 6, hex('#ffd25a'), false); mb.cyl(px, y - 0.2 + h, pz, 0.09 * s, 0.09 * s, 0.02, 6, hex('#7a3a1a')); }
+  }
+}
+function seaweed(mb, x, y, z, r) {
+  if (y > -1.6) return;
+  // kelp: tall wavy ribbons with leafy blades and little air bubbles
+  const g = hex('#3a8a5a'), g2 = hex('#5aa86a'), n = mb.lod ? 2 : 3;
+  for (let k = 0; k < n; k++) {
+    const px = x + Math.cos(k * 2 + r * 7) * 0.4, pz = z + Math.sin(k * 2 + r * 7) * 0.4, H = Math.min(2 + r * 2.5, -y - 0.6), seg = mb.lod ? 3 : 6;
+    if (mb.lod) { mb.cyl(px, y - 0.2, pz, 0.12, 0.04, H, 4, g, false, k); continue; }
+    let prev = [px, y - 0.2, pz]; const wa = r * 7 + k, wx = Math.cos(wa) * 0.07, wz = Math.sin(wa) * 0.07;
+    for (let q = 1; q <= seg; q++) { const t = q / seg, p = [px + Math.sin(t * 5 + k + r * 9) * 0.25, y - 0.2 + H * t, pz + Math.cos(t * 4 + k) * 0.2]; mb.tri2([prev[0] - wx, prev[1], prev[2] - wz], [prev[0] + wx, prev[1], prev[2] + wz], [p[0] + wx, p[1], p[2] + wz], g); mb.tri2([prev[0] - wx, prev[1], prev[2] - wz], [p[0] + wx, p[1], p[2] + wz], [p[0] - wx, p[1], p[2] - wz], g);
+      if (q < seg) { const a = q * 2.3 + k, bl = 0.35 + (q % 2) * 0.15; mb.tri2(p, [p[0] + Math.cos(a) * bl, p[1] + 0.25, p[2] + Math.sin(a) * bl], [p[0] + Math.cos(a + 0.5) * bl * 0.6, p[1] + 0.4, p[2] + Math.sin(a + 0.5) * bl * 0.6], q % 2 ? g : g2); if (q % 2) mb.sph([p[0] + Math.cos(a) * 0.08, p[1] + 0.03, p[2] + Math.sin(a) * 0.08], 0.05, 3, hex('#8ac85a'), 0); }
+      prev = p; }
+  }
+}
 function _end() {} // marks the end of the plant list

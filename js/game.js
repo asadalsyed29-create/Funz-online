@@ -341,52 +341,65 @@ class Game {
   }
 
   // ---------- creatures ----------
-  updateCreatures(dt, me, players, night) {
+  // Every creature's walk is worked out from the shared world clock (wt, in seconds), so everyone online
+  // sees the same animals in the same places doing the same thing. Running away from players is worked out
+  // from where the players are right now, so that matches for everyone too.
+  updateCreatures(dt, me, players, night, wt) {
     const N = this.T.N, pcx = Math.floor(me.p[0] / CHUNK), pcz = Math.floor(me.p[2] / CHUNK), act = new Set();
+    this.wt = wt;
+    const mk = (type, chunk, home, seed, floor, ok) => ({ type, chunk, home, p: [home[0], 0, home[2]], yaw: seed * 6.28, seed: seed * 97 % 9, id: seed, walk: 0, mv: 0, hop: 0, nb: 1 + seed * 4, graze: 0, calm: 1, floor, ok });
     if (!this.cave && !this.realm) for (let i = pcx - 3; i <= pcx + 3; i++) for (let j = pcz - 3; j <= pcz + 3; j++) {
       const k = i + ',' + j; act.add(k); if (this.creatureChunks.has(k)) continue;
       this.creatureChunks.add(k);
       const x = i * CHUNK + 32, z = j * CHUNK + 32, inf = this.T.info(x, z);
       const types = Object.entries(CREATURES).filter(([, c]) => c.biomes.includes(inf.b)).map(([t]) => t);
       if (!types.length || N.hash(i, j, 700) > 0.55) continue;
-      const t = types[Math.floor(N.hash(i, j, 701) * types.length)], n = 1 + Math.floor(N.hash(i, j, 702) * (t === 'fish' ? 5 : 3));
+      const t = types[Math.floor(N.hash(i, j, 701) * types.length)], n = 1 + Math.floor(N.hash(i, j, 702) * (t === 'fish' ? 5 : 3)), C = CREATURES[t];
+      const ok = C.swim ? (x2, z2) => this.T.ground(x2, z2) < SEA - 1.2 : C.fly ? () => true : (x2, z2) => this.T.ground(x2, z2) > SEA + 0.15;
       for (let q = 0; q < n; q++) {
         const cx = x + (N.hash(i, j, 710 + q) - 0.5) * 50, cz = z + (N.hash(i, j, 720 + q) - 0.5) * 50;
-        this.creatures.push({ type: t, chunk: k, p: [cx, 0, cz], yaw: N.hash(i, j, 730 + q) * 6.28, target: null, t: Math.random() * 5, hop: 0, flee: 0, walk: 0, mv: 0, seed: Math.random() * 9, nb: Math.random() * 4, graze: 0, calm: 1 });
+        if (!ok(cx, cz)) continue;
+        this.creatures.push(mk(t, k, [cx, 0, cz], N.hash(i, j, 730 + q), (x2, z2) => this.T.ground(x2, z2), ok));
       }
     }
-    if (this.realm && !this.realm.spawned) { const R = this.realm; R.spawned = true; let q = 0; for (const [type, n] of R.spawnC) for (let k = 0; k < n; k++, q++) { const a = R.R(q, 50) * 6.283, d = 8 + R.R(q, 51) * 70, x = R.o[0] + Math.cos(a) * d, z = R.o[2] + Math.sin(a) * d; this.creatures.push({ type, chunk: 'realm:' + R.kind, p: [x, R.floorAt(x, z), z], yaw: a, t: 0, hop: 0, flee: 0, walk: 0, mv: 0, seed: q, nb: 2, graze: 0, calm: 1 }); } }
-    if (this.cave && !this.cave.bugs) { this.cave.bugs = true; this.cave.ch.slice(1).forEach((c, q) => this.creatures.push({ type: 'beetle', chunk: 'cave:' + this.cave.key, p: [this.cave.o[0] + c[0], 0, this.cave.o[2] + c[1]], yaw: q, t: 0, hop: 0, flee: 0, walk: 0, mv: 0, seed: q, nb: 2, graze: 0, calm: 1 })); }
+    if (this.realm && !this.realm.spawned) { const R = this.realm; R.spawned = true; let q = 0; for (const [type, n] of R.spawnC) for (let k = 0; k < n; k++, q++) { const a = R.R(q, 50) * 6.283, d = 8 + R.R(q, 51) * 70, x = R.o[0] + Math.cos(a) * d, z = R.o[2] + Math.sin(a) * d;
+      const ok = (x2, z2) => Math.abs(R.floorAt(x2, z2) - R.o[1]) < 25 && !(R.kind === 'space' && Math.hypot(x2 - R.o[0], z2 - R.o[2]) > 38);
+      this.creatures.push(mk(type, 'realm:' + R.kind, [x, 0, z], R.R(q, 52), (x2, z2) => R.floorAt(x2, z2), ok)); } }
+    if (this.cave && !this.cave.bugs) { const cv = this.cave; cv.bugs = true; cv.ch.slice(1).forEach((c, q) => this.creatures.push(mk('beetle', 'cave:' + cv.key, [cv.o[0] + c[0], 0, cv.o[2] + c[1]], (q * 0.618) % 1, (x2, z2) => cv.floor(x2, z2), (x2, z2) => Math.hypot(x2 - cv.o[0] - c[0], z2 - cv.o[2] - c[1]) < 5))); }
     this.creatures = this.creatures.filter(c => act.has(c.chunk) || (this.cave && c.chunk === 'cave:' + this.cave.key) || (this.realm && c.chunk === 'realm:' + this.realm.kind));
     if (!this.realm) for (const R of Object.values(this.realms)) R.spawned = false;
     for (const k of [...this.creatureChunks]) if (!act.has(k)) this.creatureChunks.delete(k);
+    const H = (id, n, s) => { const v = Math.sin(id * 12.9898 + n * 78.233 + s * 37.719) * 43758.5453; return v - Math.floor(v); };
     for (const c of this.creatures) {
-      const C = CREATURES[c.type]; c.t -= dt; const ox = c.p[0], oz = c.p[2];
-      let near = null, nd = 7; for (const p of players) { const d = Math.hypot(p.p[0] - c.p[0], p.p[2] - c.p[2]); if (d < nd) { nd = d; near = p; } }
-      let sp = C.speed;
-      if (near && c.type !== 'bird') { c.yaw = Math.atan2(c.p[2] - near.p[2], c.p[0] - near.p[0]); sp *= 1.8; c.t = 1; }
-      else if (c.t <= 0) { c.t = 2 + Math.random() * 4; c.idle = Math.random() < 0.4; c.yaw += (Math.random() - 0.5) * 2.5; }
-      if (c.idle && !near) sp = 0;
+      const C = CREATURES[c.type], ox = c.p[0], oz = c.p[2], sp = C.speed;
+      // the walk: a new spot every leg, picked from the clock. walk part of the leg, then rest (or graze)
+      const L = 5 + H(c.id, 0, 1) * 4, wf = C.fly || C.swim ? 0.8 : 0.55, off = H(c.id, 0, 2) * 50, T = wt + off, n = Math.floor(T / L), f = T / L - n;
+      const rad = C.fly ? 9 : C.swim ? 11 : 13, spot = m => { if (H(c.id, m, 3) < 0.18) return c.home; const a = H(c.id, m, 4) * 6.2832, d = Math.min(rad, sp * L * wf * 0.45) * (0.3 + 0.7 * H(c.id, m, 5)), x = c.home[0] + Math.cos(a) * d, z = c.home[2] + Math.sin(a) * d; return c.ok(x, z) && c.ok((x + c.home[0]) / 2, (z + c.home[2]) / 2) ? [x, 0, z] : c.home; };
+      const A = spot(n), B = spot(n + 1), k = Math.min(1, f / wf), e = k * k * (3 - 2 * k);
+      let x = A[0] + (B[0] - A[0]) * e, z = A[2] + (B[2] - A[2]) * e;
+      const legD = Math.hypot(B[0] - A[0], B[2] - A[2]); let yaw = legD > 0.05 ? Math.atan2(B[2] - A[2], B[0] - A[0]) : H(c.id, n, 6) * 6.28;
+      let mvT = f < wf && legD > 0.05 ? 1 : 0, dist = (n * 11 + e * legD);
+      // run from players who come close (the same for everyone, because it only uses where the players are)
+      let px = 0, pz = 0, near = null, nd = 7;
+      if (c.type !== 'bird') for (const p of players) { const dx = x - p.p[0], dz = z - p.p[2], d = Math.hypot(dx, dz); if (d < 7 && d > 0.01) { const w = (7 - d) / 7; px += dx / d * w * 4.5; pz += dz / d * w * 4.5; } if (d < nd) { nd = d; near = p; } }
+      if (px || pz) { const nx = x + px, nz = z + pz; if (c.ok(nx, nz)) { x = nx; z = nz; } yaw = Math.atan2(pz, px); mvT = 1; }
+      c.yaw = yaw; c.p[0] = x; c.p[2] = z;
       c.calm += ((near ? 0 : 1) - c.calm) * Math.min(1, dt * 3);
       if (near && nd < 1.3 && !c.touched && near === me) { c.touched = true; if (this.onTouch) this.onTouch(c); }
-      const nx = c.p[0] + Math.cos(c.yaw) * sp * dt, nz = c.p[2] + Math.sin(c.yaw) * sp * dt;
-      const RL = c.chunk.startsWith('realm:') ? this.realm : null, gnd = RL ? RL.floorAt(nx, nz) : this.cave ? this.cave.floor(nx, nz) : this.T.ground(nx, nz);
-      const water = !this.cave && !RL && gnd < SEA - 0.3;
-      if (RL ? (Math.abs(gnd - RL.o[1]) > 25 || (RL.kind === 'space' && Math.hypot(nx - RL.o[0], nz - RL.o[2]) > 38)) : C.swim ? (gnd > SEA - 1.2) : (water && !C.fly)) { c.yaw += Math.PI * 0.7; continue; }
-      c.p[0] = nx; c.p[2] = nz;
-      if (C.swim) c.p[1] = RL ? gnd + (c.type === 'jelly' ? 6 : 3) + Math.sin(c.t * 2 + c.seed) * 0.6 : SEA - 0.8 + Math.sin(c.t * 2) * 0.2;
-      else if (C.fly) c.p[1] = gnd + 1.5 + Math.sin(performance.now() / 300 + c.yaw) * 0.6;
-      else { if (C.hop && sp > 0) { c.hop += dt * 6; c.p[1] = gnd + Math.abs(Math.sin(c.hop)) * 0.5; } else c.p[1] = gnd; }
+      const gnd = c.floor(x, z);
+      if (C.swim) c.p[1] = c.chunk.startsWith('realm:') ? gnd + (c.type === 'jelly' ? 6 : 3) + Math.sin(wt * 2 + c.seed) * 0.6 : SEA - 0.8 + Math.sin(wt * 2 + c.seed) * 0.2;
+      else if (C.fly) c.p[1] = gnd + 1.5 + Math.sin(wt * 3.3 + c.seed) * 0.6;
+      else if (C.hop && mvT) { c.hop = dist * 1.2 + c.seed; c.p[1] = gnd + Math.abs(Math.sin(c.hop)) * 0.5; }
+      else { c.p[1] = gnd; c.hop = 0; }
       c.vis = !(c.type === 'moth' && !night);
       // animation: steps, blinking, grazing
-      const moved = Math.hypot(c.p[0] - ox, c.p[2] - oz); c.walk += moved * (C.hop ? 3 : 7); c.mv += ((moved > 0.002 ? 1 : 0) - c.mv) * Math.min(1, dt * 6);
+      const moved = Math.hypot(c.p[0] - ox, c.p[2] - oz); c.walk += Math.min(moved, 1) * (C.hop ? 3 : 7); c.mv += (mvT - c.mv) * Math.min(1, dt * 6);
       c.nb -= dt; if (c.nb < -0.13) c.nb = 2 + Math.random() * 4;
-      c.graze += (((c.idle && !near && (c.type === 'deer' || c.type === 'goat' || c.type === 'hopper')) ? 1 : 0) - c.graze) * Math.min(1, dt * 2);
+      c.graze += ((!mvT && H(c.id, n, 7) < 0.6 && (c.type === 'deer' || c.type === 'goat' || c.type === 'hopper') ? 1 : 0) - c.graze) * Math.min(1, dt * 2);
     }
-    // birds circle in the sky in a few flocks
-    if (!this.cave && this.birds.length === 0) for (let f = 0; f < 3; f++) for (let k = 0; k < 5; k++) this.birds.push({ f, k, ph: Math.random() * 6 });
-    this.birdCenter = this.birdCenter || [me.p[0], me.p[2]];
-    if (Math.hypot(this.birdCenter[0] - me.p[0], this.birdCenter[1] - me.p[2]) > 300) this.birdCenter = [me.p[0], me.p[2]];
+    // birds circle in flocks over a fixed grid, timed by the shared clock
+    if (!this.cave && this.birds.length === 0) for (let f = 0; f < 3; f++) for (let k = 0; k < 5; k++) this.birds.push({ f, k });
+    this.birdCenter = [Math.round(me.p[0] / 400) * 400, Math.round(me.p[2] / 400) * 400];
   }
 
   // ---------- camera ----------
@@ -629,10 +642,10 @@ class Game {
     for (const cr of this.creatures) {
       if (cr.vis === false || !vis(cr.p[0], cr.p[2], 90, 3)) continue;
       const C = CREATURES[cr.type], hopH = C.hop ? Math.abs(Math.sin(cr.hop)) : 0;
-      const st = { t: t + cr.seed, walk: cr.walk, mv: cr.mv, blink: cr.nb < 0 ? 0.1 : 1, hop: hopH, hopv: Math.cos(cr.hop) > 0 ? -1 : 1, seed: cr.seed, graze: cr.graze, calm: cr.calm, flap: 16 };
+      const st = { t: (this.wt ?? t) + cr.seed, walk: cr.walk, mv: cr.mv, blink: cr.nb < 0 ? 0.1 : 1, hop: hopH, hopv: Math.cos(cr.hop) > 0 ? -1 : 1, seed: cr.seed, graze: cr.graze, calm: cr.calm, flap: 16 };
       drawRig(G, this.creatureFor(cr.type), M4.model(cr.p, M4.rotY(-cr.yaw)), st, vis(cr.p[0], cr.p[2], 26));
     }
-    if (!this.under && o.dark < 0.5) for (const b of this.birds) { const a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
+    if (!this.under && o.dark < 0.5) for (const b of this.birds) { const t = this.wt || 0, a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
     if (o.chase) o.chase.draw(G, t, me);
     if (this.park && vis(PARK.x, PARK.z, far + 80)) this.park.draw(G, t, me);
     if (this.sky && !this.under) this.sky.draw(G, t, me);

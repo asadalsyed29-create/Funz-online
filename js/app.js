@@ -473,6 +473,10 @@
   const cleanLook = (m, admin) => ({ color: okLook('color', m.color, admin) ? m.color : COLORS[0], color2: okLook('color2', m.color2, admin) ? m.color2 : '#e8eef7', skin: okLook('skin', m.skin, admin) ? m.skin : 'plain', hat: okLook('hat', m.hat, admin) ? m.hat : 'none', trail: okLook('trail', m.trail, admin) ? m.trail : 'none', gadget: GADGETS[m.gadget] ? m.gadget : 'none', og: admin && Array.isArray(m.og) ? m.og.filter(k => OWNER_GADGETS[k]).slice(0, 5) : [] });
   const roster = () => [...G.players.values()].map(publicP);
   const dayPhase = () => ((performance.now() - G.dayStart) / DAY_MS) % 1;
+  // the world clock everyone shares (the keeper's clock), used so animals move the same for everyone
+  let clockOff = 0;
+  const worldT = () => +((Date.now() + clockOff) / 1000).toFixed(3);
+  function syncClock(wt, hard) { if (typeof wt !== 'number' || !isFinite(wt)) return; const target = wt * 1000 - Date.now(); if (hard || Math.abs(target - clockOff) > 1500) clockOff = target; else clockOff += (target - clockOff) * 0.05; }
   const findPlayer = name => { name = (name || '').toLowerCase().replace(/^@/, ''); if (!name) return null; return [...G.players.values()].find(p => p.name.toLowerCase() === name) || [...G.players.values()].find(p => p.name.toLowerCase().startsWith(name)); };
   const takenList = () => [...G.taken.keys()];
   // nobody can build or break at the station; only the admin can at the spawn plaza and the parkour
@@ -588,7 +592,7 @@
       dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
       p: okVec(pos) ? pos : defaultSpawn() });
     const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
-    Net.toOne(id, { t: 'welcome', id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), roster: roster(), nonce, names: [...G.names], drops: [...G.drops.values()], wx: G.wx, clouds: G.game.extraClouds || [] });
+    Net.toOne(id, { t: 'welcome', id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), wt: worldT(), roster: roster(), nonce, names: [...G.names], drops: [...G.drops.values()], wx: G.wx, clouds: G.game.extraClouds || [] });
     renderPeople();
     if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
     // a name that belongs to someone has to be proven with that device's key
@@ -632,7 +636,7 @@
       G.bans = new Set((m.bans || []).filter(b => typeof b === 'string'));
       G.taken = new Map((m.taken || []).map(i => [i, 0]));
       G.board = Array.isArray(m.board) ? m.board.slice(0, 5) : [];
-      G.dayStart = performance.now() - m.phase * DAY_MS;
+      G.dayStart = performance.now() - m.phase * DAY_MS; syncClock(m.wt, true);
       G.players.clear(); G.players.set(m.id, G.me);
       for (const r of m.roster) if (r.id !== m.id) applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r);
       G.me.admin = false;
@@ -662,7 +666,7 @@
       for (const r of m.roster) { if (!r || typeof r.id !== 'string') continue; const p = G.players.get(r.id); if (!p) applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r); else if (p !== G.me) applyRoster(p, r); else { p.admin = !!r.admin && OWNER; if (p.admin && cleanName(r.name) && p.name !== cleanName(r.name)) { p.name = G.profile.name = cleanName(r.name); } } }
       renderPeople();
     } else if (m.t === 'state') {
-      G.dayStart = performance.now() - m.phase * DAY_MS;
+      G.dayStart = performance.now() - m.phase * DAY_MS; syncClock(m.wt);
       for (const [id, x, y, z, fl, big, gl, sh] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = !!fl && !!p.admin; p.big = big; p.glow = gl; p.ship = !!sh && !!p.admin; } }
     } else if (m.t === 'bye') { const p = G.players.get(m.id); if (p) { sys(p.name + ' left'); G.players.delete(m.id); renderPeople(); } }
     else if (m.t === 'chat') { const p = G.players.get(m.id); if (p) say(p, cleanText(m.text)); }
@@ -1388,7 +1392,7 @@
       G.lastCirc = now;
       if (G.circ.step([...G.players.values()].map(p => p.p))) { G.game.setPower(new Set(G.circ.on)); sendPower(); G.dirty = true; }
     }
-    G.game.updateCreatures(dt, m, [...G.players.values()], G.wasNight);
+    G.game.updateCreatures(dt, m, [...G.players.values()], G.wasNight, worldT() % 100000);
 
     if (G.role === 'guest' && G.myId && now - G.lastSend > 66) {
       G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow, sh: !!m.ship });
@@ -1396,7 +1400,7 @@
     }
     if (G.role === 'keeper' && now - G.lastState > 66) {
       G.lastState = now;
-      Net.toAll({ t: 'state', phase: dayPhase(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow, !!p.ship]) });
+      Net.toAll({ t: 'state', phase: dayPhase(), wt: worldT(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow, !!p.ship]) });
     }
 
     const ph = dayPhase(), sun = Math.cos(ph * Math.PI * 2);
