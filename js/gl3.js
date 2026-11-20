@@ -32,14 +32,17 @@ function gl3WorldFS() {
 }
 const GL3_TEXFN = `precision highp sampler2DArray;
 uniform sampler2DArray uTexA;uniform float uTexOn;
-vec4 tpl(float L,vec3 p,vec3 w,float sc){return texture(uTexA,vec3(p.zy*sc,L))*w.x+texture(uTexA,vec3(p.xz*sc,L))*w.y+texture(uTexA,vec3(p.xy*sc,L))*w.z;}
-vec4 tTop(float L,vec3 p,float sc){return texture(uTexA,vec3(p.xz*sc,L));}
-vec4 tBark(vec3 p,vec3 w,float sc){vec2 q=vec2(p.x*0.8+p.z*0.6,p.y*0.3);return texture(uTexA,vec3(q*sc,4.0))*(1.0-w.y)+texture(uTexA,vec3(p.xz*sc,4.0))*w.y;}
+// each sample also carries the slope of the surface bumps (blue/alpha); B gathers them as a world-space nudge for the normal
+vec3 B;
+vec4 tpl(float L,vec3 p,vec3 w,float sc){vec4 a=texture(uTexA,vec3(p.zy*sc,L)),b=texture(uTexA,vec3(p.xz*sc,L)),c=texture(uTexA,vec3(p.xy*sc,L));
+  B+=(vec3(0.0,a.a-0.5,a.b-0.5)*w.x+vec3(b.b-0.5,0.0,b.a-0.5)*w.y+vec3(c.b-0.5,c.a-0.5,0.0)*w.z);return a*w.x+b*w.y+c*w.z;}
+vec4 tTop(float L,vec3 p,float sc){vec4 b=texture(uTexA,vec3(p.xz*sc,L));B+=vec3(b.b-0.5,0.0,b.a-0.5);return b;}
+vec4 tBark(vec3 p,vec3 w,float sc){vec2 q=vec2(p.x*0.8+p.z*0.6,p.y*0.3);vec4 a=texture(uTexA,vec3(q*sc,4.0));B+=vec3((a.b-0.5)*0.8,(a.a-0.5)*0.3,(a.b-0.5)*0.6)*(1.0-w.y);return a*(1.0-w.y)+texture(uTexA,vec3(p.xz*sc,4.0))*w.y;}
 vec3 perturbN(vec3 sp,vec3 sn,vec2 dh){vec3 sx=dFdx(sp),sy=dFdy(sp);vec3 r1=cross(sy,sn),r2=cross(sn,sx);float det=dot(sx,r1);vec3 g=sign(det)*(dh.x*r1+dh.y*r2);return normalize(abs(det)*sn-g);}
 vec3 texDet(vec3 c,inout vec3 n,float dist){
   vec3 W=vW;vec3 w=pow(abs(n),vec3(4.0));w/=(w.x+w.y+w.z);
   float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b)),sat=(mx-mn)/(mx+0.001);
-  vec4 t=vec4(0.5,0.5,0.0,1.0);float bk=1.4;
+  vec4 t=vec4(0.5,0.5,0.5,0.5);float bk=1.0;B=vec3(0.0);
   if(uTex<1.5){
     float wSnow=smoothstep(0.8,0.9,mn);
     float wSand=smoothstep(0.1,0.22,c.r-c.b)*smoothstep(0.6,0.75,c.r)*(1.0-wSnow);
@@ -64,7 +67,7 @@ vec3 texDet(vec3 c,inout vec3 n,float dist){
     else t=tpl(10.0,W,w,0.4);
   }else{t=tpl(8.0,W,w,0.2);bk=0.9;}
   float fade=1.0-smoothstep(80.0,300.0,dist);
-  n=perturbN(vR,n,vec2(dFdx(t.g),dFdy(t.g))*bk*0.7*fade);
+  vec3 nb=B-n*dot(B,n);n=normalize(n-nb*bk*1.3*fade);
   float m=mix(1.0,t.r*2.0,fade*0.62+0.12)*(1.0+(n2(W.xz*0.03)-0.5)*0.16);
   return vec3(m);}
 `;

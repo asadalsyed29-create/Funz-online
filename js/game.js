@@ -449,7 +449,7 @@ class Game {
   setWeather(w) { this.wxForce = w; this.cloudCells.clear(); }
   // a lightning strike under a thunderstorm cloud (cl), seen from 'at'
   strike(cl, at) {
-    const R = 200 * cl.s, a = Math.random() * 6.283, d = Math.random() * R, bx = cl.x + Math.cos(a) * d, bz = cl.z + Math.sin(a) * d;
+    const R = (STORM_KINDS[cl.kind] || STORM_KINDS.cb).bolt * cl.s, a = Math.random() * 6.283, d = Math.random() * R, bx = cl.x + (cl.kind === 'supercell' ? 400 * cl.s : 0) + Math.cos(a) * d, bz = cl.z + Math.sin(a) * d;
     const gy = Math.max(this.T.ground(bx, bz), SEA), top = cl.y - 5, mb = new MeshBuilder(), col = glowC(hex('#e8f0ff'));
     const bolt = (p0, p1, n, w, depth) => {
       let prev = p0;
@@ -492,10 +492,10 @@ class Game {
         if (!list) { list = cloudsInCell(this.T.N, this.T, i, j, this.wxForce); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
         for (const cl of list) near.push({ ...cl, x: cl.x + W + Math.sin(t * 0.012 + cl.ph) * 40 });
       }
-      for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < 2200 && Math.abs(cl.z - c.target[2]) < 2200) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
+      for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < (cl.kind === 'supercell' ? 6000 : 2200) && Math.abs(cl.z - c.target[2]) < (cl.kind === 'supercell' ? 6000 : 2200)) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
     }
     let rainK = 0, stormNear = null, underStorm = false, stormD = 1e9;
-    for (const cl of near) { if (cl.kind !== 'nimbo' && cl.kind !== 'cb') continue; const d = Math.hypot(cl.x - c.target[0], cl.z - c.target[2]), R = (cl.kind === 'cb' ? 230 : 400) * cl.s; rainK = Math.max(rainK, Math.min(1, (1 - d / R) * 1.8)); if (cl.kind === 'cb' && d < 1400 && d < stormD) { stormNear = cl; stormD = d; if (d < R) underStorm = true; } }
+    for (const cl of near) { const SK = STORM_KINDS[cl.kind]; if (cl.kind !== 'nimbo' && !SK) continue; const rx = cl.kind === 'supercell' ? cl.x + 500 * cl.s : cl.x, d = Math.hypot(rx - c.target[0], cl.z - c.target[2]), R = (SK ? SK.rain : 400) * cl.s; rainK = Math.max(rainK, Math.min(1, (1 - d / R) * 1.8)); if (SK && d < SK.near * cl.s && d < stormD) { stormNear = cl; stormD = d; if (d < R) underStorm = true; } }
     if (c.target[1] > 220) rainK = 0;
     this.rain += (rainK - this.rain) * Math.min(1, (o.dt || 0.016) * 0.5); this.weather = this.rain > 0.15 ? (underStorm ? 'Stormy' : 'Rainy') : stormNear ? 'Storm nearby' : null;
     if (this.rain > 0.01) { const r = this.rain; sunC = sunC.map(v => v * (1 - r * 0.55)); zen = L3(zen, L3([0.36, 0.4, 0.48], [0.03, 0.04, 0.08], k), r * 0.75); hor = L3(hor, L3([0.58, 0.61, 0.67], [0.06, 0.07, 0.12], k), r * 0.75); fog = hor; fogD *= 1 + r * 0.9; amb = amb.map(v => v * (1 - r * 0.2)); }
@@ -507,7 +507,7 @@ class Game {
     if (RL) { zen = RL.zen; hor = RL.hor; fog = RL.fog; fogD = RL.fogD; amb = RL.amb; gnd = RL.amb.map(v => v * 0.5); sunC = RL.sunC; night = RL.stars ? 1 : 0; }
     if (this.cave) { zen = hor = fog = [0.015, 0.02, 0.035]; amb = [0.1, 0.11, 0.15]; gnd = [0.05, 0.05, 0.07]; sunC = [0, 0, 0]; fogD = 1 / 45; night = 0; }
     else if (inSt) { amb = [0.24, 0.32, 0.36]; gnd = [0.12, 0.16, 0.18]; sunC = sunC.map(v => v * 0.3); fog = [0.05, 0.12, 0.14]; fogD = 1 / 110; }
-    const proj = M4.persp(this.fov, this.w / this.h, 0.25, 4200), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
+    const proj = M4.persp(this.fov, this.w / this.h, 0.25, 8000), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
     this.vp = M4.mul(proj, view);
     const sa = o.sunAngle, sun = [Math.cos(sa) * 0.5, Math.max(0.2, Math.sin(sa)), 0.55], sl = Math.hypot(...sun);
     const sd = [Math.cos(sa) * 0.6, Math.sin(sa), 0.55], sdl = Math.hypot(...sd);
@@ -676,7 +676,7 @@ class Game {
       const top = L3(L3([1, 1, 1], [1, 0.84, 0.72], dusk), [0.28, 0.31, 0.42], Math.max(0, (k - 0.35) / 0.65)), bot = L3(L3([0.6, 0.64, 0.75], [0.55, 0.42, 0.5], dusk), [0.1, 0.11, 0.18], Math.max(0, (k - 0.35) / 0.65));
       if (!this.cloudData) this.cloudData = new Float32Array(6000 * 44);
       const nCl = fillClouds(this.cloudData, near, c.eye, { top, bot }, this.flash, this.maxClouds || 2600);
-      G.depthWrite(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 3000)); G.blend(true);
+      G.depthWrite(false); G.particles(this.cloudData, nCl, Math.min(fogD, 1 / 6500)); G.blend(true);
       G.fog();
     }
     if (!this.under && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }

@@ -3,8 +3,9 @@
 const CLOUD_CELL = 900;
 const CLOUD_KINDS = {
   cumulus: 'Cumulus', congestus: 'Cumulus congestus', cb: 'Cumulonimbus', stratus: 'Stratus', strato: 'Stratocumulus',
-  alto: 'Altocumulus', cirrus: 'Cirrus', nimbo: 'Nimbostratus', lens: 'Lenticular',
+  alto: 'Altocumulus', cirrus: 'Cirrus', nimbo: 'Nimbostratus', lens: 'Lenticular', supercell: 'Supercell (giant cumulonimbus)',
 };
+const STORM_KINDS = { cb: { rain: 230, near: 1000, bolt: 200 }, supercell: { rain: 1100, near: 4200, bolt: 900 } };
 // 0 = clear ... 1 = stormy
 function weatherAt(N, x, z) { const v = N.fbm(x / 2600 + 3.1, z / 2600 - 1.7, 950, 2); return Math.max(0, Math.min(1, (v - 0.5) * 2.1 + 0.46)); }
 // the weather and the clouds slowly blow east, the same for every player (uses the real clock)
@@ -35,6 +36,25 @@ function buildCloudModels(gl, N) {
     for (let k = 0; k < 60; k++) { const a = R(k, v + 63) * 6.283, d = Math.sqrt(R(k, v + 64)), r = 70 + R(k, v + 65) * 50; put(60 + Math.cos(a) * d * 330, 400 + R(k, v + 66) * 25, Math.sin(a) * d * 200, r, 0.75 + R(k, 3) * 0.3, 0.9); } // the anvil
     for (let k = 0; k < 18; k++) { const a = R(k, v + 67) * 6.283, d = 0.4 + R(k, v + 68) * 0.5; put(60 + Math.cos(a) * d * 280, 370, Math.sin(a) * d * 170, 32, 0.45, 0.8); } // mammatus pouches
   }));
+  // the supercell: a giant thunderstorm that covers the whole sky. It moves east (+x): the shelf cloud is on its
+  // front edge, the rain core just behind it, the huge anvil spreads far ahead at the top, the wall cloud hangs at the back.
+  out.supercell = [0, 1].map(v => make(put => {
+    const r = k => R(k, v + 200);
+    for (let k = 0; k < 70; k++) { const a = r(k) * 6.283, d = Math.sqrt(r(k + 1)) * 900; put(Math.cos(a) * d, r(k + 2) * 40, Math.sin(a) * d * 0.9, 150 + r(k + 3) * 60, 0.08, 0.92); } // dark flat base
+    for (let k = 0; k < 110; k++) { const h = Math.pow(r(k + 4), 0.85), a = r(k + 5) * 6.283, rad = (650 - h * 260) * Math.sqrt(r(k + 6)); put(-150 + Math.cos(a) * rad, 60 + h * 1050, Math.sin(a) * rad, 140 + r(k + 7) * 90 - h * 30, 0.25 + h * 0.8, 0.9); } // the huge tower
+    for (let k = 0; k < 18; k++) { const a = r(k + 8) * 6.283, d = r(k + 9) * 220; put(-150 + Math.cos(a) * d, 1180 + r(k + 10) * 90, Math.sin(a) * d, 110 + r(k + 11) * 40, 1, 0.9); } // overshooting top
+    for (let k = 0; k < 190; k++) { // the anvil: wide, flat and spreading far downwind
+      const a = r(k + 12) * 6.283, d = Math.sqrt(r(k + 13)), ax = 900 + Math.cos(a) * d * 3200, az = Math.sin(a) * d * 2600 * (0.55 + 0.45 * (ax + 2300) / 5000);
+      put(ax, 1020 + r(k + 14) * 90 - d * 60, az, 260 + r(k + 15) * 120, 0.68 + r(k + 16) * 0.3, d > 0.85 ? 0.55 : 0.85);
+    }
+    for (let k = 0; k < 90; k++) { const a = r(k + 17) * 6.283, d = 0.25 + r(k + 18) * 0.55; put(900 + Math.cos(a) * d * 2400, 930, Math.sin(a) * d * 1700, 70 + r(k + 19) * 30, 0.42, 0.85); } // mammatus pouches under the anvil
+    for (let t = 0; t < 4; t++) for (let k = 0; k < 34; k++) { // the shelf cloud: a long curved wedge on the front edge, in steps
+      const a = (k / 33 - 0.5) * 2.3, R0 = 1050 + t * 70, wob = (r(k * 4 + t + 20) - 0.5) * 40;
+      put(Math.cos(a) * R0 + wob, -70 + t * 38 + wob * 0.3, Math.sin(a) * R0 * 1.15, 95 - t * 8 + r(k + t + 21) * 20, 0.12 + t * 0.2, 0.92);
+    }
+    for (let k = 0; k < 26; k++) { const a = r(k + 22) * 6.283, d = r(k + 23) * 260, h = r(k + 24); put(-480 + Math.cos(a) * d, -40 - h * 150, 240 + Math.sin(a) * d * 0.8, 120 - h * 35, 0.05 + h * 0.05, 0.92); } // the lowered wall cloud at the back
+    for (let k = 0; k < 70; k++) { const x = 250 + r(k + 25) * 650, z = (r(k + 26) - 0.5) * 1400, y = -r(k + 27) * 210; put(x, y, z, 90 + r(k + 28) * 40, 0.18, 0.32); } // grey rain curtains below the core
+  }));
   // a sheet: wide and thin, made of big flat-ish puffs; see-through near the edges
   const sheet = (put, W, D, n, r, b0, b1, seed) => { for (let k = 0; k < n; k++) { const u = R(k, seed) * 2 - 1, w = R(k, seed + 1) * 2 - 1, e = Math.max(Math.abs(u), Math.abs(w)); put(u * W, (R(k, seed + 2) - 0.5) * r * 0.5, w * D, r * (0.7 + R(k, seed + 3) * 0.6), b0 + (b1 - b0) * R(k, seed + 4), e > 0.8 ? 0.45 : 0.85); } };
   out.stratus = [make(put => sheet(put, 400, 300, 70, 95, 0.55, 0.75, 70))];
@@ -50,20 +70,20 @@ function buildCloudModels(gl, N) {
 function fillClouds(out, list, eye, tint, flash, maxN) {
   const P = []; let n = 0;
   for (const cl of list) {
-    const pf = cl.puffs, c = Math.cos(cl.rot), s = Math.sin(cl.rot), S = cl.s, dark = cl.kind === 'cb' || cl.kind === 'nimbo';
+    const pf = cl.puffs, c = Math.cos(cl.rot), s = Math.sin(cl.rot), S = cl.s, dark = !!STORM_KINDS[cl.kind] || cl.kind === 'nimbo';
     for (let i = 0; i < pf.length; i += 6) {
       const lx = pf[i] * S, lz = pf[i + 2] * S, x = cl.x + lx * c - lz * s, y = cl.y + pf[i + 1] * S, z = cl.z + lx * s + lz * c;
-      P.push([(x - eye[0]) ** 2 + (y - eye[1]) ** 2 + (z - eye[2]) ** 2, x, y, z, pf[i + 3] * S, pf[i + 4], pf[i + 5], dark && flash ? flash : 0]);
+      P.push([(x - eye[0]) ** 2 + (y - eye[1]) ** 2 + (z - eye[2]) ** 2, x, y, z, pf[i + 3] * S, pf[i + 4], pf[i + 5], dark && flash ? flash : 0, dark ? 1 : 0]);
     }
   }
   // keep the nearest puffs when there are too many (so the clouds right above you never vanish), then draw far to near
-  if (P.length > maxN) { P.sort((a, b) => a[0] - b[0]); P.length = maxN; }
+  if (P.length > maxN) { P.sort((a, b) => a[0] / (a[8] ? 16 : 1) - b[0] / (b[8] ? 16 : 1)); P.length = maxN; } // storm clouds count as closer: they're the ones you must see
   P.sort((a, b) => b[0] - a[0]);
   const top = tint.top, bot = tint.bot;
   for (const q of P) {
     if (n >= maxN) break;
-    const b = q[5], f = q[7], o = n * 44;
-    const r = (bot[0] + (top[0] - bot[0]) * b) + f, g = (bot[1] + (top[1] - bot[1]) * b) + f, bl = (bot[2] + (top[2] - bot[2]) * b) + f * 1.1;
+    const b = q[5], f = q[7], o = n * 44, dk = q[8] ? 0.34 + 0.66 * b : 1; // storm clouds get properly dark underneath
+    const r = (bot[0] + (top[0] - bot[0]) * b) * dk + f, g = (bot[1] + (top[1] - bot[1]) * b) * dk + f, bl = (bot[2] + (top[2] - bot[2]) * b) * (dk * 0.9 + 0.1) + f * 1.1;
     let k = 0; for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const j = o + k * 11; out[j] = q[1]; out[j + 1] = q[2]; out[j + 2] = q[3]; out[j + 3] = cx; out[j + 4] = cy; out[j + 5] = q[4]; out[j + 6] = r; out[j + 7] = g; out[j + 8] = bl; out[j + 9] = q[6]; out[j + 10] = 11; k++; }
     n++;
   }
@@ -79,6 +99,7 @@ function cloudsInCell(N, T, i, j, force) {
   else if (w < 0.5) { const n = 2 + Math.floor(R(7) * 2); for (let k = 0; k < n; k++) add('cumulus', 10 + k * 3, 320 + R(11 + k) * 80, 0.8 + R(12 + k) * 0.6); if (R(20) < 0.6) add('alto', 20, 700 + R(21) * 100, 1 + R(22) * 0.5); if (R(23) < 0.5) add('cirrus', 23, 1150, 1.2); }
   else if (w < 0.64) { add('strato', 30, 300 + R(31) * 40, 1 + R(32) * 0.5); const n = 1 + Math.floor(R(33) * 2); for (let k = 0; k < n; k++) add('congestus', 34 + k * 3, 300 + R(35 + k) * 40, 0.9 + R(36 + k) * 0.6); add('cumulus', 40, 360, 1); }
   else if (w < 0.78) { add(w > 0.71 ? 'nimbo' : 'stratus', 50, w > 0.71 ? 240 : 280, 1 + R(51) * 0.4, 0); add('strato', 52, 380, 1.2); }
+  else if (w > 0.9 && R(68) < 0.55) { add('supercell', 60, 200, 0.9 + R(61) * 0.25); out[out.length - 1].rot = 0; }
   else { add('cb', 60, 240, 1 + R(61) * 0.4); add('nimbo', 62, 250, 1.1, 0); if (R(63) < 0.5) add('congestus', 64, 300, 1.2); }
   const inf = T.info(cx, cz); if ((inf.b === 6 || inf.h > 90) && R(66) < 0.8) add('lens', 66, Math.max(450, inf.h + 200), 1 + R(67) * 0.5, 0);
   return out;

@@ -58,8 +58,12 @@ function makeTextureLayers(S, only) {
     if (name === 'grass') for (let k = 0; k < S * 5; k++) { const sh = 0.75 + rnd() * 0.6; stamp(rnd() * S, rnd() * S, rnd() * Math.PI, S * (0.012 + rnd() * 0.02), S * 0.0045 + 0.6, sh, 0.5 + sh * 0.4); }
     if (name === 'leaves') for (let k = 0; k < S * 2.2; k++) { const sh = 0.75 + rnd() * 0.6; stamp(rnd() * S, rnd() * S, rnd() * Math.PI, S * (0.028 + rnd() * 0.022), S * (0.013 + rnd() * 0.008), sh, 0.4 + rnd() * 0.6); }
     if (name === 'dirt') for (let k = 0; k < S * 0.6; k++) { const sh = 0.8 + rnd() * 0.5; stamp(rnd() * S, rnd() * S, rnd() * 3, S * (0.006 + rnd() * 0.01), S * (0.005 + rnd() * 0.008), sh, 0.9); }
-    const base = (only == null ? L : 0) * S * S * 4;
-    for (let i = 0; i < S * S; i++) { out[base + i * 4] = Math.max(0, Math.min(255, D[i] * 128)); out[base + i * 4 + 1] = Math.max(0, Math.min(255, Hh[i] * 255)); out[base + i * 4 + 2] = 0; out[base + i * 4 + 3] = 255; }
+    const base = (only == null ? L : 0) * S * S * 4, k = S / 64;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const i = y * S + x, gx = (Hh[y * S + (x + 1) % S] - Hh[y * S + (x + S - 1) % S]) * k, gy = (Hh[((y + 1) % S) * S + x] - Hh[((y + S - 1) % S) * S + x]) * k;
+      out[base + i * 4] = Math.max(0, Math.min(255, D[i] * 128)); out[base + i * 4 + 1] = Math.max(0, Math.min(255, Hh[i] * 255));
+      out[base + i * 4 + 2] = Math.max(0, Math.min(255, 128 + gx * 127)); out[base + i * 4 + 3] = Math.max(0, Math.min(255, 128 + gy * 127));
+    }
   });
   return out;
 }
