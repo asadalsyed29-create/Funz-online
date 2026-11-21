@@ -32,7 +32,8 @@ class Game {
     this.pier = new FishingPier(this); this.landmarks.push(this.pier.build(this.gfx, this.St));
     this.arena = new GameArena(this); this.landmarks.push(this.arena.build(this.gfx, this.St));
     // sky islands, cannons, and the portals to the special worlds
-    this.cannons = []; this.cannonM = cannonModel(this.gfx); // the cannon to the sky islands comes with the sky world
+    for (const isle of buildSkyIslands(this.gfx, this.St)) this.landmarks.push(isle);
+    this.cannons = cannonList(this.T); this.cannonM = cannonModel(this.gfx); // a cannon near the plaza shoots you up to the sky islands, and cannons hop you between them
     this.realms = {}; this.realm = null;
     const T0 = this.T;
     this.portals = [
@@ -276,7 +277,7 @@ class Game {
     // cannons: roll in and fly along an arc to where it points
     if (!this.realm && !this.cave) for (const cn of this.cannons) {
       if (Math.hypot(b.p[0] - cn.p[0], b.p[1] - (cn.p[1] + 1), b.p[2] - cn.p[2]) > 1.7) continue;
-      const to = cn.to, d = Math.hypot(to[0] - b.p[0], to[2] - b.p[2]), T = Math.max(1.6, Math.min(4.2, d / 32 + 0.8)), g = 24;
+      const to = cn.to, d = Math.hypot(to[0] - b.p[0], to[1] - b.p[1], to[2] - b.p[2]), T = Math.max(1.6, Math.min(6.5, d / 80 + 1)), g = 24;
       b.p = [cn.p[0], cn.p[1] + 2.5, cn.p[2]]; b.v = [(to[0] - b.p[0]) / T, (to[1] - b.p[1]) / T + 0.5 * g * T, (to[2] - b.p[2]) / T]; b.boostT = T; b.tpCool = 1; fx('cannon'); return;
     }
     // portals to the special worlds, and the gold ring back
@@ -510,6 +511,7 @@ class Game {
         if (!list) { list = cloudsInCell(this.T.N, this.T, i, j, this.wxForce); for (const cl of list) { const ms = this.cloudM[cl.kind]; cl.puffs = ms[cl.v % ms.length]; } this.cloudCells.set(key, list); if (this.cloudCells.size > 80) this.cloudCells.delete(this.cloudCells.keys().next().value); }
         for (const cl of list) near.push({ ...cl, x: cl.x + W + Math.sin(t * 0.012 + cl.ph) * 40 });
       }
+      if (Math.hypot(c.target[0] - CLOUD_SEA.x, c.target[2] - CLOUD_SEA.z) < 2600) near.push(this.cloudSea || (this.cloudSea = cloudSea(this.T.N)));
       for (const cl of this.extraClouds || []) if (Math.abs(cl.x - c.target[0]) < (cl.kind === 'supercell' ? 6000 : 2200) && Math.abs(cl.z - c.target[2]) < (cl.kind === 'supercell' ? 6000 : 2200)) near.push({ ...cl, x: cl.x + Math.sin(t * 0.012 + cl.ph) * 40 });
     }
     let rainK = 0, stormNear = null, underStorm = false, stormD = 1e9;

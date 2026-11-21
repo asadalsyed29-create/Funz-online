@@ -437,20 +437,36 @@ function bones(mb, x, y, z, rot) { const c = hex('#f2ead8'); mb.at([x, y + 0.15,
 function seashell(mb, x, y, z, r) { mb.up = true; const c = hex(r > 0.5 ? '#ffb3a7' : '#f4e0c8'); for (let k = 0; k < 6; k++) { const a0 = -1 + k * 0.33, a1 = a0 + 0.33; mb.tri([x, y + 0.02, z], [x + Math.sin(a1) * 0.3, y + 0.1, z + Math.cos(a1) * 0.3], [x + Math.sin(a0) * 0.3, y + 0.1, z + Math.cos(a0) * 0.3], shadeC(c, k % 2 ? 1 : 0.85), true); }  mb.up = false; }
 function iceSpike(mb, x, y, z, s) { mb.cyl(x, y - 0.5, z, 0.8 * s, 0, 5 * s, 6, glowC(hex('#bfe6ff'))); mb.cyl(x + 0.7 * s, y - 0.5, z + 0.3, 0.4 * s, 0, 2.5 * s, 5, hex('#d8f0ff')); mb.cyl(x - 0.5 * s, y - 0.5, z - 0.4, 0.35 * s, 0, 2 * s, 5, hex('#e8f6ff')); }
 function snowBush(mb, x, y, z, s) { puffs(mb, x, y, z, s, '#3f6a4a', 0.5, [[0, 0.4, 0, 0.75], [0.5, 0.3, 0.2, 0.5]]); mb.sph([x, y + 0.85 * s, z], [0.65 * s, 0.25 * s, 0.6 * s], 8, hex('#f4f8fc'), 0.1); }
-function crystals(mb, x, y, z, s, c) {
-  // a geode-like cluster: rocky base, a few big six-sided crystals with pointed tips, and small shards around
-  const base = hex(c), tip = mixC(base, [1, 1, 1, 1], 0.55), dk = shadeC(base, 0.72);
-  mb.ico(x, y + 0.05, z, [0.85 * s, 0.32 * s, 0.85 * s], 1, (a, b) => b > 0.3 ? hex('#7a7f92') : hex('#5a5f70'));
-  const n = mb.lod ? 4 : 9;
+// a realistic crystal: a six-sided prism with a pointed six-sided tip. Every face catches the light a bit
+// differently, the base is milky and the tip is clear and bright, like real quartz or amethyst.
+function crystalShard(mb, p, dir, len, w, col, spin = 0) {
+  const W = [1, 1, 1, 1], milky = mixC(col, W, 0.5), clear = mixC(col, W, 0.18), tipL = w * 2.1, body = Math.max(w * 0.8, len - tipL);
+  const shade = [0.74, 0.9, 1.14, 1.02, 0.82, 1.08];
+  mb.push(p, M4.mul3(M4.aim(dir), M4.rotY(spin)));
+  const P = (a, r, y) => [Math.cos(a) * r, y, Math.sin(a) * r];
+  for (let f = 0; f < 6; f++) {
+    const a0 = f / 6 * 6.2832, a1 = (f + 1) / 6 * 6.2832, k = shade[f], r0 = w * 1.06, r1 = w;
+    mb.quad(P(a0, r0, -0.2), P(a0, r0, body * 0.4), P(a1, r0, body * 0.4), P(a1, r0, -0.2), smoothC(shadeC(milky, k * 0.92)));
+    mb.quad(P(a0, r0, body * 0.4), P(a0, r1, body), P(a1, r1, body), P(a1, r0, body * 0.4), smoothC(shadeC(col, k)));
+    mb.tri(P(a0, r1, body), [0, body + tipL, 0], P(a1, r1, body), smoothC(shadeC(clear, k * 1.1)));
+    // a bright edge line where two faces meet, like light catching the ridge
+    if (f % 2 === 0) mb.quad(P(a0 - 0.035, r1 * 1.01, body * 0.15), P(a0 - 0.035, r1 * 1.01, body * 0.98), P(a0 + 0.035, r1 * 1.01, body * 0.98), P(a0 + 0.035, r1 * 1.01, body * 0.15), smoothC(mixC(clear, W, 0.5)), true);
+  }
+  mb.pop();
+}
+// one big crystal with medium and small ones fanning out around it, growing from a lump of rock
+function crystalCluster(mb, x, y, z, s, col, seed = 0.5, glow = false) {
+  const H = k => { const v = Math.sin((seed * 97 + k) * 12.9898) * 43758.5453; return v - Math.floor(v); };
+  mb.ico(x, y - 0.05 * s, z, [0.75 * s, 0.32 * s, 0.7 * s], 1, (a, b) => shadeC(hex('#6e6a72'), 0.8 + b * 0.18), false, null, (a, b, c) => 0.18 * Math.sin(a * 5 + seed * 9) * Math.cos(c * 4));
+  const n = mb.lod ? 4 : 10;
   for (let k = 0; k < n; k++) {
-    const big = k < 4, a = k * 2.39996, d = k ? (big ? 0.28 : 0.55 + (k % 2) * 0.15) * s : 0, h = big ? (1.0 + (k % 3) * 0.55) * s : (0.35 + (k % 3) * 0.12) * s, w = big ? (0.17 + (k % 2) * 0.07) * s : 0.07 * s;
-    mb.at([x + Math.cos(a) * d, y - 0.15, z + Math.sin(a) * d], M4.mul3(M4.rotY(a), M4.rotZ(k ? (big ? 0.28 : 0.6) * (k % 2 ? 1 : -1) : 0)));
-    mb.cyl(0, 0, 0, w, w * 1.08, h, 6, glowC(k % 2 ? base : dk), false, k);
-    mb.cyl(0, h, 0, w * 1.08, 0, w * 2.4, 6, glowC(tip), false, k);
-    if (big && !mb.lod) mb.cyl(0, h * 0.2, 0, w * 0.55, w * 0.5, h * 0.75, 6, glowC(tip), false, k + 0.5); // a bright core showing through
-    mb.reset();
+    const big = k === 0, med = k > 0 && k < 4, tilt = big ? 0.12 : med ? 0.3 + H(k) * 0.25 : 0.6 + H(k) * 0.35, az = k * 2.39996 + seed * 6, d = big ? 0 : (med ? 0.22 : 0.4 + H(k + 9) * 0.25) * s;
+    const dir = [Math.sin(tilt) * Math.cos(az), Math.cos(tilt), Math.sin(tilt) * Math.sin(az)], len = (big ? 1.9 : med ? 1.0 + H(k + 3) * 0.5 : 0.35 + H(k + 5) * 0.35) * s, w = (big ? 0.22 : med ? 0.14 : 0.07) * s;
+    const c = glow && k % 3 === 0 ? glowC(hex(col)) : hex(col);
+    crystalShard(mb, [x + Math.cos(az) * d, y + 0.05 * s, z + Math.sin(az) * d], dir, len, w, c, H(k + 7) * 3);
   }
 }
+function crystals(mb, x, y, z, s, c) { crystalCluster(mb, x, y, z, s * 1.15, c, (x * 0.013 + z * 0.007) % 1); }
 function deadTree(mb, x, y, z, s, rot) {
   // a twisted dead swamp tree: gnarled trunk, crooked bare branches, hanging moss
   const c = hex('#5a4a3a'), moss = hex('#7a9a4a');

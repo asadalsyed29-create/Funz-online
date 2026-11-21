@@ -26,7 +26,7 @@ class TriGrid {
 const STRUCT_TYPES = {
   ruins: 'Castle ruins', circle: 'Moon henge', village: 'Windmill village', tower: 'Watch keep', bigtree: 'Treehouse village', cabin: 'A-frame lodge',
   pyramid: 'Sun temple', pod: 'Crashed starship', igloo: 'Snow fort', frozen: 'Ice palace', cave: 'Crystal mine', stilts: 'Swamp witch house',
-  arch: 'Floating crystals', shroomring: 'Mushroom house', wreck: 'Pirate wreck', lighthouse: 'Harbour beacon',
+  arch: 'Crystal geode', shroomring: 'Mushroom house', wreck: 'Pirate wreck', lighthouse: 'Harbour beacon',
 };
 
 class Structures {

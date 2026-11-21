@@ -377,14 +377,22 @@ function buildStructure(mb, p, s, item, L, rnd) {
       mb.push([2.6, 3.5, 2.6], M4.rotZ(0.25)); mb.cyl(0, 0, 0, 0.04, 0.04, 2, 4, C(BC.woodD)); for (let k = 0; k < 8; k++) mb.caps([0, 0.15, 0], [Math.cos(k) * 0.2, -0.35, Math.sin(k) * 0.2], 0.02, 0.01, 3, C('#c8a050')); mb.pop();
       s.lights.push({ p: L(-5, 1.5, 4), r: 8, c: [0.5, 1, 0.4] }, { p: L(0, 6, 3), r: 8, c: [0.5, 1, 0.4] }); item('mushroom', 0, 4.2, 1.6); break;
     }
-    case 'arch': { // floating crystals: three rock islands hanging in the air with crystals on top, light beams down to a ring of crystal pillars and a tall crystal in the middle
-      const isl = (x, y, z, r) => { mb.ico(x, y, z, [r, r * 0.35, r], 1, (q, w) => w > 0.3 ? C('#6aa85a') : shadeC(C('#6a5a7a'), 0.85 + w * 0.2), false, m => m[1] > 0); mb.push([x, y, z]); mb.lathe([[0, -r * 1.6], [r * 0.4, -r * 1.0], [r * 0.85, -r * 0.4], [r, 0]], 8, (t, ph) => shadeC(C('#5a4a6a'), 0.8 + t * 0.25 + Math.cos(ph * 5) * 0.05), 0); mb.pop();
-        for (let k = 0; k < 5; k++) { const a = k * 1.3, d = k ? r * 0.45 : 0; mb.push([x + Math.cos(a) * d, y + r * 0.3, z + Math.sin(a) * d], M4.rotZ(k ? (k % 2 ? 0.3 : -0.3) : 0)); mb.cyl(0, 0, 0, r * 0.14, r * 0.15, r * (k ? 0.6 : 1.1), 6, glowC(C(k % 2 ? '#c08fff' : '#8ff6ff')), false, k); mb.cyl(0, r * (k ? 0.6 : 1.1), 0, r * 0.15, 0, r * 0.3, 6, glowC(C('#f0e8ff')), true, k); mb.pop(); } };
-      isl(-7, 9, -3, 3.2); isl(6, 12, -5, 2.6); isl(1, 15, 6, 2.2);
-      for (const [x, y, z] of [[-7, 4, -3], [6, 7, -5], [1, 11.2, 6]]) mb.cyl(x, 0, z, 0.08, 0.08, y, 5, glowC(C('#c8a8ff')));
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; mb.push([Math.cos(a) * 10, -0.3, Math.sin(a) * 10], M4.rotZ(Math.sin(a) * 0.15)); mb.cyl(0, 0, 0, 0.6, 0.45, 2.5 + (k % 3) * 1.2, 6, glowC(C(k % 2 ? '#c08fff' : '#8ff6ff')), false, k); mb.cyl(0, 2.5 + (k % 3) * 1.2, 0, 0.45, 0, 1, 6, glowC(C('#f0e8ff')), true, k); mb.pop(); }
-      mb.ico(0, 0.3, 0, [2.2, 0.8, 2.2], 1, (q, w) => shadeC(C('#6a5a7a'), 0.85 + w * 0.2)); mb.cyl(0, 0.6, 0, 0.9, 0.7, 6, 6, glowC(C('#8ff6ff'))); mb.cyl(0, 6.6, 0, 0.7, 0, 2.4, 6, glowC(C('#f0e8ff')));
-      s.lights.push({ p: L(0, 6, 0), r: 14, c: [0.7, 0.5, 1] }); item('crystal', 3, 0.6, 3); item('gem', -3, 0.6, 2); break;
+    case 'arch': { // crystal geode: a giant cracked-open rock egg you can roll into, lined inside with real amethyst crystals
+      const sd = 3.7, wob = (a2, b2, c2) => 0.14 * Math.sin(a2 * 5 + sd) * Math.cos(c2 * 4 + sd * 2) + 0.07 * Math.sin(b2 * 9);
+      const open = m => !(m[2] > 0.42 && m[1] < 0.62) && m[1] > -0.3;
+      mb.ico(0, 2, 0, [8, 6.6, 8], 2, (a2, b2) => b2 > 0.7 ? rockC(C('#7aa85a')) : rockC(shadeC(C('#857f78'), 0.8 + b2 * 0.18 + a2 * 0.05)), false, open, wob);
+      mb.ico(0, 2, 0, [7.5, 6.1, 7.5], 2, () => C('#f0ecf4'), true, open, wob); // a thin white quartz layer at the broken edge
+      mb.ico(0, 2, 0, [7.1, 5.7, 7.1], 2, (a2, b2) => smoothC(shadeC(C('#6a4a8a'), 0.85 + b2 * 0.15)), true, open, wob);
+      // crystals all over the inside, pointing in
+      for (let k = 0; k < 70; k++) {
+        const u = 1 - (k + 0.5) / 70 * 1.25, th = k * 2.39996, ry = Math.max(-0.25, u), rr = Math.sqrt(Math.max(0, 1 - ry * ry)), m = [rr * Math.cos(th), ry, rr * Math.sin(th)];
+        if (!open(m) || m[1] < -0.05) continue;
+        const p0 = [m[0] * 6.9, 2 + m[1] * 5.5, m[2] * 6.9], inward = [-m[0], -m[1] * 1.2, -m[2]], l = Math.hypot(...inward);
+        crystalShard(mb, p0, inward.map(v => v / l), 0.7 + rnd(k) * 1.3, 0.14 + rnd(k + 3) * 0.16, C(k % 4 === 0 ? '#c8a8f0' : k % 3 === 0 ? '#9a6ad8' : '#b080e8'), rnd(k + 5) * 3);
+      }
+      crystalCluster(mb, -1.5, 0, -2, 2.0, '#b080e8', 0.31); crystalCluster(mb, 2.2, 0, -1.2, 1.4, '#e8e4f0', 0.67); crystalCluster(mb, 5.5, 0, 9, 1.0, '#b080e8', 0.12); crystalCluster(mb, -7, 0, 7.5, 0.9, '#e8e4f0', 0.88);
+      for (let k = 0; k < 8; k++) { const a2 = rnd(k + 20) * 6.28, d = 9.5 + rnd(k + 21) * 3; mb.ico(Math.cos(a2) * d, 0.1, Math.sin(a2) * d, [0.6 + rnd(k) * 0.7, 0.4, 0.6 + rnd(k + 1) * 0.5], 0, (q, w2) => rockC(shadeC(C('#857f78'), 0.8 + w2 * 0.2))); }
+      s.lights.push({ p: L(0, 3, 0), r: 12, c: [0.75, 0.55, 1] }); item('crystal', 0, 0.6, 3); item('gem', 3, 0.6, 7); break;
     }
     case 'shroomring': { // mushroom house: a giant red-and-white mushroom with a home in its stem, a ramp curling up to a balcony, a chimney through the cap and a glowing garden
       const stem = C('#f2e8d8');
@@ -449,13 +457,13 @@ function buildStructure(mb, p, s, item, L, rnd) {
       for (const sx of [-1, 1]) H.flatBox(sx * 1.85 - 0.2, -0.5, hz + 0.05, sx * 1.85 + 0.2, 3.2, hz + 0.45, BC.woodD); H.flatBox(-2.3, 3.0, hz + 0.05, 2.3, 3.5, hz + 0.5, BC.woodD);
       for (const sx of [-1, 1]) { mb.push([sx * 1.3, 2.6, hz + 0.3], M4.rotZ(sx * 0.75)); H.deco(-0.07, -0.55, -0.07, 0.07, 0.55, 0.07, BC.woodD); mb.pop(); }
       mb.push([3.8, 2.2, hz + 1.6]); H.flatBox(-0.05, -2.6, -0.05, 0.05, 0.3, 0.05, BC.wood); H.flatBox(-0.7, 0, -0.04, 0.7, 0.5, 0.04, BC.woodL); mb.pop();
-      for (const [x, z, c, h] of [[-2.6, 3.4, '#8ff6ff', 1.6], [2.8, 3.2, '#c08fff', 1.3], [-1.3, 4.6, '#c08fff', 0.9], [1.5, 4.8, '#8ff6ff', 1.0], [-3.8, 2.6, '#8ff6ff', 0.9], [-0.6, -1.5, '#8ff6ff', 1.2], [0.8, -2.5, '#c08fff', 1.0]]) for (let q = 0; q < 3; q++) { mb.push([x + q * 0.25, -0.5, z + (q % 2) * 0.2], M4.rotZ((q - 1) * 0.35)); mb.cyl(0, 0, 0, 0.22 - q * 0.04, 0, h - q * 0.25, 6, glowC(C(c)), true, q); mb.pop(); }
+      for (const [x, z, c, sc] of [[-2.8, 3.4, '#a8d8f0', 0.9], [3.0, 3.2, '#b080e8', 0.75], [-1.4, 4.8, '#b080e8', 0.5], [1.6, 5.0, '#e8e4f0', 0.55], [-4.2, 2.6, '#a8d8f0', 0.6], [-0.7, -1.4, '#a8d8f0', 0.8], [0.9, -2.4, '#b080e8', 0.7]]) crystalCluster(mb, x, -0.4, z, sc, c, (x * 0.37 + z * 0.11 + 5) % 1);
       // the headframe tower: four legs, cross braces, a platform and a big wheel
       const hx = 7.5, hz2 = 5; for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) mb.caps([hx + sx * 1.6, -0.5, hz2 + sz * 1.6], [hx + sx * 0.9, 7.5, hz2 + sz * 0.9], 0.15, 0.13, 5, C(BC.woodD));
       for (let k = 0; k < 3; k++) { const y0 = k * 2.5, y1 = y0 + 2.5, f = t => 1.6 - (t / 8) * 0.7; mb.caps([hx - f(y0), y0, hz2 + f(y0)], [hx + f(y1), y1, hz2 + f(y1)], 0.06, 0.06, 4, C(BC.wood)); mb.caps([hx + f(y0), y0, hz2 + f(y0)], [hx - f(y1), y1, hz2 + f(y1)], 0.06, 0.06, 4, C(BC.wood)); }
       mb.box(hx - 1.2, 7.5, hz2 - 1.2, hx + 1.2, 7.75, hz2 + 1.2, C(BC.woodL)); mb.push([hx, 8.9, hz2], M4.rotX(Math.PI / 2)); mb.tor([0, 0, 0], 1.0, 0.1, 16, 4, C(BC.metalD)); for (let k = 0; k < 4; k++) { mb.push([0, 0, 0], M4.rotY(k * 0.785)); mb.box(-0.98, -0.04, -0.04, 0.98, 0.04, 0.04, C(BC.metalD)); mb.pop(); } mb.pop(); mb.cyl(hx, 2, hz2 + 0.9, 0.02, 0.02, 6.9, 3, C('#c8c0b0'));
       for (let k = 0; k < 9; k++) H.flatBox(-0.75, -0.45, 1.6 + k * 0.9, 0.75, -0.38, 1.85 + k * 0.9, BC.woodD); for (const sx of [-0.55, 0.55]) H.flatBox(sx - 0.05, -0.38, 1.2, sx + 0.05, -0.3, 9.8, BC.metalD);
-      mb.push([0, -0.3, 7.2]); H.flatBox(-0.75, 0.25, -0.9, 0.75, 1.1, 0.9, '#6a5a4a'); for (const sx of [-0.58, 0.58]) for (const z of [-0.55, 0.55]) { mb.push([sx, 0.2, z], M4.rotZ(Math.PI / 2)); mb.cyl(0, -0.06, 0, 0.2, 0.2, 0.12, 8, C('#3a3a40')); mb.pop(); } for (let k = 0; k < 6; k++) mb.ico(-0.4 + (k % 3) * 0.4, 1.15, -0.4 + Math.floor(k / 3) * 0.6, 0.25, 0, () => k % 3 === 1 ? glowC(C('#8ff6ff')) : rockC(C('#5a5658'))); mb.pop();
+      mb.push([0, -0.3, 7.2]); H.flatBox(-0.75, 0.25, -0.9, 0.75, 1.1, 0.9, '#6a5a4a'); for (const sx of [-0.58, 0.58]) for (const z of [-0.55, 0.55]) { mb.push([sx, 0.2, z], M4.rotZ(Math.PI / 2)); mb.cyl(0, -0.06, 0, 0.2, 0.2, 0.12, 8, C('#3a3a40')); mb.pop(); } for (let k = 0; k < 6; k++) { if (k % 3 === 1) crystalShard(mb, [-0.4 + (k % 3) * 0.4, 1.0, -0.4 + Math.floor(k / 3) * 0.6], [0.2, 1, 0.1].map(v => v / 1.03), 0.5, 0.08, C('#a8d8f0'), k); else mb.ico(-0.4 + (k % 3) * 0.4, 1.15, -0.4 + Math.floor(k / 3) * 0.6, 0.25, 0, () => rockC(C('#5a5658'))); } mb.pop();
       H.lantern(-2.6, 2.6, 2.4); H.lantern(2.6, 2.6, 2.4);
       s.triggers.push({ kind: 'cave', p: L(0, 1, 1.8), r: 2.2, cave: p.key, out: L(0, 1.5, 6) });
       s.lights.push({ p: L(0, 1.5, 3), r: 8, c: [0.6, 0.9, 1] }); break;

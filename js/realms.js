@@ -105,28 +105,86 @@ class Realm {
 }
 
 // ---------- sky islands and cannons (on the main land) ----------
-const SKY_ISLES = [[260, 190, 230], [340, 215, 300], [230, 240, 370], [140, 265, 300], [170, 300, 190]];
+// The sky islands float high above a sea of clouds (the cloud tops are at about 400 m, the islands from 480 m up).
+// Big ones and small ones: [x, y, z, size, kind]. A cannon near the plaza shoots you up; cannons hop you from isle to isle.
+const SKY_ISLES = [[260, 480, 250, 42, 'meadow'], [335, 505, 305, 9, 'small'], [395, 530, 225, 24, 'falls'], [330, 552, 150, 10, 'small'], [235, 578, 115, 36, 'forest'], [158, 600, 185, 11, 'small'], [150, 628, 280, 19, 'summit']];
+const CLOUD_SEA = { x: 280, z: 210, y: 372, r: 560 };
+// the shape of one island: an uneven grassy top with little hills, a soil edge, and a big jagged rock underneath with hanging roots
+function isleShape(mb, dmb, x, y, z, r, k, grass) {
+  const n = r > 20 ? 30 : 16, R = a => r * (0.8 + 0.2 * (0.5 + 0.5 * Math.sin(a * 3 + k) * Math.cos(a * 5 - k * 2))), P = [], I = [];
+  const hill = (a, t) => r > 20 ? Math.max(0, Math.sin(a * 2 + k) * Math.cos(a * 3 - k)) * r * 0.06 * Math.sin(t * Math.PI) : 0;
+  for (let j = 0; j <= n; j++) { const a = j / n * 6.2832, rr = R(a); P.push([x + Math.cos(a) * rr, y + Math.sin(a * 7 + k) * 0.15, z + Math.sin(a) * rr]); I.push([x + Math.cos(a) * rr * 0.5, y + hill(a, 0.5), z + Math.sin(a) * rr * 0.5]); }
+  const g = j => shadeC(hex(grass), 0.92 + ((j * 7) % 5) * 0.03);
+  for (let j = 0; j < n; j++) { mb.tri([x, y + (r > 20 ? r * 0.02 : 0.1), z], I[j + 1], I[j], g(j)); mb.quad(I[j], I[j + 1], P[j + 1], P[j], g(j + 3)); }
+  const Q = P.map((p, j) => [x + (p[0] - x) * 0.94, y - 2.4 - (j % 3) * 0.3, z + (p[2] - z) * 0.94]);
+  for (let j = 0; j < n; j++) { mb.quad(P[j], P[j + 1], [P[j + 1][0], P[j + 1][1] - 0.6, P[j + 1][2]], [P[j][0], P[j][1] - 0.6, P[j][2]], shadeC(hex(grass), 0.72)); mb.quad([P[j][0], P[j][1] - 0.6, P[j][2]], [P[j + 1][0], P[j + 1][1] - 0.6, P[j + 1][2]], Q[j + 1], Q[j], hex(j % 2 ? '#8a6a48' : '#7a5c3e')); }
+  const wob = (a, b, c) => 0.16 * Math.sin(a * 5 + k) * Math.cos(c * 4 + k * 2) + 0.08 * Math.sin(b * 8 + k);
+  const rk = (a, b) => rockC(shadeC(hex(b < -0.75 ? '#5e5a62' : '#7a7068'), 0.8 + (b + 1) * 0.12 + a * 0.04));
+  // the rock underneath: rings going down from the soil edge to a jagged point, pushed in and out so it looks broken off
+  const rows = 7, depth = r * 1.3, ring = [Q];
+  for (let t = 1; t <= rows; t++) { const f = t / rows, sh = Math.pow(1 - f, 0.85); ring.push(Q.map((p, j) => { const a = j / n * 6.2832, bump = t < rows ? 1 + 0.16 * Math.sin(a * 4 + t * 1.7 + k) * Math.cos(a * 7 - t + k * 2) : 0; return [x + (p[0] - x) * sh * bump, p[1] - depth * Math.pow(f, 0.9) - (t < rows ? (j % 2) * r * 0.03 : 0), z + (p[2] - z) * sh * bump]; })); }
+  for (let t = 0; t < rows; t++) for (let j = 0; j < n; j++) { const A = ring[t], B = ring[t + 1]; mb.quad(A[j], A[j + 1], B[j + 1], B[j], rk(Math.sin(j * 1.3), -t / rows * 1.6 + 0.4)); }
+  for (let q = 0; q < (r > 20 ? 4 : 2); q++) { const a = q * 1.7 + k, d = r * 0.3; mb.ico(x + Math.cos(a) * d, y - 2.6 - r * 0.85, z + Math.sin(a) * d, [r * 0.22, r * 0.55, r * 0.22], 1, rk, false, m => m[1] < 0.05, wob); }
+  for (let q = 0; q < (r > 20 ? 14 : 6); q++) { const j = (q * 5 + k) % n, p = Q[j], L = 2 + ((q * 13 + k) % 7) * 0.9; MB.tube(dmb, [[p[0], p[1] + 0.4, p[2]], [p[0] + Math.sin(q) * 0.3, p[1] - L * 0.5, p[2] + Math.cos(q) * 0.3], [p[0], p[1] - L, p[2]]], 0.06, 3, hex(q % 3 ? '#5a7a3a' : '#6a4a2e')); }
+  for (let q = 0; q < 3; q++) { const a = q * 2.1 + k * 0.7, d = r * (0.9 + q * 0.15); dmb.ico(x + Math.cos(a) * d, y - r * (0.5 + q * 0.25), z + Math.sin(a) * d, [r * 0.07 + 0.5, r * 0.06 + 0.4, r * 0.07 + 0.5], 1, rk, false, null, wob); }
+}
 function buildSkyIslands(gl, st) {
-  const out = [], N = st.T.N;
-  SKY_ISLES.forEach(([x, y, z], k) => {
-    const mb = new MeshBuilder().collect(), dmb = new MeshBuilder(), r = 16 + (k % 2) * 6, s = { key: 'isle' + k, items: [], lights: [], triggers: [], label: k === 0 ? 'Sky islands' : null, x, z, y, far: 1600 };
-    // grassy top, rocky cone underneath
-    mb.cyl(x, y - 1, z, r, r * 1.05, 1, 16, hex('#6cbf55'), true);
-    mb.ico(x, y - 1, z, [r * 1.02, r * 1.4, r * 1.02], 1, (a, b) => b < -0.6 ? shadeC(hex('#7a6a58'), 0.8) : shadeC(hex('#8a7a62'), 0.85 + b * 0.15), false, m => m[1] < -0.05, (a, b, c) => 0.15 * Math.sin(a * 6 + k) * Math.cos(c * 5));
-    for (let q = 0; q < 6; q++) { const a = q + k, d = r * (0.3 + N.hash(k, q, 1400) * 0.55); if (q % 3 === 0) blossom(dmb, x + Math.cos(a) * d, y, z + Math.sin(a) * d, 0.9, N.hash(k, q, 1401)); else if (q % 3 === 1) flowers(dmb, x + Math.cos(a) * d, y, z + Math.sin(a) * d, N.hash(k, q, 1402)); else bush(dmb, x + Math.cos(a) * d, y, z + Math.sin(a) * d, 1, '#4fae4a', N.hash(k, q, 1403)); }
-    // little waterfall falling off the edge
-    dmb.cyl(x + r * 0.95, y - 30, z, 0.9, 0.9, 30, 8, [0.6, 0.85, 1, 0.3]);
-    s.items.push({ id: 'isle:' + k, type: k === SKY_ISLES.length - 1 ? 'key' : 'cloud', p: [x, y + 0.6, z] });
+  const out = [], N = st.T.N, H = (k, q, s2) => N.hash(k, q, 1400 + s2);
+  SKY_ISLES.forEach(([x, y, z, r, kind], k) => {
+    const mb = new MeshBuilder().collect(), dmb = new MeshBuilder(), s = { key: 'isle' + k, items: [], lights: [], triggers: [], label: k === 0 ? 'Sky islands' : null, x, z, y, far: 2600, rad: r + 10 };
+    const grass = kind === 'summit' ? '#7ab86a' : kind === 'forest' ? '#4f9e48' : '#62b852';
+    isleShape(mb, dmb, x, y, z, r, k, grass);
+    const at = (q, f0 = 0.2, f1 = 0.7) => { const a = H(k, q, 1) * 6.2832, d = r * (f0 + H(k, q, 2) * (f1 - f0)); return [x + Math.cos(a) * d, z + Math.sin(a) * d]; };
+    if (kind === 'meadow') {
+      for (let q = 0; q < 10; q++) { const [px, pz] = at(q, 0.55, 0.75); if (q % 3) leafyTree(dmb, px, y, pz, 1.1 + H(k, q, 3) * 0.5, '#5aae4a', H(k, q, 4)); else blossom(dmb, px, y, pz, 1.1 + H(k, q, 3) * 0.5, H(k, q, 4)); }
+      for (let q = 0; q < 22; q++) { const [px, pz] = at(q + 20, 0.15, 0.7); flowers(dmb, px, y, pz, H(k, q, 5)); }
+      // a pond with stones, and a little round gazebo
+      mb.cyl(x - 12, y - 0.35, z + 8, 6, 6, 0.4, 14, [0.35, 0.65, 0.9, 1]); for (let q = 0; q < 10; q++) { const a = q / 10 * 6.283; mb.ico(x - 12 + Math.cos(a) * 6.3, y, z + 8 + Math.sin(a) * 6.3, [0.7, 0.4, 0.6], 0, () => rockC(hex('#9a948a'))); }
+      for (let q = 0; q < 6; q++) { const a = q / 6 * 6.283; mb.cyl(x + 10 + Math.cos(a) * 3.2, y, z - 6 + Math.sin(a) * 3.2, 0.18, 0.18, 3.2, 8, hex('#f2ece0')); }
+      mb.cyl(x + 10, y - 0.1, z - 6, 3.8, 3.8, 0.3, 12, hex('#e8e0d0')); mb.push([x + 10, y + 3.2, z - 6]); mb.lathe([[3.9, 0], [3.6, 0.8], [2.4, 1.9], [0, 2.4]], 14, smoothC(hex('#5a8ac8')), 0.1); mb.pop(); mb.cyl(x + 10, y + 5.6, z - 6, 0.1, 0.1, 0.8, 5, hex('#ffd24a'));
+    } else if (kind === 'falls') {
+      for (let q = 0; q < 6; q++) { const [px, pz] = at(q, 0.3, 0.72); pine(dmb, px, y, pz, 1 + H(k, q, 3) * 0.4, false, H(k, q, 4)); }
+      for (let q = 0; q < 8; q++) { const [px, pz] = at(q + 10, 0.2, 0.7); fern(dmb, px, y, pz, 1, H(k, q, 6) * 6); }
+      mb.cyl(x + 6, y - 0.3, z, 5, 5, 0.35, 12, [0.35, 0.65, 0.9, 1]); mb.quad([x + r * 0.78, y + 0.05, z - 1.6], [x + r * 0.78, y + 0.05, z + 1.6], [x + 6, y + 0.06, z + 1.6], [x + 6, y + 0.06, z - 1.6], [0.45, 0.75, 0.95, 1]);
+      // the waterfall: a wide white-blue sheet pouring off the edge and down into the clouds, with spray
+      for (let q = 0; q < 8; q++) { const y0 = y - q * 15, y1 = y0 - 15, w0 = 1.8 + q * 0.25, w1 = w0 + 0.25, x0 = x + r * 0.84 + q * q * 0.06, x1 = x + r * 0.84 + (q + 1) * (q + 1) * 0.06, c = glowC([0.82 + (q % 2) * 0.06, 0.93, 1, 1]);
+        dmb.quad([x0, y0, z - w0], [x0, y0, z + w0], [x1, y1, z + w1], [x1, y1, z - w1], c, true); dmb.quad([x0, y0, z + w0], [x0, y0, z - w0], [x1, y1, z - w1], [x1, y1, z + w1], c, true);
+        for (let w = 0; w < 3; w++) dmb.box(x0 + 0.05, y1, z - w0 + w * w0 * 0.8, x0 + 0.12, y0, z - w0 + w * w0 * 0.8 + 0.12, [1, 1, 1, 1], true, true); }
+      for (let q = 0; q < 6; q++) dmb.ico(x + r * 0.84 + (q % 3 - 1) * 1.2, y - 0.5, z + (q - 2.5) * 0.7, 0.6 + (q % 2) * 0.3, 0, () => [0.95, 0.98, 1, 1]);
+    } else if (kind === 'forest') {
+      for (let q = 0; q < 18; q++) { const [px, pz] = at(q, 0.15, 0.78); (q % 2 ? pine : leafyTree)(dmb, px, y, pz, 1.1 + H(k, q, 3) * 0.6, q % 2 ? false : '#3f9a4e', H(k, q, 4)); }
+      for (let q = 0; q < 8; q++) { const [px, pz] = at(q + 30, 0.2, 0.7); shrooms(dmb, px, y, pz, H(k, q, 7)); }
+      for (let q = 0; q < 3; q++) { const [px, pz] = at(q + 40, 0.2, 0.6); log(dmb, px, y, pz, 1, H(k, q, 8) * 6); dmb.reset(); }
+    } else if (kind === 'summit') {
+      crystalCluster(mb, x - 4, y, z - 3, 2.2, '#e8e4f0', 0.41); crystalCluster(mb, x + 5, y, z + 4, 1.4, '#a8d8f0', 0.73);
+      for (let q = 0; q < 5; q++) { const [px, pz] = at(q, 0.55, 0.8); pine(dmb, px, y, pz, 0.9 + H(k, q, 3) * 0.3, true, H(k, q, 4)); }
+      mb.cyl(x, y - 0.1, z, 1.6, 1.8, 1.1, 8, rockC(hex('#9a948a'))); mb.cyl(x + 3, y, z + 0.5, 0.08, 0.08, 6, 5, hex('#8a8a90')); mb.tri([x + 3, y + 6, z + 0.5], [x + 5.2, y + 5.4, z + 0.5], [x + 3, y + 4.8, z + 0.5], hex('#ffd24a'), true);
+    } else { // a small isle: one tree, some flowers and a boulder
+      const [px, pz] = at(1, 0.1, 0.3); if (k % 2) blossom(dmb, px, y, pz, 0.9, H(k, 1, 4)); else leafyTree(dmb, px, y, pz, 0.9, '#5aae4a', H(k, 1, 4));
+      for (let q = 0; q < 4; q++) { const [fx, fz] = at(q + 5, 0.3, 0.7); flowers(dmb, fx, y, fz, H(k, q, 5)); } const [bx2, bz] = at(9, 0.4, 0.6); rock(mb, bx2, y, bz, 1.2, '#9a948a', H(k, 9, 6));
+    }
+    s.items.push({ id: 'isle:' + k, type: k === SKY_ISLES.length - 1 ? 'key' : 'cloud', p: kind === 'summit' ? [x, y + 1.7, z] : [x, y + 1.2, z] });
     s.mesh = mb.build(gl); s.deco = dmb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   });
   return out;
 }
+// a sea of clouds under the islands, always there whatever the weather, so the islands really are above the clouds
+function cloudSea(N) {
+  const p = [], C = CLOUD_SEA, R = (k, s2) => N.hash(k, s2, 1450);
+  for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++) {
+    const x = i * 44 + (R(i * 31 + j, 1) - 0.5) * 30, z = j * 44 + (R(i * 31 + j, 2) - 0.5) * 30, e = Math.hypot(x, z) / C.r; if (e > 1) continue;
+    const edge = Math.min(1, (1 - e) * 4);
+    p.push(x, (R(i * 31 + j, 3) - 0.5) * 8, z, 30 + R(i * 31 + j, 4) * 12, 0.6, 0.85 * edge);          // the soft grey underside
+    p.push(x * 0.98 + 12, 8 + R(i * 31 + j, 5) * 12, z * 0.98 + 10, 24 + R(i * 31 + j, 6) * 12, 0.97, 0.9 * edge); // the bright bumpy top
+  }
+  return { kind: 'sea', x: C.x, y: C.y, z: C.z, s: 1, rot: 0, ph: 0, puffs: new Float32Array(p) };
+}
 // cannons: roll in and get shot along an arc to the target
 function cannonList(T) {
-  const g = (x, z) => T.ground(x, z), C = [];
-  C.push({ p: [34, g(34, -22), -22], to: [SKY_ISLES[0][0] - 6, SKY_ISLES[0][1] + 1, SKY_ISLES[0][2] - 4], name: 'Cannon to the sky islands' });
-  for (let k = 0; k < SKY_ISLES.length - 1; k++) { const [x, y, z] = SKY_ISLES[k], [nx, ny, nz] = SKY_ISLES[k + 1], dx = nx - x, dz = nz - z, d = Math.hypot(dx, dz); C.push({ p: [x + dx / d * 9, y, z + dz / d * 9], to: [nx - dx / d * 6, ny + 1, nz - dz / d * 6] }); }
-  const L = SKY_ISLES[SKY_ISLES.length - 1]; C.push({ p: [L[0] - 9, L[1], L[2]], to: [2, SPAWN_H + 2, 12], name: 'Back to the plaza' });
+  const g = (x, z) => T.ground(x, z), C = [], I = SKY_ISLES;
+  C.push({ p: [34, g(34, -22), -22], to: [I[0][0] - I[0][3] * 0.45, I[0][1] + 1, I[0][2] - I[0][3] * 0.35], name: 'Cannon to the sky islands' });
+  for (let k = 0; k < I.length - 1; k++) { const [x, y, z, r] = I[k], [nx, ny, nz, nr] = I[k + 1], dx = nx - x, dz = nz - z, d = Math.hypot(dx, dz); C.push({ p: [x + dx / d * r * 0.62, y, z + dz / d * r * 0.62], to: [nx - dx / d * nr * 0.45, ny + 1, nz - dz / d * nr * 0.45] }); }
+  const L = I[I.length - 1]; C.push({ p: [L[0] - L[3] * 0.6, L[1], L[2]], to: [2, SPAWN_H + 2, 12], name: 'Back to the plaza' });
   return C;
 }
 function cannonModel(gl) {
