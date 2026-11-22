@@ -1,4 +1,4 @@
-// Funz Online 3D: one shared peaceful world. Menus, controls, the game loop,
+// Nautic Online 3D: one shared peaceful world. Menus, controls, the game loop,
 // the world-keeper rules, items, the ring race, saving, and admin tools.
 (() => {
   const $ = id => document.getElementById(id);
@@ -241,8 +241,8 @@
   $('playBtn').onclick = () => play();
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') play(); });
 
-  // Funz Online is played inside UltraNautic Hub (the hub opens it with ?app=1); a plain browser tab sends you to the hub
-  const HUB = 'https://asadalsyed29-create.github.io/framewrigt/hub/', P0 = new URLSearchParams(location.search);
+  // Nautic Online is played inside UltraNautic Hub (the hub opens it with ?app=1); a plain browser tab sends you to the hub
+  const HUB = 'https://asadalsyed29-create.github.io/Ultranautic-hub/', P0 = new URLSearchParams(location.search);
   const gate = !Device.standalone && location.protocol === 'https:' && !P0.has('debug') && !P0.has('browser');
   if (gate) $('gate').classList.remove('hidden');
   $('gateInstall').onclick = () => { location.href = HUB; };
@@ -382,7 +382,7 @@
     if (first) enterGame();
     G.reconnecting = false; renderPeople();
     if (role === 'offline') { $('roomLabel').innerHTML = '<i class="live off"></i>Offline'; sys('Could not reach the world, so you are exploring offline. Your builds are saved on this device.'); }
-    else { $('roomLabel').innerHTML = '<i class="live"></i>Online'; sys(first ? 'Welcome to Funz Online! You are the first one here, more people can join any time.' : 'Back online.'); }
+    else { $('roomLabel').innerHTML = '<i class="live"></i>Online'; sys(first ? 'Welcome to Nautic Online! You are the first one here, more people can join any time.' : 'Back online.'); }
   }
 
   function addPlayer(p) {
@@ -626,7 +626,7 @@
       G.me.admin = false;
       Promise.all([adminSign(store.get('pass', ''), m.nonce), adminSign(store.get('pass', ''), 'admin:' + m.id)]).then(([sig, proof]) => { if (sig && G) Net.toKeeper({ t: 'admin', sig, proof }); });
       $('roomLabel').innerHTML = '<i class="live"></i>Online';
-      if (first) { enterGame(); sys('Welcome to Funz Online! ' + (m.roster.length - 1) + ' other ' + (m.roster.length === 2 ? 'player is' : 'players are') + ' here.'); }
+      if (first) { enterGame(); sys('Welcome to Nautic Online! ' + (m.roster.length - 1) + ' other ' + (m.roster.length === 2 ? 'player is' : 'players are') + ' here.'); }
       else showToast('Back online!', 1500);
       G.reconnecting = false; renderPeople(); renderBag();
       return;

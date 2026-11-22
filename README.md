@@ -1,4 +1,4 @@
-# Funz Online
+# Nautic Online
 
 Explore a big world and hang out with your friends. Open the link, install the app, and play.
 

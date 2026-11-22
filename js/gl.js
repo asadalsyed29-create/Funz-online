@@ -1,4 +1,4 @@
-// A small WebGL engine for Funz Online: matrices, shaders (world, balls, particles,
+// A small WebGL engine for Nautic Online: matrices, shaders (world, balls, particles,
 // sky, water) and a mesh builder for low-poly and smooth cartoon models.
 const I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 const M4 = {
