@@ -155,7 +155,7 @@ class Progress {
     for (const [k, v] of Object.entries(TRAILS)) if (v.lock && v.lock.quest === questId) out.push(v.name + ' trail');
     return out;
   }
-  ownsGadget(id, owner) { return !!owner || !!(this.own.gadget || {})[id]; }
+  ownsGadget(id, owner) { return !!owner || !!(GADGETS[id] && GADGETS[id].free) || !!(this.own.gadget || {})[id]; }
   // what's missing to make a gadget (empty list = you can make it)
   missing(id, inv) { const c = GADGETS[id].cost, out = []; for (const [k, n] of Object.entries(c)) { const have = k === 'coins' ? this.coins : (inv[k] || 0); if (have < n) out.push((n - have) + ' more ' + (k === 'coins' ? 'coins' : (ITEMS[k] ? ITEMS[k].name.toLowerCase() + (n - have > 1 ? 's' : '') : k))); } return out; }
   craft(id, inv) { if (this.missing(id, inv).length) return false; for (const [k, n] of Object.entries(GADGETS[id].cost)) { if (k === 'coins') this.coins -= n; else { inv[k] -= n; if (!inv[k]) delete inv[k]; } } (this.own.gadget || (this.own.gadget = {}))[id] = 1; this.dirty = true; this.save(); return true; }

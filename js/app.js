@@ -52,6 +52,7 @@
   // a little picture of a ball with a skin and hat
   function thumb(skin, hat, A, B, gadget) {
     const T = thumbMaker(); if (!T) return '';
+    if (SKINS[skin] && SKINS[skin].cols) { A = SKINS[skin].cols[0]; B = SKINS[skin].cols[1]; }
     const key = skin + '|' + hat + '|' + A + '|' + B + '|' + (gadget || ''); if (T.cache.has(key)) return T.cache.get(key);
     if (gadget) hat = hat === 'none' ? 'none' : hat;
     const G2 = T.gfx, gl = G2.gl, tall = hat !== 'none' || gadget, eye = gadget === 'balloon' ? [0, 1.4, 3.8] : tall ? [0, 0.75, 2.6] : [0, 0.35, 2.2];
@@ -240,25 +241,44 @@
   $('respawnBtn').innerHTML = icon('spawn', 18);
   $('playBtn').onclick = () => play();
 
-  // ---------- mods (made in UltraNautic Hub, written in NauticX-style code) ----------
-  function modDefaults() { return { gravity: 1, speed: 1, jump: 1, big: false, glow: false, freeze: false, phase: 0 }; }
-  function startMods() {
-    stopMods(); if (!G || !G.server || !G.server.mods.length) return;
-    const PH = { day: 0, sunset: 0.23, night: 0.5, sunrise: 0.77 };
-    G.modRun = NMods.start(G.server.mods, {
-      set(k, v) { if (!G) return; G.mod[k] = v; if (k === 'freeze' && v) G.mod.phase = dayPhase(); },
-      time(mode) { if (!G) return; G.dayStart = performance.now() - PH[mode] * DAY_MS; G.mod.phase = PH[mode]; },
-      weather(w) { if (G && ['clear', 'cloudy', 'rain', 'storm', 'auto'].includes(w)) setWeather(w); },
-      message(t) { if (G) sys(t); },
-      toast(t) { if (G) showToast(t, 2200); },
-      coins(n) { if (G && n > 0) { prog.give(n); renderBag(); } },
-      sound(k) { if (['coin', 'jump', 'quest', 'chest'].includes(k)) Sound.play(k); },
-      players() { return G ? G.players.size : 0; },
-      name() { return G ? G.me.name : ''; },
-    });
-    sys('Mods on in this server: ' + G.server.mods.map(m => m.name).join(', '));
+  // ---------- mods (made in UltraNautic Hub): new blocks, gadgets, skins, items and creatures for one server ----------
+  let modSig = '', modTimer = 0;
+  // puts the server's mods into the game (before its world loads, so mod blocks are known)
+  function loadMods(server) {
+    const mods = server && Array.isArray(server.mods) ? server.mods : [], sig = JSON.stringify(mods.map(m => m.code));
+    if (sig === modSig) return null; modSig = sig;
+    const made = NMods.register(mods);
+    if (G && G.game) { const gm = G.game; for (const k of [...gm.models.keys()]) if (k.startsWith('g:mod')) gm.models.delete(k); for (const k in gm.itemModels) if (k.startsWith('mod')) delete gm.itemModels[k]; for (const k in gm.creatureModels) if (k.startsWith('mod')) delete gm.creatureModels[k];
+      gm.creatures = []; gm.creatureChunks.clear(); gm.allPartsChanged(); if (!TOOL_CATS[G.cat] || (G.cat === 'mods' && !TOOL_CATS.mods.length)) G.cat = 'blocks'; buildHotbar(); }
+    return made;
   }
-  function stopMods() { if (G && G.modRun) { G.modRun.stop(); G.modRun = null; } if (G) G.mod = modDefaults(); }
+  function modsHello() {
+    if (!G || !G.server || !G.server.mods.length) return;
+    const parts = [];
+    const c = { block: 0, gadget: 0, skin: 0, item: 0, creature: 0 };
+    for (const T of [[PARTS, 'block'], [GADGETS, 'gadget'], [SKINS, 'skin'], [ITEMS, 'item'], [CREATURES, 'creature']]) for (const k in T[0]) if (T[0][k] && T[0][k].mod) c[T[1]]++;
+    const say = { block: ['new block', 'new blocks', 'in the Mods tab when you build'], gadget: ['new gadget', 'new gadgets', 'in the wardrobe'], skin: ['new skin', 'new skins', 'in the wardrobe'], item: ['new item', 'new items', 'to find around the world'], creature: ['new creature', 'new creatures', 'living in the world'] };
+    for (const k in c) if (c[k]) parts.push(c[k] + ' ' + say[k][c[k] > 1 ? 1 : 0] + ' ' + say[k][2]);
+    sys('Mods in this server: ' + G.server.mods.map(m => m.name).join(', ') + (parts.length ? '. ' + parts.join(', ') + '.' : '.'));
+  }
+  // the keeper puts mod items around the world for people to find
+  function modItemsTick() {
+    if (!G || G.myId !== 'keeper' || G.game.realm || G.game.cave) return;
+    const list = NMods.findList(); if (!list.length) return;
+    const people = [...G.players.values()], add = [];
+    for (const { type, find } of list) {
+      let have = 0; for (const d of G.drops.values()) if (d.type === type) have++;
+      for (let q = have; q < find && add.length < 6; q++) {
+        const who = people[Math.floor(Math.random() * people.length)], at = who && who.tp ? who.tp : G.body.p, a = Math.random() * 6.283, d = 14 + Math.random() * 46;
+        const x = at[0] + Math.cos(a) * d, z = at[2] + Math.sin(a) * d, g = G.game.T.ground(x, z); if (g < SEA) continue;
+        const it = { id: 'drop:' + Date.now().toString(36) + ':' + Math.floor(Math.random() * 1e6).toString(36), type, p: [+x.toFixed(2), +(g + 0.6).toFixed(2), +z.toFixed(2)] };
+        G.drops.set(it.id, it); add.push(it);
+      }
+    }
+    if (add.length) { syncDrops(); Net.toAll({ t: 'drop', add }); }
+  }
+  // what the gadget you use does (mod gadgets)
+  function gadgetFx(id) { const g = GADGETS[id]; return g && g.fx ? g.fx : null; }
   // a public server's keeper keeps it on the server list
   setInterval(() => { if (G && G.role === 'keeper' && G.server && G.server.vis === 'public') Servers.advertise(G.server, G.players.size); }, 20000);
 
@@ -449,6 +469,7 @@
     Sound.start();
     $('playBtn').disabled = true; menuMsg('Entering the world…');
     if (Device.useTouch) { try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) {} }
+    modSig = ''; loadMods(server); clearInterval(modTimer); modTimer = setInterval(modItemsTick, 15000);
     const s = saved(), B = new Builds(); if (BUILDING) B.load(s.parts, s.wires);
     let game;
     try { game = new Game($('game'), $('ov'), SEED, B); }
@@ -469,7 +490,7 @@
       taken: new Map(), drops: new Map(), wx: 'auto', frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
       board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '', wireFrom: null,
       profile: { name, ...myLook(), dev: Device.short, devType: Device.type },
-      server: server || null, mod: modDefaults(), modRun: null,
+      server: server || null, mod: {},
       names: new Map((s.names || []).filter(e => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'string')), pending: new Set(),
     };
     G.me = { id: 'me', ...G.profile, p: body.p, R: body.R, r: body.r };
@@ -482,7 +503,7 @@
     if (!G) { Net.leave(); return; }
     G.role = role; G.lastHeard = performance.now();
     if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' }); return; }
-    if (G.server) { G.server = Servers.put(Object.assign({}, G.server, { seen: Date.now() })); startMods(); }
+    if (G.server) { G.server = Servers.put(Object.assign({}, G.server, { seen: Date.now() })); modsHello(); setTimeout(modItemsTick, 3000); }
     G.myId = 'keeper'; G.me.id = 'keeper';
     G.players.clear(); G.players.set('keeper', G.me);
     G.me.admin = !!(await adminSign(store.get('pass', ''), 'self-' + Math.random()));
@@ -518,7 +539,7 @@
 
   function leave(msg) {
     if (!G) return;
-    saveWorld(); stopMods(); G.running = false; Net.leave(); if (G.game) G.game.fpv = null; G = null;
+    saveWorld(); clearInterval(modTimer); NMods.unregister(); modSig = ''; G.running = false; Net.leave(); if (G.game) G.game.fpv = null; G = null;
     ['hud', 'chat', 'touch', 'buildToggle', 'bag', 'adminPanel'].forEach(id => $(id).classList.add('hidden'));
     document.body.classList.remove('building', 'showPeople');
     $('chatLog').textContent = '';
@@ -690,7 +711,7 @@
       p: okVec(pos) ? pos : defaultSpawn() });
     const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
     Net.toOne(id, { t: 'welcome', server: G.server || null, id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), wt: worldT(), roster: roster(), nonce, names: [...G.names], drops: [...G.drops.values()], wx: G.wx, clouds: G.game.extraClouds || [] });
-    renderPeople(); if (G.modRun) G.modRun.fire('join');
+    renderPeople();
     if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
     // a name that belongs to someone has to be proven with that device's key
     if (owner && !renamed) setTimeout(() => { if (G && G.players.get(id) === np && !np.idOk && !np.admin) renamePlayer(np, 'Could not check the name'); }, 15000);
@@ -724,7 +745,7 @@
     if (m.t === 'welcome') {
       const first = !G.myId;
       G.myId = m.id; G.me.id = m.id;
-      if (G.server) { const sv = Servers.clean(m.server); if (sv) { G.server = Servers.put(Object.assign(sv, { seen: Date.now(), pwh: G.server.pwh || '' })); $('roomLabel').innerHTML = '<i class="live"></i>'; $('roomLabel').appendChild(document.createTextNode(sv.name)); } if (first) startMods(); }
+      if (G.server) { const sv = Servers.clean(m.server); if (sv) { G.server = Servers.put(Object.assign(sv, { seen: Date.now(), pwh: G.server.pwh || '' })); $('roomLabel').innerHTML = '<i class="live"></i>'; $('roomLabel').appendChild(document.createTextNode(sv.name)); } if (first) { loadMods(G.server); modsHello(); } }
       if (typeof m.name === 'string') { G.me.name = G.profile.name = cleanName(m.name); }
       if (m.renamed) setTimeout(() => sys('The name "' + cleanText(m.renamed) + '" is already taken, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1200);
       addNames(m.names);
@@ -762,7 +783,7 @@
     if (m.t === 'roster') {
       const ids = new Set(m.roster.map(r => r.id));
       for (const id of [...G.players.keys()]) if (!ids.has(id)) G.players.delete(id);
-      for (const r of m.roster) { if (!r || typeof r.id !== 'string') continue; const p = G.players.get(r.id); if (!p) { applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r); if (G.modRun) G.modRun.fire('join'); } else if (p !== G.me) applyRoster(p, r); else { p.admin = !!r.admin && OWNER; if (p.admin && cleanName(r.name) && p.name !== cleanName(r.name)) { p.name = G.profile.name = cleanName(r.name); } } }
+      for (const r of m.roster) { if (!r || typeof r.id !== 'string') continue; const p = G.players.get(r.id); if (!p) { applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r); } else if (p !== G.me) applyRoster(p, r); else { p.admin = !!r.admin && OWNER; if (p.admin && cleanName(r.name) && p.name !== cleanName(r.name)) { p.name = G.profile.name = cleanName(r.name); } } }
       renderPeople();
     } else if (m.t === 'state') {
       G.dayStart = performance.now() - m.phase * DAY_MS; syncClock(m.wt);
@@ -1159,13 +1180,14 @@
   function showToast(t, ms) { $('toast').textContent = t; $('toast').classList.remove('hidden'); clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => $('toast').classList.add('hidden'), ms); }
 
   // ---------- build tab ----------
-  const CATS = ['blocks', 'machines', 'circuits', 'decor'], CAT_NAMES = { blocks: 'Blocks', machines: 'Machines', circuits: 'Circuits', decor: 'Decor' }, CAT_ICONS = { blocks: 'build', machines: 'gear', circuits: 'chip', decor: 'star' };
+  const BASE_CATS = ['blocks', 'machines', 'circuits', 'decor'], CAT_NAMES = { blocks: 'Blocks', machines: 'Machines', circuits: 'Circuits', decor: 'Decor', mods: 'Mods' }, CAT_ICONS = { blocks: 'build', machines: 'gear', circuits: 'chip', decor: 'star', mods: 'nail' };
+  const catList = () => TOOL_CATS.mods && TOOL_CATS.mods.length ? [...BASE_CATS, 'mods'] : BASE_CATS;
   const toolList = () => [...TOOL_CATS[G.cat], 0];
   const curTool = () => toolList()[G.tool];
-  function nextCat() { G.cat = CATS[(CATS.indexOf(G.cat) + 1) % CATS.length]; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); }
+  function nextCat() { const CATS = catList(); G.cat = CATS[(CATS.indexOf(G.cat) + 1) % CATS.length]; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); }
   function buildHotbar() {
     const tabs = $('tabs'); tabs.textContent = '';
-    for (const c of CATS) { // the three kinds of things you can build are always on show
+    for (const c of catList()) { // the kinds of things you can build are always on show
       const t = document.createElement('button'); if (c === G.cat) t.className = 'on';
       t.innerHTML = icon(CAT_ICONS[c], 16) + '<span>' + CAT_NAMES[c] + '</span>';
       t.onclick = () => { if (G.cat === c) return; G.cat = c; G.tool = 0; G.wireFrom = null; buildHotbar(); selectTool(0); };
@@ -1363,7 +1385,7 @@
   function activities(now) {
     const b = G.body, game = G.game;
     for (const it of game.nearbyItems(b.p)) { // pick up items you roll into
-      const pr = G.me.gadget === 'magnet' ? 5.5 : 1.4; if (Math.abs(it.p[0] - b.p[0]) > pr || Math.abs(it.p[2] - b.p[2]) > pr || Math.abs(it.p[1] - b.p[1]) > pr + 0.2) continue;
+      const pr = G.me.gadget === 'magnet' || (gadgetFx(G.me.gadget) || {}).magnet ? 5.5 : 1.4; if (Math.abs(it.p[0] - b.p[0]) > pr || Math.abs(it.p[2] - b.p[2]) > pr || Math.abs(it.p[1] - b.p[1]) > pr + 0.2) continue;
       if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('You beat the parkour climb!'); } continue; }
       if (G.taken.has(it.id) || G.asked === it.id) continue;
       G.asked = it.id; setTimeout(() => { if (G && G.asked === it.id) G.asked = null; }, 800);
@@ -1410,7 +1432,7 @@
     if (kind === 'realm-in') { const R = REALMS[arg]; Sound.play('tp'); banner('Welcome to', R.name, arg === 'space' ? 'Low gravity: jump across the floating rocks!' : arg === 'sea' ? 'You can breathe down here. Find the pearls!' : 'Look for glowing crystals and gems', 4000); prog.max('realm_' + arg, 1); questCheck(); return; }
     if (kind === 'realm-out') { Sound.play('tp'); showToast('Back on the main land!', 1400); return; }
     if (kind === 'flap') { Sound.play('jump'); P.burst([bp[0], bp[1], bp[2]], 10, { cols: ['#cdb4ff', '#a8d8ff', '#ffffff'], shape: 22, size: 0.16, speed: 2.5, life: 0.6 }); return; }
-    if (kind === 'jumped' && G && G.modRun) G.modRun.fire('jump');
+    if (kind === 'hot' && G) { respawn(); showToast('Too hot! Back to spawn', 1500); return; }
     if (kind === 'jumped') { prog.add('jumps'); Sound.play('jump'); P.burst([bp[0], bp[1] - 0.35, bp[2]], 8, { col: [0.92, 0.88, 0.8], shape: 0, size: 0.22, speed: 1.6, up: 0.3, life: 0.5, drag: 3 }); return; }
     if (kind === 'boost') { showToast('Whoosh!', 600); Sound.play('boost'); P.burst(bp, 14, { cols: ['#8af0ff', '#ffffff'], shape: 29, size: 0.3, speed: 4, life: 0.4 }); return; }
     if (kind === 'jump') { Sound.play('boost'); P.burst(bp, 12, { cols: ['#7be36b', '#ffffff'], shape: 26, size: 0.2, speed: 3, life: 0.6 }); }
@@ -1445,7 +1467,6 @@
         else if (avg < 1 / 56 && (g.scale || 1) < 1) { if (++P.good >= 3) { g.scale = Math.min(1, (g.scale || 1) + 0.1); g.resize(); P.good = 0; } } else P.good = 0; } }
     const m = G.me, b = G.body, cam = G.game.cam;
     for (const k in G.effects) if (G.effects[k] < now) delete G.effects[k];
-    if (G.mod.freeze) G.dayStart = now - G.mod.phase * DAY_MS; // a mod stopped the sun
     let ix = 0, iy = 0;
     if (keys.has('a') || keys.has('arrowleft')) ix--; if (keys.has('d') || keys.has('arrowright')) ix++;
     if (keys.has('w') || keys.has('arrowup')) iy--; if (keys.has('s') || keys.has('arrowdown')) iy++;
@@ -1458,20 +1479,21 @@
     const f = G.game.forward(), rt = [-f[1], f[0]], go = l > 0.12 ? 1 : 0;
     const input = { x: (rt[0] * ix - f[0] * iy) * go, z: (rt[1] * ix - f[1] * iy) * go,
       jump: !G.frozen && !blind && (keys.has(' ') || jumpHeld), up: keys.has(' ') || jumpHeld, down: keys.has('shift') || downHeld };
-    const gset = new Set(m.gadget && m.gadget !== 'none' ? [m.gadget] : []);
+    const gset = new Set(m.gadget && m.gadget !== 'none' ? [m.gadget] : []), gfx = gadgetFx(m.gadget);
+    if (gfx) { if (gfx.float) gset.add('balloon'); if (gfx.glide) gset.add('glider'); if (gfx.dive) gset.add('snorkel'); if (gfx.glow) gset.add('lantern'); }
     if (G.ship && G.ship.st === 'fly') { ix = stick.id !== null ? stick.x : ix; }
     for (const k of m.og || []) gset.add(k);
     if (G.chase && !G.chase.update(dt, b, now, G.nail)) endChase();
     if (G.game.park) G.game.park.update(dt, b, input, now, parkUI);
     const fishing = G.game.pier.update(dt, b, input, now, gameUI, { night: G.dark > 0.3, rain: (G.game.rain || 0) > 0.3 });
     const skyHold = G.game.sky.update(dt, b, now, gameUI, G.game.cam);
-    if (!fishing && !skyHold && !shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big || G.mod.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx, mod: G.mod });
+    if (!fishing && !skyHold && !shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx, mod: gfx ? { speed: gfx.speed, jump: gfx.jump } : {} });
     if (G.chase && G.chase.anchor) { b.p = [...G.chase.anchor]; b.v = [0, 0, 0]; }
     if (!fishing && !skyHold && G.game.arena.bounce(b)) Sound.play('boost');
     const RR = G.game.realmAt(b.p);
     if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
     else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
-    m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow || G.mod.glow || gset.has('lantern') || gset.has('aura'); m.big = !!G.effects.big || G.mod.big;
+    m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow || gset.has('lantern') || gset.has('aura'); m.big = !!G.effects.big;
     const a = 1 - Math.pow(0.0008, dt); // others glide to where they are and roll
     for (const p of G.players.values()) if (p !== m) {
       const ox = p.p[0], oz = p.p[2];

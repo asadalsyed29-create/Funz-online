@@ -72,7 +72,17 @@ class Game {
   gadgetFor(id) { const k = 'g:' + id; return this.models.get(k) || (this.models.set(k, gadgetModel(this.gfx, id)), this.models.get(k)); }
   hatFor(h) { if (!h || h === 'none') return null; return this.models.get(h) || (this.models.set(h, hatModel(this.gfx, h)), this.models.get(h)); }
   itemFor(t) { return this.itemModels[t] || (this.itemModels[t] = itemModel(this.gfx, t)); }
-  creatureFor(t) { return this.creatureModels[t] || (this.creatureModels[t] = creatureRig(this.gfx, t)); }
+  creatureFor(t) {
+    if (this.creatureModels[t]) return this.creatureModels[t];
+    const C = CREATURES[t];
+    if (!C || !C.like) return (this.creatureModels[t] = creatureRig(this.gfx, t));
+    // a mod creature: the creature it is based on, painted in its own colour (eyes, noses and claws keep theirs)
+    const tint = C.tint ? hex(C.tint) : null, build = MeshBuilder.prototype.build;
+    if (tint) { const tl = 0.3 * tint[0] + 0.59 * tint[1] + 0.11 * tint[2] || 0.3;
+      MeshBuilder.prototype.build = function (gl) { const v = this.v; for (let i = 0; i < v.length; i += 10) { const r = v[i + 6], g = v[i + 7], b = v[i + 8], L = 0.3 * r + 0.59 * g + 0.11 * b, sat = Math.max(r, g, b) - Math.min(r, g, b);
+        if (L < 0.14 || (L > 0.86 && sat < 0.12) || v[i + 9] < 0.95 && v[i + 9] > 0.85) continue; const k = Math.min(1.6, L / tl); v[i + 6] = Math.min(1, tint[0] * k); v[i + 7] = Math.min(1, tint[1] * k); v[i + 8] = Math.min(1, tint[2] * k); } return build.call(this, gl); }; }
+    try { return (this.creatureModels[t] = creatureRig(this.gfx, C.like)); } finally { MeshBuilder.prototype.build = build; }
+  }
   partFor(id, rot, on) { const k = id + ':' + rot + ':' + on; if (!this.partModels.has(k)) this.partModels.set(k, partModel(this.gfx, id, rot, on)); return this.partModels.get(k); }
   ringModel(c) { const mb = new MeshBuilder(), col = glowC(hex(c)); mb.push([0, 0, 0], M4.rotX(Math.PI / 2)); mb.tor([0, 0, 0], 1.5, 0.17, 40, 10, col); mb.pop(); return mb.build(this.gfx); }
   waterModel() { const mb = new MeshBuilder(), c = hex('#1d6fbf', 0.7), N = 90, E = 10; for (let i = -N / 2; i < N / 2; i++) for (let j = -N / 2; j < N / 2; j++) mb.quad([i * E, 0, j * E], [i * E, 0, (j + 1) * E], [(i + 1) * E, 0, (j + 1) * E], [(i + 1) * E, 0, j * E], c); return mb.build(this.gfx); }
@@ -101,7 +111,7 @@ class Game {
     for (const [k, part] of this.B.parts) {
       const [x, y, z] = unkey(k); if (Math.floor(x / 16) !== px || Math.floor(z / 16) !== pz) continue;
       if (!Game.isStatic(part.id)) { dyn.push([k, x, y, z, part]); continue; }
-      const P = PARTS[part.id], c = shadeC(hex(P.color), 0.95 + this.T.N.hash(x, z + y * 7, 3) * 0.1), target = P.glass ? clear : mb;
+      const P = PARTS[part.id], c0 = shadeC(hex(P.color), 0.95 + this.T.N.hash(x, z + y * 7, 3) * 0.1), c = P.glow ? glowC(c0) : c0, target = P.glass ? clear : mb;
       if (P.ramp) {
         target.at([x + 0.5, y, z + 0.5], M4.rotY(-part.rot * Math.PI / 2));
         target.quad([-0.5, 0, 0.5], [0.5, 0, 0.5], [0.5, 1, -0.5], [-0.5, 1, -0.5], c); target.quad([0.5, 0, -0.5], [-0.5, 0, -0.5], [-0.5, 1, -0.5], [0.5, 1, -0.5], shadeC(c, 0.9));
@@ -179,7 +189,9 @@ class Game {
     const hs = Math.hypot(v[0], v[2]);
     if (hs > maxS && b.boostT <= 0) { const k = Math.max(maxS / hs, 1 - dt * 4); v[0] *= k; v[2] *= k; }
     if (b.boostT > 0) b.boostT -= dt;
-    if (!input.x && !input.z && b.grounded) {
+    const slip = b.ground && b.ground.part && PARTS[b.ground.part.id] && PARTS[b.ground.part.id].slippery;
+    if (slip) { const k = Math.exp(-0.25 * dt); v[0] *= k; v[2] *= k; }
+    else if (!input.x && !input.z && b.grounded) {
       const gentle = !b.gn || b.gn[1] > 0.9, k = Math.exp(-(gentle ? 6 : 3.2) * dt); v[0] *= k; v[2] *= k;
       if (gentle && Math.hypot(v[0], v[2]) < 0.7) { v[0] = 0; v[2] = 0; } // stay put instead of slowly sliding
     }
@@ -248,7 +260,7 @@ class Game {
       const k = pkey(x, y, z), dynamic = part.id === 61 || part.id === 62 || part.id === 63;
       if (!dynamic && (y < Math.floor(p[1] - r) - 1 || x < Math.floor(p[0] - r) || x > Math.floor(p[0] + r) || z < Math.floor(p[2] - r) || z > Math.floor(p[2] + r))) continue;
       if (part.id === 61 && (this.anim.get(k) || 0) > 0.6) continue;
-      const off = dynamic ? this.partOffset(k, part) : null, sh = partShape(part, x, y, z, off), info = { k, part, at: [x, y, z] };
+      const off = dynamic ? this.partOffset(k, part) : null, sh = partShape(part, x, y, z, off), info = { k, part, at: [x, y, z], bouncy: !!PARTS[part.id].bouncy };
       if (sh.box) { const [x0, y0, z0, x1, y1, z1] = sh.box; this.push(b, [Math.max(x0, Math.min(x1, p[0])), Math.max(y0, Math.min(y1, p[1])), Math.max(z0, Math.min(z1, p[2]))], info); }
       else if (sh.sphere) { const [sx, sy, sz, sr] = sh.sphere, dx = p[0] - sx, dy = p[1] - sy, dz = p[2] - sz, d = Math.hypot(dx, dy, dz) || 1; this.push(b, [sx + dx / d * sr, sy + dy / d * sr, sz + dz / d * sr], { ...info, bouncy: part.id === 47 }); }
       else for (const t of sh.tris) this.push(b, closestOnTri(p, t[0], t[1], t[2]), info);
@@ -265,6 +277,12 @@ class Game {
       if (links.length) { const t = unkey(links[0]); b.p = [t[0] + 0.5, t[1] + 0.3 + b.r + 0.05, t[2] + 0.5]; b.v = [0, 0, 0]; b.tpCool = 1.6; opts.fx('tp'); }
       else { b.tpCool = 3; opts.fx('tp-alone'); }
     } else if (id === 46) opts.fx('spawn', g.at);
+    else if (PARTS[id] && PARTS[id].mod) { // blocks from mods
+      const P = PARTS[id];
+      if (P.hot && b.padCool <= 0) { b.padCool = 1; opts.fx('hot'); return; }
+      if (P.launch && b.padCool <= 0) { b.v[1] = P.launch; b.grounded = false; b.padCool = 0.3; opts.fx('jump'); }
+      if (P.boost && b.padCool <= 0) { const hs = Math.hypot(b.v[0], b.v[2]); if (hs > 0.5) { b.v[0] = b.v[0] / hs * P.boost; b.v[2] = b.v[2] / hs * P.boost; b.boostT = 1.2; b.padCool = 0.4; opts.fx('speed'); } }
+    }
   }
   roll(b, dt) { const v = b.v, hs = Math.hypot(v[0], v[2]); if (hs < 0.01) return; b.R = M4.ortho3(M4.mul3(M4.axisAngle(v[2] / hs, 0, -v[0] / hs, hs * dt / b.r), b.R)); }
   rollBy(p, dx, dz, r) { const d = Math.hypot(dx, dz); if (d < 1e-4 || d > 3) return; p.R = M4.ortho3(M4.mul3(M4.axisAngle(dz / d, 0, -dx / d, d / r), p.R || [1, 0, 0, 0, 1, 0, 0, 0, 1])); }
@@ -643,9 +661,9 @@ class Game {
     G.mat(1, 0.35, 0.45);
     for (const cr of this.creatures) {
       if (cr.vis === false || !vis(cr.p[0], cr.p[2], 90, 3)) continue;
-      const C = CREATURES[cr.type], hopH = C.hop ? Math.abs(Math.sin(cr.hop)) : 0;
+      const C = CREATURES[cr.type]; if (!C) continue; const hopH = C.hop ? Math.abs(Math.sin(cr.hop)) : 0;
       const st = { t: (this.wt ?? t) + cr.seed, walk: cr.walk, mv: cr.mv, blink: cr.nb < 0 ? 0.1 : 1, hop: hopH, hopv: Math.cos(cr.hop) > 0 ? -1 : 1, seed: cr.seed, graze: cr.graze, calm: cr.calm, flap: 16 };
-      drawRig(G, this.creatureFor(cr.type), M4.model(cr.p, M4.rotY(-cr.yaw)), st, vis(cr.p[0], cr.p[2], 26));
+      drawRig(G, this.creatureFor(cr.type), M4.model(cr.p, M4.rotY(-cr.yaw), C.size || 1), st, vis(cr.p[0], cr.p[2], 26));
     }
     if (!this.under && o.dark < 0.5) for (const b of this.birds) { const t = this.wt || 0, a = t * 0.25 + b.f * 2.1 + b.k * 0.18, R = 40 + b.f * 15; const p = [this.birdCenter[0] + Math.cos(a + b.f) * R + b.k * 1.5, 45 + b.f * 8 + Math.sin(t + b.k) * 2, this.birdCenter[1] + Math.sin(a + b.f) * R]; drawRig(G, this.creatureFor('bird'), M4.model(p, M4.mul3(M4.rotY(-a - Math.PI / 2), M4.rotX(Math.sin(t * 0.8 + b.k) * 0.15)), 1.6), { t, walk: 0, mv: 0, blink: 1, hop: 0, seed: b.k * 1.7, flap: Math.sin(t * 0.5 + b.k) > 0.3 ? 3 : 12 }, false); }
     if (o.chase) o.chase.draw(G, t, me);
@@ -657,7 +675,7 @@ class Game {
     // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
     const clear = [];
     for (const p of players) {
-      const r = p.r || 0.45, sk = (SKINS[p.skin] || SKINS.plain).n, A = this.rgb3(p.color), B = this.rgb3(p.color2 || p.color), og = p.og || [];
+      const r = p.r || 0.45, SK = SKINS[p.skin] || SKINS.plain, sk = SK.n, A = this.rgb3(SK.cols ? SK.cols[0] : p.color), B = this.rgb3(SK.cols ? SK.cols[1] : p.color2 || p.color), og = p.og || [];
       // which way it's going (for the hat), smoothed
       const lp0 = p._lp || p.p, dx = p.p[0] - lp0[0], dz = p.p[2] - lp0[2], dy = p.p[1] - lp0[1], mv = Math.hypot(dx, dz);
       if (mv > 0.004 && mv < 3) { const want = Math.atan2(dz, dx), cur = p._hd ?? want; let d = want - cur; d = Math.atan2(Math.sin(d), Math.cos(d)); p._hd = cur + d * Math.min(1, 0.25); }

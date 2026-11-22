@@ -55,6 +55,7 @@ const TOOL_CATS = {
   machines: [40, 41, 42, 46, 47, 48],
   circuits: [50, 51, 52, 53, 54, 55, 56, 60, 61, 62, 63, 'wire', 'cut'],
   decor: [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81],
+  mods: [], // blocks added by a server's mods
 };
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const pkey = (x, y, z) => x + ',' + y + ',' + z;

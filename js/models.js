@@ -231,7 +231,7 @@ function hatModel(gl, hat) {
 // ---------- gadgets (drawn on top of the ball like a hat, but they don't roll) ----------
 function gadgetModel(gl, id) {
   const mb = new MeshBuilder(), C = hex, G = c => glowC(hex(c));
-  switch (id) {
+  switch ((GADGETS[id] && GADGETS[id].like) || id) {
     case 'balloon': MB.tube(mb, [[-0.05, 0.42, 0], [-0.12, 0.9, 0.05], [-0.1, 1.35, 0]], 0.008, 4, C('#f4f4f4')); mb.sph([-0.1, 1.62, 0], [0.27, 0.32, 0.27], 16, C('#ff5f7e'), 0.1); mb.caps([-0.1, 1.31, 0], [-0.1, 1.27, 0], 0.04, 0.02, 6, C('#e0405e')); break;
     case 'glider': { mb.caps([-0.05, 0.42, 0], [-0.05, 0.85, 0], 0.02, 0.02, 5, C('#5a5f70')); const w = C('#ffc45a'), w2 = C('#ff8a5a'); mb.tri2([0.4, 0.95, 0], [-0.35, 0.85, 0.95], [-0.25, 0.9, 0], w); mb.tri2([0.4, 0.95, 0], [-0.25, 0.9, 0], [-0.35, 0.85, -0.95], w2); mb.caps([-0.33, 0.86, -0.9], [-0.33, 0.86, 0.9], 0.02, 0.02, 5, C('#5a5f70')); break; }
     case 'spring': for (let k = 0; k < 5; k++) mb.tor([-0.42, 0.05 + k * 0.08, 0], 0.11, 0.025, 14, 5, C(k % 2 ? '#c8ccd4' : '#a8b0bc')); mb.sph([-0.42, 0.45, 0], [0.13, 0.04, 0.13], 10, C('#ff5f5f'), 0); break;
@@ -309,7 +309,7 @@ function auraModel(gl) { const mb = new MeshBuilder(); mb.tor([0, 0, 0], 0.85, 0
 // ---------- items ----------
 function itemModel(gl, type) {
   const mb = new MeshBuilder(), c = hex(ITEMS[type].color), g = glowC(c), C = hex;
-  switch (type) {
+  switch (ITEMS[type].like || type) {
     case 'coin': {
       mb.push([0, 0, 0], M4.rotX(Math.PI / 2));
       mb.lathe([[0, -0.05], [0.24, -0.05], [0.27, -0.03], [0.27, 0.03], [0.24, 0.05], [0.18, 0.05], [0.17, 0.06], [0, 0.06]], 24, (t, ph, k) => k >= 5 ? C('#fff1a0', 0.9) : g, 0);
