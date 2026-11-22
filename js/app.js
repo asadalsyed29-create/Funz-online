@@ -239,6 +239,113 @@
   $('jumpBtn').innerHTML = icon('up', 26);
   $('respawnBtn').innerHTML = icon('spawn', 18);
   $('playBtn').onclick = () => play();
+
+  // ---------- mods (made in UltraNautic Hub, written in NauticX-style code) ----------
+  function modDefaults() { return { gravity: 1, speed: 1, jump: 1, big: false, glow: false, freeze: false, phase: 0 }; }
+  function startMods() {
+    stopMods(); if (!G || !G.server || !G.server.mods.length) return;
+    const PH = { day: 0, sunset: 0.23, night: 0.5, sunrise: 0.77 };
+    G.modRun = NMods.start(G.server.mods, {
+      set(k, v) { if (!G) return; G.mod[k] = v; if (k === 'freeze' && v) G.mod.phase = dayPhase(); },
+      time(mode) { if (!G) return; G.dayStart = performance.now() - PH[mode] * DAY_MS; G.mod.phase = PH[mode]; },
+      weather(w) { if (G && ['clear', 'cloudy', 'rain', 'storm', 'auto'].includes(w)) setWeather(w); },
+      message(t) { if (G) sys(t); },
+      toast(t) { if (G) showToast(t, 2200); },
+      coins(n) { if (G && n > 0) { prog.give(n); renderBag(); } },
+      sound(k) { if (['coin', 'jump', 'quest', 'chest'].includes(k)) Sound.play(k); },
+      players() { return G ? G.players.size : 0; },
+      name() { return G ? G.me.name : ''; },
+    });
+    sys('Mods on in this server: ' + G.server.mods.map(m => m.name).join(', '));
+  }
+  function stopMods() { if (G && G.modRun) { G.modRun.stop(); G.modRun = null; } if (G) G.mod = modDefaults(); }
+  // a public server's keeper keeps it on the server list
+  setInterval(() => { if (G && G.role === 'keeper' && G.server && G.server.vis === 'public') Servers.advertise(G.server, G.players.size); }, 20000);
+
+  // ---------- servers: make one, find public ones, join with a link ----------
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  let srvTab = 'public';
+  function openServers(tab) { srvTab = tab || srvTab; $('srvScreen').classList.remove('hidden'); renderServers(); }
+  $('serversBtn').onclick = () => openServers();
+  $('srvClose').onclick = () => { $('srvScreen').classList.add('hidden'); Servers.lobbyLeave(); };
+  function srvMsg(t) { $('srvMsg').textContent = t || ''; }
+  async function joinServer(sv, pw) {
+    if (!myName()) { $('srvScreen').classList.add('hidden'); return; }
+    let s = Object.assign({}, Servers.get(sv.id) || {}, sv);
+    if (pw) s.pwh = await Servers.hash(pw);
+    if (s.vis === 'private' && !s.pwh && s.owner !== (await myIdentity()).fp) { srvTab = 'pw'; pwFor = s; renderServers(); return; }
+    s = Servers.clean(s) ? Object.assign(Servers.clean(s), { pwh: s.pwh || '' }) : null; if (!s) return;
+    Servers.put(s); $('srvScreen').classList.add('hidden'); play(s);
+  }
+  let pwFor = null;
+  function renderServers() {
+    const body = $('srvBody'); body.textContent = ''; srvMsg('');
+    document.querySelectorAll('#srvTabs button').forEach(b => b.classList.toggle('on', b.dataset.t === srvTab));
+    if (srvTab === 'pw' && pwFor) {
+      body.append(el('p', 'srvNote', pwFor.name + ' is private. Type its password to join.'));
+      const inp = el('input'); inp.type = 'password'; inp.placeholder = 'Password'; inp.maxLength = 40; body.append(inp);
+      const go = el('button', 'big', 'Join'); go.onclick = () => { if (inp.value) joinServer(pwFor, inp.value); }; body.append(go); inp.focus(); return;
+    }
+    if (srvTab === 'public') {
+      const note = el('p', 'srvNote', 'Looking for public servers…'); body.append(note);
+      Servers.list().then(list => {
+        if (srvTab !== 'public') return; note.remove();
+        const known = Object.values(Servers.all()).filter(x => x.vis === 'public' && !list.some(l => l.id === x.id));
+        if (!list.length) body.append(el('p', 'srvNote', 'No public servers have players right now. Make one, or open one you played before in My servers.'));
+        for (const a of list) body.append(srvRow(a.name, a.n + (a.n === 1 ? ' player' : ' players') + (a.mods.length ? ' · Mods: ' + a.mods.join(', ') : ''), [['Join', () => joinServer({ id: a.id, name: a.name, vis: 'public' })]]));
+        for (const k of known) body.append(srvRow(k.name, 'Nobody in it right now · opens again when you join', [['Join', () => joinServer(k)]]));
+      }).catch(() => { note.textContent = 'Could not reach the server list. Check your internet.'; });
+      return;
+    }
+    if (srvTab === 'mine') {
+      const code = el('div', 'srvJoinRow'); const ci = el('input'); ci.placeholder = 'Paste a server link'; const cb = el('button', 'mini', 'Join');
+      cb.onclick = () => { const sv = parseServer(ci.value.trim()); if (sv) joinServer(sv); else srvMsg('That is not a server link.'); }; code.append(ci, cb); body.append(code);
+      const mine = Object.values(Servers.all()).sort((a, b) => (b.seen || b.made || 0) - (a.seen || a.made || 0));
+      if (!mine.length) body.append(el('p', 'srvNote', 'Servers you make or join show up here.'));
+      for (const m of mine) body.append(srvRow(m.name, { public: 'Public', link: 'Only people with the link', private: 'Private (password)' }[m.vis] + (m.mods && m.mods.length ? ' · Mods: ' + m.mods.map(x => x.name).join(', ') : ''),
+        [['Join', () => joinServer(m)], ['Copy link', () => copyLink(m)], ['Remove', () => { Servers.remove(m.id); renderServers(); }]]));
+      return;
+    }
+    // make a server
+    const ni = el('input'); ni.placeholder = 'Server name'; ni.maxLength = 30; ni.value = (myName() || 'My') + "'s server";
+    body.append(el('label', 'srvLbl', 'Name'), ni, el('label', 'srvLbl', 'Who can join'));
+    let vis = 'public'; const seg = el('div', 'srvSeg'), pwi = el('input'); pwi.type = 'password'; pwi.placeholder = 'Password'; pwi.maxLength = 40; pwi.classList.add('hidden');
+    for (const [v, t] of [['public', 'Public'], ['link', 'Link only'], ['private', 'Private']]) { const b = el('button', v === vis ? 'on' : '', t); b.onclick = () => { vis = v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); pwi.classList.toggle('hidden', v !== 'private'); visNote.textContent = VN[v]; }; seg.append(b); }
+    const VN = { public: 'Shows in the server list for everyone.', link: 'Not in the list. Anyone with the link can join.', private: 'Not in the list. People need the link and the password.' };
+    const visNote = el('p', 'srvNote', VN[vis]); body.append(seg, visNote, pwi);
+    body.append(el('label', 'srvLbl', 'Mods'));
+    const mods = NMods.installed(), picked = new Set();
+    if (!mods.length) body.append(el('p', 'srvNote', 'No Nautic Online mods installed yet. Install some in the Mods tab of UltraNautic Hub.'));
+    for (const m of mods) { const r = el('label', 'srvMod'); const c = el('input'); c.type = 'checkbox'; c.onchange = () => c.checked ? picked.add(m.id) : picked.delete(m.id); r.append(c, el('span', '', m.name)); body.append(r); }
+    const make = el('button', 'big', 'Make server');
+    make.onclick = async () => {
+      const name = ni.value.trim().replace(/[<>]/g, '') || 'My server'; if (vis === 'private' && pwi.value.length < 3) { srvMsg('Pick a password with at least 3 letters.'); return; }
+      const id = Servers.newId(), pw = vis === 'private' ? await Servers.hash(pwi.value) : '';
+      const sv = Servers.clean({ id, name, vis, pw, made: Date.now(), owner: (await myIdentity()).fp, mods: mods.filter(m => picked.has(m.id)) });
+      sv.pwh = pw; Servers.put(sv); copyLink(sv, true); $('srvScreen').classList.add('hidden'); play(sv);
+    };
+    body.append(make);
+  }
+  function srvRow(name, sub, btns) {
+    const r = el('div', 'srvRow'), t = el('div', 'srvT'); t.append(el('b', '', name), el('span', '', sub)); r.append(t);
+    for (const [label, fn] of btns) { const b = el('button', 'mini' + (label === 'Join' ? '' : ' ghost'), label); b.onclick = fn; r.append(b); }
+    return r;
+  }
+  // the link carries the server's settings, so it works even when nobody is in it
+  function serverLink(s) { const meta = { n: s.name, v: s.vis, p: s.pw || '', m: (s.mods || []).map(m => ({ i: m.id, n: m.name, c: m.code })), o: s.owner || '' }; return Servers.link(s.id) + '.' + btoa(unescape(encodeURIComponent(JSON.stringify(meta)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function parseServer(t) {
+    const m = String(t || '').match(/(?:online=|server=)?([a-z0-9]{6,16})(?:\.([A-Za-z0-9_-]+))?$/); if (!m) return null;
+    let meta = {}; if (m[2]) try { meta = JSON.parse(decodeURIComponent(escape(atob(m[2].replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) {}
+    return Servers.clean({ id: m[1], name: meta.n, vis: meta.v, pw: meta.p, owner: meta.o, mods: (meta.m || []).map(x => ({ id: x.i, name: x.n, code: x.c })) }) || null;
+  }
+  function copyLink(s, made) {
+    const l = serverLink(s);
+    const done = () => showToast(made ? 'Server made! Its link is copied, send it to friends.' : 'Link copied', 2600);
+    try { navigator.clipboard.writeText(l).then(done, () => showToast(l, 6000)); } catch (e) { showToast(l, 6000); }
+  }
+  document.querySelectorAll('#srvTabs button').forEach(b => b.onclick = () => { srvTab = b.dataset.t; renderServers(); });
+  // opened from a server link (the hub passes it along)
+  { const q = new URLSearchParams(location.search).get('server'); if (q) { const sv = parseServer(q); if (sv) setTimeout(() => { if (myName()) joinServer(sv); else { srvTab = 'mine'; openServers(); } }, 600); } }
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') play(); });
 
   // Nautic Online is played inside UltraNautic Hub (the hub opens it with ?app=1); a plain browser tab sends you to the hub
@@ -320,9 +427,10 @@
 
   // ---------- game state ----------
   let G = null;
-  const saveKey = 'world5';
+  let saveKey = 'world5'; // the main world; each server has its own saved copy ('srvworld.<id>')
   function saved() { return store.json(saveKey, {}); }
-  function saveWorld() { if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), parts: G.B.list(), wires: [...G.B.wires], levers: [...G.circ.levers], bans: [...G.bans], board: G.board, names: [...G.names] })); }
+  function saveWorld() { if (G && G.server && G.role === 'guest') G.dirty = true; // guests keep a copy too, so the server lives on
+    if (!G || !G.dirty) return; G.dirty = false; store.set(saveKey, JSON.stringify({ t: Date.now(), parts: G.B.list(), wires: [...G.B.wires], levers: [...G.circ.levers], bans: [...G.bans], board: G.board, names: [...G.names] })); }
   setInterval(saveWorld, 8000);
   addEventListener('pagehide', saveWorld);
   const defaultSpawn = () => [0, SPAWN_H + 1.5, 7];
@@ -335,8 +443,9 @@
     return s[1] < g + 0.4 ? [s[0], g + 1.5, s[2]] : s;
   }
 
-  async function play() {
+  async function play(server) {
     const name = myName(); if (!name) return;
+    saveKey = server ? 'srvworld.' + server.id : 'world5';
     Sound.start();
     $('playBtn').disabled = true; menuMsg('Entering the world…');
     if (Device.useTouch) { try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) {} }
@@ -360,6 +469,7 @@
       taken: new Map(), drops: new Map(), wx: 'auto', frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
       board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '', wireFrom: null,
       profile: { name, ...myLook(), dev: Device.short, devType: Device.type },
+      server: server || null, mod: modDefaults(), modRun: null,
       names: new Map((s.names || []).filter(e => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'string')), pending: new Set(),
     };
     G.me = { id: 'me', ...G.profile, p: body.p, R: body.R, r: body.r };
@@ -368,10 +478,11 @@
 
   async function connectWorld(first) {
     let role;
-    try { role = await Net.connect(); } catch (e) { role = 'offline'; }
+    try { role = await Net.connect(G.server ? Servers.worldId(G.server.id) : null); } catch (e) { role = 'offline'; }
     if (!G) { Net.leave(); return; }
     G.role = role; G.lastHeard = performance.now();
-    if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)) }); return; }
+    if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' }); return; }
+    if (G.server) { G.server = Servers.put(Object.assign({}, G.server, { seen: Date.now() })); startMods(); }
     G.myId = 'keeper'; G.me.id = 'keeper';
     G.players.clear(); G.players.set('keeper', G.me);
     G.me.admin = !!(await adminSign(store.get('pass', ''), 'self-' + Math.random()));
@@ -382,6 +493,7 @@
     if (first) enterGame();
     G.reconnecting = false; renderPeople();
     if (role === 'offline') { $('roomLabel').innerHTML = '<i class="live off"></i>Offline'; sys('Could not reach the world, so you are exploring offline. Your builds are saved on this device.'); }
+    else if (G.server) { $('roomLabel').innerHTML = '<i class="live"></i>'; $('roomLabel').appendChild(document.createTextNode(G.server.name)); sys(first ? 'Welcome to ' + G.server.name + '! The server stays open: when everyone leaves, it is saved and picks up again when someone comes back.' : 'Back online.'); }
     else { $('roomLabel').innerHTML = '<i class="live"></i>Online'; sys(first ? 'Welcome to Nautic Online! You are the first one here, more people can join any time.' : 'Back online.'); }
   }
 
@@ -406,7 +518,7 @@
 
   function leave(msg) {
     if (!G) return;
-    saveWorld(); G.running = false; Net.leave(); if (G.game) G.game.fpv = null; G = null;
+    saveWorld(); stopMods(); G.running = false; Net.leave(); if (G.game) G.game.fpv = null; G = null;
     ['hud', 'chat', 'touch', 'buildToggle', 'bag', 'adminPanel'].forEach(id => $(id).classList.add('hidden'));
     document.body.classList.remove('building', 'showPeople');
     $('chatLog').textContent = '';
@@ -496,6 +608,7 @@
     const p = G.players.get(id);
     if (m.t === 'hello') {
       if (p || G.pending.has(id)) return;
+      if (G.server && G.server.vis === 'private' && G.server.pw && m.pwh !== G.server.pw) { Net.toOne(id, { t: 'badpw' }); Net.drop(id); return; }
       G.pending.add(id);
       const pub = m.pub && typeof m.pub.x === 'string' && typeof m.pub.y === 'string' && m.pub.x.length < 60 && m.pub.y.length < 60 ? { x: m.pub.x, y: m.pub.y } : null;
       (pub ? fingerprint(pub).catch(() => '') : Promise.resolve('')).then(fp => { if (!G) return; G.pending.delete(id); if (!G.players.get(id)) welcome(id, m, pub, fp); });
@@ -576,8 +689,8 @@
       dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
       p: okVec(pos) ? pos : defaultSpawn() });
     const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
-    Net.toOne(id, { t: 'welcome', id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), wt: worldT(), roster: roster(), nonce, names: [...G.names], drops: [...G.drops.values()], wx: G.wx, clouds: G.game.extraClouds || [] });
-    renderPeople();
+    Net.toOne(id, { t: 'welcome', server: G.server || null, id, name, renamed, parts: G.B.list(), wires: [...G.B.wires], power: [...G.circ.on], bans: [...G.bans], taken: takenList(), board: G.board, phase: dayPhase(), wt: worldT(), roster: roster(), nonce, names: [...G.names], drops: [...G.drops.values()], wx: G.wx, clouds: G.game.extraClouds || [] });
+    renderPeople(); if (G.modRun) G.modRun.fire('join');
     if (!reservedName(wantName)) { const msg = np.name + ' joined (' + np.dev + ')'; sys(msg); Net.toAll({ t: 'sys', text: msg }, id); }
     // a name that belongs to someone has to be proven with that device's key
     if (owner && !renamed) setTimeout(() => { if (G && G.players.get(id) === np && !np.idOk && !np.admin) renamePlayer(np, 'Could not check the name'); }, 15000);
@@ -611,6 +724,7 @@
     if (m.t === 'welcome') {
       const first = !G.myId;
       G.myId = m.id; G.me.id = m.id;
+      if (G.server) { const sv = Servers.clean(m.server); if (sv) { G.server = Servers.put(Object.assign(sv, { seen: Date.now(), pwh: G.server.pwh || '' })); $('roomLabel').innerHTML = '<i class="live"></i>'; $('roomLabel').appendChild(document.createTextNode(sv.name)); } if (first) startMods(); }
       if (typeof m.name === 'string') { G.me.name = G.profile.name = cleanName(m.name); }
       if (m.renamed) setTimeout(() => sys('The name "' + cleanText(m.renamed) + '" is already taken, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1200);
       addNames(m.names);
@@ -635,6 +749,7 @@
       if (m.t === 'full') leave('The world is full right now (' + MAX_PLAYERS + ' players). Try again soon!');
       if (m.t === 'kicked') leave('The admin removed you from the world for a while.');
       if (m.t === 'banned') leave('You are banned from this world.');
+      if (m.t === 'badpw') { if (G.server) { const sv = Servers.get(G.server.id); if (sv) { delete sv.pwh; Servers.put(sv); } } leave('That password is not right for this server.'); }
       return;
     }
     if (m.t === 'names') { addNames(m.add); return; }
@@ -647,7 +762,7 @@
     if (m.t === 'roster') {
       const ids = new Set(m.roster.map(r => r.id));
       for (const id of [...G.players.keys()]) if (!ids.has(id)) G.players.delete(id);
-      for (const r of m.roster) { if (!r || typeof r.id !== 'string') continue; const p = G.players.get(r.id); if (!p) applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r); else if (p !== G.me) applyRoster(p, r); else { p.admin = !!r.admin && OWNER; if (p.admin && cleanName(r.name) && p.name !== cleanName(r.name)) { p.name = G.profile.name = cleanName(r.name); } } }
+      for (const r of m.roster) { if (!r || typeof r.id !== 'string') continue; const p = G.players.get(r.id); if (!p) { applyRoster(addPlayer({ id: r.id, p: r.p, name: '' }), r); if (G.modRun) G.modRun.fire('join'); } else if (p !== G.me) applyRoster(p, r); else { p.admin = !!r.admin && OWNER; if (p.admin && cleanName(r.name) && p.name !== cleanName(r.name)) { p.name = G.profile.name = cleanName(r.name); } } }
       renderPeople();
     } else if (m.t === 'state') {
       G.dayStart = performance.now() - m.phase * DAY_MS; syncClock(m.wt);
@@ -1295,6 +1410,7 @@
     if (kind === 'realm-in') { const R = REALMS[arg]; Sound.play('tp'); banner('Welcome to', R.name, arg === 'space' ? 'Low gravity: jump across the floating rocks!' : arg === 'sea' ? 'You can breathe down here. Find the pearls!' : 'Look for glowing crystals and gems', 4000); prog.max('realm_' + arg, 1); questCheck(); return; }
     if (kind === 'realm-out') { Sound.play('tp'); showToast('Back on the main land!', 1400); return; }
     if (kind === 'flap') { Sound.play('jump'); P.burst([bp[0], bp[1], bp[2]], 10, { cols: ['#cdb4ff', '#a8d8ff', '#ffffff'], shape: 22, size: 0.16, speed: 2.5, life: 0.6 }); return; }
+    if (kind === 'jumped' && G && G.modRun) G.modRun.fire('jump');
     if (kind === 'jumped') { prog.add('jumps'); Sound.play('jump'); P.burst([bp[0], bp[1] - 0.35, bp[2]], 8, { col: [0.92, 0.88, 0.8], shape: 0, size: 0.22, speed: 1.6, up: 0.3, life: 0.5, drag: 3 }); return; }
     if (kind === 'boost') { showToast('Whoosh!', 600); Sound.play('boost'); P.burst(bp, 14, { cols: ['#8af0ff', '#ffffff'], shape: 29, size: 0.3, speed: 4, life: 0.4 }); return; }
     if (kind === 'jump') { Sound.play('boost'); P.burst(bp, 12, { cols: ['#7be36b', '#ffffff'], shape: 26, size: 0.2, speed: 3, life: 0.6 }); }
@@ -1329,6 +1445,7 @@
         else if (avg < 1 / 56 && (g.scale || 1) < 1) { if (++P.good >= 3) { g.scale = Math.min(1, (g.scale || 1) + 0.1); g.resize(); P.good = 0; } } else P.good = 0; } }
     const m = G.me, b = G.body, cam = G.game.cam;
     for (const k in G.effects) if (G.effects[k] < now) delete G.effects[k];
+    if (G.mod.freeze) G.dayStart = now - G.mod.phase * DAY_MS; // a mod stopped the sun
     let ix = 0, iy = 0;
     if (keys.has('a') || keys.has('arrowleft')) ix--; if (keys.has('d') || keys.has('arrowright')) ix++;
     if (keys.has('w') || keys.has('arrowup')) iy--; if (keys.has('s') || keys.has('arrowdown')) iy++;
@@ -1348,13 +1465,13 @@
     if (G.game.park) G.game.park.update(dt, b, input, now, parkUI);
     const fishing = G.game.pier.update(dt, b, input, now, gameUI, { night: G.dark > 0.3, rain: (G.game.rain || 0) > 0.3 });
     const skyHold = G.game.sky.update(dt, b, now, gameUI, G.game.cam);
-    if (!fishing && !skyHold && !shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx });
+    if (!fishing && !skyHold && !shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big || G.mod.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx, mod: G.mod });
     if (G.chase && G.chase.anchor) { b.p = [...G.chase.anchor]; b.v = [0, 0, 0]; }
     if (!fishing && !skyHold && G.game.arena.bounce(b)) Sound.play('boost');
     const RR = G.game.realmAt(b.p);
     if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
     else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
-    m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow || gset.has('lantern') || gset.has('aura'); m.big = !!G.effects.big;
+    m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow || G.mod.glow || gset.has('lantern') || gset.has('aura'); m.big = !!G.effects.big || G.mod.big;
     const a = 1 - Math.pow(0.0008, dt); // others glide to where they are and roll
     for (const p of G.players.values()) if (p !== m) {
       const ox = p.p[0], oz = p.p[2];

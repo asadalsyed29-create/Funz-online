@@ -2,7 +2,8 @@
 // The first player online runs the world for everyone ("keeper"); everyone else
 // connects to them. If the keeper leaves, someone else takes over automatically.
 const Net = (() => {
-  const WORLD_ID = 'funz-online-main-world-v1';
+  const MAIN_ID = 'funz-online-main-world-v1';
+  let WORLD_ID = MAIN_ID; // each server has its own id; the main world keeps the old one
   let peer = null, keeperConn = null;
   const conns = new Map(); // keeper only: peerId -> connection
   const h = { message() {}, join() {}, leave() {}, closed() {} };
@@ -53,7 +54,8 @@ const Net = (() => {
   }
 
   // Join the world, or start it if nobody's there. Returns 'guest' or 'keeper'.
-  async function connect() {
+  async function connect(worldId) {
+    WORLD_ID = worldId || MAIN_ID;
     if (!ready()) throw new Error('offline');
     for (let i = 0; i < 6; i++) {
       try { await tryJoin(); return 'guest'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); }

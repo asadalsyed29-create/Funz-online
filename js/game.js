@@ -168,7 +168,7 @@ class Game {
       b.p[0] = Math.max(-LIMIT, Math.min(LIMIT, b.p[0])); b.p[2] = Math.max(-LIMIT, Math.min(LIMIT, b.p[2])); b.p[1] = Math.min(b.p[1], 600);
       this.roll(b, dt); b.grounded = false; return;
     }
-    const gd = opts.g || new Set(), maxS = 8 * (opts.fast ? 1.7 : 1) * (gd.has('jets') ? 1.45 : 1) * (opts.slow || 1), acc = (b.grounded ? 28 : 11) * (gd.has('jets') ? 1.3 : 1);
+    const gd = opts.g || new Set(), md = opts.mod || {}, mSp = md.speed > 0 ? md.speed : 1, maxS = 8 * (opts.fast ? 1.7 : 1) * (gd.has('jets') ? 1.45 : 1) * (opts.slow || 1) * mSp, acc = (b.grounded ? 28 : 11) * (gd.has('jets') ? 1.3 : 1) * Math.max(1, mSp);
     // on the ground, push along the slope (so hills can be climbed) instead of into it
     let ax = input.x, ay = 0, az = input.z;
     if (b.grounded && b.gn && (ax || az)) {
@@ -183,7 +183,7 @@ class Game {
       const gentle = !b.gn || b.gn[1] > 0.9, k = Math.exp(-(gentle ? 6 : 3.2) * dt); v[0] *= k; v[2] *= k;
       if (gentle && Math.hypot(v[0], v[2]) < 0.7) { v[0] = 0; v[2] = 0; } // stay put instead of slowly sliding
     }
-    v[1] -= (this.realm ? this.realm.grav : 24) * dt;
+    v[1] -= (this.realm ? this.realm.grav : 24) * (md.gravity >= 0 && md.gravity != null ? md.gravity : 1) * dt;
     // gadgets that slow your fall: balloon floats, glider glides forward
     if (!b.grounded && input.up && !opts.fly) {
       if (gd.has('balloon') && v[1] < -2.2) v[1] += (-2.2 - v[1]) * Math.min(1, dt * 8);
@@ -196,7 +196,7 @@ class Game {
     for (let dy = 0; dy < 10; dy++) { const y = Math.floor(b.p[1]) - dy, part = this.B.get(fx, y, fz); if (part) { if (part.id === 48 && this.active(pkey(fx, y, fz))) v[1] += (48 - dy * 2.5) * dt; break; } }
     b.airT = b.grounded ? 0 : (b.airT || 0) + dt; b.hopCool = (b.hopCool || 0) - dt;
     if (input.jump && b.hopCool <= 0) {
-      if (b.airT < 0.13 || (depth > -0.1 && depth < 0.6)) { v[1] = opts.superJump || gd.has('spring') ? 13 : gd.has('balloon') ? 11 : 8.8; b.airT = 1; b.hopCool = 0.2; opts.fx('jumped'); }
+      if (b.airT < 0.13 || (depth > -0.1 && depth < 0.6)) { v[1] = (opts.superJump || gd.has('spring') ? 13 : gd.has('balloon') ? 11 : 8.8) * Math.sqrt((md.jump > 0 ? md.jump : 1) * (md.gravity > 0 ? md.gravity : 1)); b.airT = 1; b.hopCool = 0.2; opts.fx('jumped'); }
       else if (gd.has('wings') && !b.wn) { v[1] = Math.max(v[1], 8.5); b.hopCool = 0.32; opts.fx('flap'); } // wings: flap again in the air
       else if (b.wn) { v[1] = Math.max(v[1], 7.5); v[0] += b.wn[0] * 3.5; v[2] += b.wn[2] * 3.5; b.hopCool = 0.35; opts.fx('jumped'); } // hop off steep walls so you never get stuck
     }

@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=6.1">
+<link rel="stylesheet" href="style.css?v=6.4">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -43,8 +43,9 @@
         <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
       </label>
       <button id="playBtn" class="big">Play</button>
+      <button id="serversBtn" class="ghost">Servers</button>
       <p id="menuMsg" class="msg"></p>
-      <p class="ver" id="verLabel">Version 5.5</p>
+      <p class="ver" id="verLabel">Version 6.4</p>
     </div>
     <div id="wardrobe" class="wardrobe">
       <div class="wHead"><b>Wardrobe</b><span id="coinCount" class="coins"></span><button id="wardClose" class="iconBtn hidden">✕</button></div>
@@ -52,6 +53,15 @@
       <div id="wInfo" class="wInfo"></div>
       <div id="wGrid" class="wGrid"></div>
     </div>
+  </div>
+</div>
+
+<div id="srvScreen" class="hidden">
+  <div class="srvBox">
+    <div class="wHead"><b>Servers</b><button id="srvClose" class="iconBtn">✕</button></div>
+    <div id="srvTabs" class="wTabs"><button data-t="public">Public servers</button><button data-t="mine">My servers</button><button data-t="make">Make a server</button></div>
+    <div id="srvBody"></div>
+    <p id="srvMsg" class="msg"></p>
   </div>
 </div>
 
@@ -100,30 +110,32 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
-<script>window.FUNZ_VERSION = '6.1';</script>
+<script>window.FUNZ_VERSION = '6.4';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js?v=6.1"></script>
-<script src="js/device.js?v=6.1"></script>
-<script src="js/gl.js?v=6.1"></script>
+<script src="js/icons.js?v=6.4"></script>
+<script src="js/device.js?v=6.4"></script>
+<script src="js/gl.js?v=6.4"></script>
 <script src="js/lib/three.min.js?v=r147"></script>
 <script src="js/lib/three-post.js?v=r147"></script>
-<script src="js/textures.js?v=6.1"></script>
-<script src="js/gl3.js?v=6.1"></script>
-<script src="js/terrain.js?v=6.1"></script>
-<script src="js/structures.js?v=6.1"></script>
-<script src="js/buildings.js?v=6.1"></script>
-<script src="js/sky.js?v=6.1"></script>
-<script src="js/realms.js?v=6.1"></script>
-<script src="js/parts.js?v=6.1"></script>
-<script src="js/custom.js?v=6.1"></script>
-<script src="js/models.js?v=6.1"></script>
-<script src="js/fx.js?v=6.1"></script>
-<script src="js/sound.js?v=6.1"></script>
-<script src="js/chase.js?v=6.1"></script>
-<script src="js/games.js?v=6.1"></script>
-<script src="js/games2.js?v=6.1"></script>
-<script src="js/game.js?v=6.1"></script>
-<script src="js/net.js?v=6.1"></script>
-<script src="js/app.js?v=6.1"></script>
+<script src="js/textures.js?v=6.4"></script>
+<script src="js/gl3.js?v=6.4"></script>
+<script src="js/terrain.js?v=6.4"></script>
+<script src="js/structures.js?v=6.4"></script>
+<script src="js/buildings.js?v=6.4"></script>
+<script src="js/sky.js?v=6.4"></script>
+<script src="js/realms.js?v=6.4"></script>
+<script src="js/parts.js?v=6.4"></script>
+<script src="js/custom.js?v=6.4"></script>
+<script src="js/models.js?v=6.4"></script>
+<script src="js/fx.js?v=6.4"></script>
+<script src="js/sound.js?v=6.4"></script>
+<script src="js/chase.js?v=6.4"></script>
+<script src="js/games.js?v=6.4"></script>
+<script src="js/games2.js?v=6.4"></script>
+<script src="js/game.js?v=6.4"></script>
+<script src="js/net.js?v=6.4"></script>
+<script src="js/mods.js?v=6.4"></script>
+<script src="js/servers.js?v=6.4"></script>
+<script src="js/app.js?v=6.4"></script>
 </body>
 </html>
