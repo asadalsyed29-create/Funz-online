@@ -261,3 +261,8 @@ body.noBuild #buildBar,body.noBuild #buildToggle{display:none!important}
 #srvScreen .hidden,#srvScreen input.hidden{display:none}
 #srvTabs{flex:none}
 #srvScreen label.srvMod{flex-direction:row;justify-content:flex-start}
+/* accounts */
+.acct{display:flex;flex-direction:column;gap:10px}
+#acctIn{display:flex;flex-direction:column;gap:10px}#acctIn.hidden{display:none}
+.acctRow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.08);padding:8px 10px;border-radius:12px;font-size:14px;text-align:left}
+.acctRow b{color:var(--accent)}

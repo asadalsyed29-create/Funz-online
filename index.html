@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=6.4">
+<link rel="stylesheet" href="style.css?v=6.5">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -39,13 +39,22 @@
       <div class="brand"><img src="icons/icon-192.png" alt="" class="logo"><div><h1>Nautic Online</h1><p class="sub">A massive peaceful world to roll around, explore and hang out in.</p></div></div>
       <div class="stage"><canvas id="avatarPreview" width="360" height="270"></canvas><div id="lookName" class="lookName"></div></div>
       <div id="deviceBadge" class="badge"></div>
-      <label class="nameLbl">Your name
-        <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
-      </label>
-      <button id="playBtn" class="big">Play</button>
-      <button id="serversBtn" class="ghost">Servers</button>
+      <input id="nameInput" type="hidden">
+      <div id="acctOut" class="acct hidden">
+        <div id="acctTabs" class="wTabs"><button data-t="signup">Sign up</button><button data-t="login">Log in</button></div>
+        <p class="hint">Make an account to play. You can log in to it on any device.</p>
+        <label>Username<input id="acctUser" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+        <label>Password<input id="acctPass" type="password" maxlength="200" autocomplete="new-password"></label>
+        <label id="acctPass2Lbl">Password again<input id="acctPass2" type="password" maxlength="200" autocomplete="new-password"></label>
+        <button id="acctGo" class="big">Sign up</button>
+      </div>
+      <div id="acctIn" class="hidden">
+        <div class="acctRow"><span>Logged in as <b id="acctName"></b></span><button id="logoutBtn" class="ghost mini">Log out</button></div>
+        <button id="playBtn" class="big">Play</button>
+        <button id="serversBtn" class="ghost">Servers</button>
+      </div>
       <p id="menuMsg" class="msg"></p>
-      <p class="ver" id="verLabel">Version 6.4</p>
+      <p class="ver" id="verLabel">Version 6.5</p>
     </div>
     <div id="wardrobe" class="wardrobe">
       <div class="wHead"><b>Wardrobe</b><span id="coinCount" class="coins"></span><button id="wardClose" class="iconBtn hidden">✕</button></div>
@@ -110,32 +119,33 @@
   <button id="downBtn" class="hidden"></button>
 </div>
 
-<script>window.FUNZ_VERSION = '6.4';</script>
+<script>window.FUNZ_VERSION = '6.5';</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/icons.js?v=6.4"></script>
-<script src="js/device.js?v=6.4"></script>
-<script src="js/gl.js?v=6.4"></script>
+<script src="js/icons.js?v=6.5"></script>
+<script src="js/device.js?v=6.5"></script>
+<script src="js/gl.js?v=6.5"></script>
 <script src="js/lib/three.min.js?v=r147"></script>
 <script src="js/lib/three-post.js?v=r147"></script>
-<script src="js/textures.js?v=6.4"></script>
-<script src="js/gl3.js?v=6.4"></script>
-<script src="js/terrain.js?v=6.4"></script>
-<script src="js/structures.js?v=6.4"></script>
-<script src="js/buildings.js?v=6.4"></script>
-<script src="js/sky.js?v=6.4"></script>
-<script src="js/realms.js?v=6.4"></script>
-<script src="js/parts.js?v=6.4"></script>
-<script src="js/custom.js?v=6.4"></script>
-<script src="js/models.js?v=6.4"></script>
-<script src="js/fx.js?v=6.4"></script>
-<script src="js/sound.js?v=6.4"></script>
-<script src="js/chase.js?v=6.4"></script>
-<script src="js/games.js?v=6.4"></script>
-<script src="js/games2.js?v=6.4"></script>
-<script src="js/game.js?v=6.4"></script>
-<script src="js/net.js?v=6.4"></script>
-<script src="js/mods.js?v=6.4"></script>
-<script src="js/servers.js?v=6.4"></script>
-<script src="js/app.js?v=6.4"></script>
+<script src="js/textures.js?v=6.5"></script>
+<script src="js/gl3.js?v=6.5"></script>
+<script src="js/terrain.js?v=6.5"></script>
+<script src="js/structures.js?v=6.5"></script>
+<script src="js/buildings.js?v=6.5"></script>
+<script src="js/sky.js?v=6.5"></script>
+<script src="js/realms.js?v=6.5"></script>
+<script src="js/parts.js?v=6.5"></script>
+<script src="js/custom.js?v=6.5"></script>
+<script src="js/models.js?v=6.5"></script>
+<script src="js/fx.js?v=6.5"></script>
+<script src="js/sound.js?v=6.5"></script>
+<script src="js/chase.js?v=6.5"></script>
+<script src="js/games.js?v=6.5"></script>
+<script src="js/games2.js?v=6.5"></script>
+<script src="js/game.js?v=6.5"></script>
+<script src="js/net.js?v=6.5"></script>
+<script src="js/mods.js?v=6.5"></script>
+<script src="js/servers.js?v=6.5"></script>
+<script src="js/accounts.js?v=6.5"></script>
+<script src="js/app.js?v=6.5"></script>
 </body>
 </html>

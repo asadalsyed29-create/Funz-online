@@ -195,7 +195,7 @@
   drawPreview(); renderWardrobe();
   setTimeout(() => adminSign(store.get('pass', ''), 'owner-' + Math.random()).then(sig => {
     OWNER = !!sig; if (!sig && store.get('pass', '')) store.del('pass');
-    if (!OWNER && reservedName(nameInput.value)) nameInput.value = '';
+    if (!OWNER && !Accounts.signedIn() && reservedName(nameInput.value)) nameInput.value = '';
     renderWardrobe(); drawPreview();
   }), 0);
 
@@ -212,13 +212,50 @@
   const cleanName = s => (s || '').replace(/[\u0000-\u001f\u007f<>★]/g, '').trim().slice(0, 16);
   const cleanText = s => (typeof s === 'string' ? s : '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
   const menuMsg = t => { $('menuMsg').textContent = t || ''; };
+  // everyone plays with their account name (the account server makes sure each name has one owner)
   const myName = () => {
-    const n = cleanName(nameInput.value) || 'Explorer' + Math.floor(Math.random() * 900 + 100);
-    if (reservedName(n) && !isOwner()) { menuMsg('That name is special and can\'t be used. Pick another one!'); return null; }
-    const owner = (saved().names || []).find(e => Array.isArray(e) && e[0] === nameKey(n));
-    if (owner && idKey && owner[1] !== idKey.fp) { menuMsg('Someone else already took the name "' + n + '". Pick another one!'); return null; }
-    nameInput.value = n; store.set('name', n); return n;
+    if (!Accounts.signedIn()) { showAccount(); menuMsg('Make an account or log in first.'); return null; }
+    const n = Accounts.name; nameInput.value = n; store.set('name', n); return n;
   };
+
+  // ---------- accounts: sign up / log in ----------
+  let acctTab = 'signup';
+  function showAccount() {
+    const on = Accounts.signedIn();
+    $('acctOut').classList.toggle('hidden', on); $('acctIn').classList.toggle('hidden', !on);
+    if (on) { $('acctName').textContent = Accounts.name; nameInput.value = Accounts.name; }
+    document.querySelectorAll('#acctTabs button').forEach(b => b.classList.toggle('on', b.dataset.t === acctTab));
+    $('acctPass2Lbl').classList.toggle('hidden', acctTab !== 'signup');
+    $('acctPass').autocomplete = acctTab === 'signup' ? 'new-password' : 'current-password';
+    $('acctGo').textContent = acctTab === 'signup' ? 'Sign up' : 'Log in';
+    drawPreview();
+  }
+  document.querySelectorAll('#acctTabs button').forEach(b => { b.onclick = () => { acctTab = b.dataset.t; menuMsg(''); showAccount(); }; });
+  async function accountGo() {
+    const name = $('acctUser').value.trim(), pw = $('acctPass').value;
+    if (!name || !pw) { menuMsg('Type a username and a password.'); return; }
+    let r;
+    $('acctGo').disabled = true; menuMsg(acctTab === 'signup' ? 'Making your account…' : 'Logging in…');
+    if (acctTab === 'signup') {
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) { $('acctGo').disabled = false; menuMsg('Usernames are 3 to 16 letters, numbers or _'); return; }
+      if (pw.length < 6) { $('acctGo').disabled = false; menuMsg('Passwords need at least 6 characters.'); return; }
+      if (pw !== $('acctPass2').value) { $('acctGo').disabled = false; menuMsg('The two passwords are not the same.'); return; }
+      const extra = {};
+      if (reservedName(name)) { const ts = Date.now(), adm = await adminSign(store.get('pass', ''), 'account:' + name.toLowerCase() + ':' + ts); if (adm) { extra.adm = adm; extra.ts = ts; } }
+      r = await Accounts.signup(name, pw, extra);
+    } else r = await Accounts.login(name, pw);
+    $('acctGo').disabled = false;
+    if (r.error) { menuMsg(r.error); return; }
+    $('acctPass').value = ''; $('acctPass2').value = '';
+    menuMsg(acctTab === 'signup' ? 'Your account is ready. Have fun!' : 'Welcome back, ' + Accounts.name + '!');
+    store.set('name', Accounts.name); showAccount();
+  }
+  $('acctGo').onclick = accountGo;
+  ['acctUser', 'acctPass', 'acctPass2'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') accountGo(); }));
+  $('logoutBtn').onclick = () => { Accounts.logout(); acctTab = 'login'; $('acctUser').value = ''; menuMsg('You logged out.'); showAccount(); };
+  if (!Accounts.signedIn() && store.get('account.had', '')) acctTab = 'login';
+  showAccount();
+  Accounts.refresh().then(r => { if (r && r.out) { acctTab = 'login'; menuMsg('Please log in again.'); } if (Accounts.signedIn()) store.set('account.had', '1'); showAccount(); });
 
   $('chatToggle').innerHTML = icon('chat', 22);
   $('emoteToggle').innerHTML = icon('smile', 22);
@@ -481,13 +518,15 @@
     try { role = await Net.connect(G.server ? Servers.worldId(G.server.id) : null); } catch (e) { role = 'offline'; }
     if (!G) { Net.leave(); return; }
     G.role = role; G.lastHeard = performance.now();
-    if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' }); return; }
+    if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, acct: Accounts.ticket, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' }); return; }
     if (G.server) { G.server = Servers.put(Object.assign({}, G.server, { seen: Date.now() })); startMods(); }
     G.myId = 'keeper'; G.me.id = 'keeper';
     G.players.clear(); G.players.set('keeper', G.me);
     G.me.admin = !!(await adminSign(store.get('pass', ''), 'self-' + Math.random()));
-    if (G.me.admin) await refreshProof(); else { G.me.proof = null; if (reservedName(G.me.name)) G.me.name = G.profile.name = randomName(); }
-    { const k = await myIdentity(), key = nameKey(G.me.name), owner = G.names.get(key);
+    const myAcct = await Accounts.verify(Accounts.ticket), acctOk = !!myAcct && nameKey(myAcct) === nameKey(G.me.name);
+    G.me.acct = acctOk ? Accounts.ticket : '';
+    if (G.me.admin) await refreshProof(); else { G.me.proof = null; if (reservedName(G.me.name) && !acctOk) G.me.name = G.profile.name = randomName(); }
+    if (!acctOk) { const k = await myIdentity(), key = nameKey(G.me.name), owner = G.names.get(key);
       if (!G.me.admin && owner && owner !== k.fp) { const was = G.me.name; G.me.name = G.profile.name = randomName(); setTimeout(() => sys('The name "' + was + '" already belongs to another player, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1500); }
       else if (!owner && !isRandomName(G.me.name) && k.fp && !reservedName(G.me.name)) { G.names.set(key, k.fp); G.dirty = true; } }
     if (first) enterGame();
@@ -564,7 +603,7 @@
     if (list.length >= per) { G.rate.set(k, list); return false; }
     list.push(now); G.rate.set(k, list); return true;
   }
-  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, gadget: p.gadget, og: p.og || [], dev: p.dev, devType: p.devType, admin: !!p.admin, proof: p.admin ? p.proof || null : null, pt: p.admin ? p.pt || 0 : 0, p: p.p.map(v => +v.toFixed(2)) });
+  const publicP = p => ({ id: p.id, name: p.name, color: p.color, color2: p.color2, skin: p.skin, hat: p.hat, trail: p.trail, gadget: p.gadget, og: p.og || [], dev: p.dev, devType: p.devType, admin: !!p.admin, acct: p.acct || '', proof: p.admin ? p.proof || null : null, pt: p.admin ? p.pt || 0 : 0, p: p.p.map(v => +v.toFixed(2)) });
   const okLook = (kind, v, admin) => (kind === 'color' || kind === 'color2' ? COLORS.includes(v) : !!LOOK_KINDS[kind][v]) && (admin || !ownerOnly(kind, v));
   const cleanLook = (m, admin) => ({ color: okLook('color', m.color, admin) ? m.color : COLORS[0], color2: okLook('color2', m.color2, admin) ? m.color2 : '#e8eef7', skin: okLook('skin', m.skin, admin) ? m.skin : 'plain', hat: okLook('hat', m.hat, admin) ? m.hat : 'none', trail: okLook('trail', m.trail, admin) ? m.trail : 'none', gadget: GADGETS[m.gadget] ? m.gadget : 'none', og: admin && Array.isArray(m.og) ? m.og.filter(k => OWNER_GADGETS[k]).slice(0, 5) : [] });
   const roster = () => [...G.players.values()].map(publicP);
@@ -588,7 +627,7 @@
     if (G && proof) { G.me.proof = proof; G.me.pt = t; }
   }
   setInterval(() => { if (G && G.role === 'keeper' && G.me.admin) refreshProof().then(() => { if (G && G.role === 'keeper') Net.toAll({ t: 'roster', roster: roster() }); }); }, 90 * 1000);
-  const proofOk = new Map();
+  const proofOk = new Map(), acctSeen = new Map();
   const proofMsg = r => r.id === 'keeper' ? 'admin:keeper:' + (+r.pt || 0) : 'admin:' + r.id;
   const fakeName = id => 'Explorer' + (1000 + [...String(id)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 9000, 7));
   function applyRoster(p, r) {
@@ -596,7 +635,9 @@
     const fresh = r.id !== 'keeper' || Math.abs(Date.now() - (+r.pt || 0)) < 15 * 60 * 1000;
     const vk = claim ? proofMsg(r) + '|' + r.proof : '', ok = claim && fresh && proofOk.get(vk) === true;
     const name = cleanName(r.name) || fakeName(r.id);
-    Object.assign(p, cleanLook(r, ok), { admin: ok, name: !ok && reservedName(name) ? fakeName(r.id) : name, dev: cleanText(r.dev).slice(0, 40), devType: r.devType });
+    const acct = typeof r.acct === 'string' ? r.acct : '', aok = !!acct && acctSeen.get(acct) === nameKey(name);
+    if (acct && !acctSeen.has(acct) && reservedName(name)) { acctSeen.set(acct, "wait"); Accounts.verify(acct).then(n => { acctSeen.set(acct, n ? nameKey(n) : ''); const q = G && G.players.get(r.id); if (n && q && q !== G.me) { applyRoster(q, r); renderPeople(); } }); }
+    Object.assign(p, cleanLook(r, ok), { acct, admin: ok, name: !ok && !aok && reservedName(name) ? fakeName(r.id) : name, dev: cleanText(r.dev).slice(0, 40), devType: r.devType });
     if (claim && fresh && !proofOk.has(vk)) {
       proofOk.set(vk, 'wait');
       adminVerify(proofMsg(r), r.proof).then(v => { proofOk.set(vk, v); const q = G && G.players.get(r.id); if (v && q && q !== G.me) { applyRoster(q, r); renderPeople(); } });
@@ -611,7 +652,7 @@
       if (G.server && G.server.vis === 'private' && G.server.pw && m.pwh !== G.server.pw) { Net.toOne(id, { t: 'badpw' }); Net.drop(id); return; }
       G.pending.add(id);
       const pub = m.pub && typeof m.pub.x === 'string' && typeof m.pub.y === 'string' && m.pub.x.length < 60 && m.pub.y.length < 60 ? { x: m.pub.x, y: m.pub.y } : null;
-      (pub ? fingerprint(pub).catch(() => '') : Promise.resolve('')).then(fp => { if (!G) return; G.pending.delete(id); if (!G.players.get(id)) welcome(id, m, pub, fp); });
+      Promise.all([pub ? fingerprint(pub).catch(() => '') : '', Accounts.verify(m.acct)]).then(([fp, acct]) => { if (!G) return; G.pending.delete(id); if (!G.players.get(id)) welcome(id, m, pub, fp, acct); });
       return;
     }
     if (!p) return;
@@ -620,7 +661,7 @@
       if (!nonce || typeof m.sig !== 'string' || !p.pub) return;
       idVerify(p.pub, 'id:' + nonce, m.sig).then(ok => {
         if (!G || G.players.get(id) !== p) return;
-        if (ok) { p.idOk = true; const key = nameKey(p.name); if (!G.names.has(key) && !isRandomName(p.name) && !reservedName(p.name)) { G.names.set(key, p.fp); G.dirty = true; Net.toAll({ t: 'names', add: [[key, p.fp]] }); } }
+        if (ok) { p.idOk = true; if (p.acct) return; const key = nameKey(p.name); if (!G.names.has(key) && !isRandomName(p.name) && !reservedName(p.name)) { G.names.set(key, p.fp); G.dirty = true; Net.toAll({ t: 'names', add: [[key, p.fp]] }); } }
         else renamePlayer(p, 'The name check failed');
       });
       return;
@@ -674,18 +715,20 @@
     }
   }
 
-  function welcome(id, m, pub, fp) {
+  function welcome(id, m, pub, fp, acctName) {
     const wantName = cleanName(m.name) || randomName();
+    // a name with a real account ticket belongs to that player, on any device
+    const acctOk = !!acctName && nameKey(acctName) === nameKey(wantName);
     const ban = G.kicked.get(wantName.toLowerCase());
     if (G.bans.has(wantName.toLowerCase())) { Net.toOne(id, { t: 'banned' }); Net.drop(id); return; }
     if (ban && ban > Date.now()) { Net.toOne(id, { t: 'kicked' }); Net.drop(id); return; }
     if (G.players.size >= MAX_PLAYERS) { Net.toOne(id, { t: 'full' }); Net.drop(id); return; }
     // the name: the owner's special name, a name someone else owns, or a name someone here is using right now
-    let name = reservedName(wantName) ? randomName() : wantName, renamed = null;
-    const key = nameKey(name), owner = G.names.get(key), online = [...G.players.values()].some(q => nameKey(q.name) === key);
+    let name = reservedName(wantName) && !acctOk ? randomName() : wantName, renamed = null;
+    const key = nameKey(name), owner = acctOk ? null : G.names.get(key), online = [...G.players.values()].some(q => nameKey(q.name) === key);
     if ((owner && owner !== fp) || online) { renamed = name; name = randomName(); }
     const pos = vec(m.p);
-    const np = addPlayer({ id, name, wantName, ...cleanLook(m, false), wantLook: cleanLook(m, true), pub, fp,
+    const np = addPlayer({ id, name, wantName, ...cleanLook(m, false), wantLook: cleanLook(m, true), pub, fp, acct: acctOk && name === wantName ? m.acct : '',
       dev: cleanText(m.dev).slice(0, 40), devType: ['phone', 'tablet', 'computer'].includes(m.devType) ? m.devType : '',
       p: okVec(pos) ? pos : defaultSpawn() });
     const nonce = Math.random().toString(36).slice(2) + Date.now(); G.nonces.set(id, nonce); G.nonces.set('id' + id, nonce);
