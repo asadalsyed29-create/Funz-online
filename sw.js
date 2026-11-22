@@ -1,7 +1,7 @@
 // Lets Funz Online install and open even with a weak connection.
-const VERSION = '6.1';
+const VERSION = '6.2';
 const CACHE = 'funz-online-' + VERSION;
-const FILES = ['./', 'index.html', 'style.css', 'manifest.webmanifest',
+const FILES = ['./', 'index.html', 'style.css', 
   'js/icons.js', 'js/device.js', 'js/gl.js', 'js/lib/three.min.js', 'js/lib/three-post.js', 'js/textures.js', 'js/gl3.js', 'js/terrain.js', 'js/structures.js', 'js/buildings.js', 'js/sky.js', 'js/realms.js', 'js/parts.js', 'js/custom.js', 'js/models.js', 'js/fx.js', 'js/sound.js', 'js/chase.js', 'js/games.js', 'js/games2.js', 'js/game.js', 'js/net.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon.png',
   'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
@@ -10,7 +10,7 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled(FILES.map(f => c.add(new Request(f, { cache: 'reload' }))))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('funz-online-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 // Always ask the server for the newest files first (so updates show up right away),
 // and fall back to the saved copy when there's no connection.

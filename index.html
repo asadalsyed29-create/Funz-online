@@ -10,7 +10,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Funz Online">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css?v=6.1">
@@ -25,11 +24,11 @@
   <div class="gBox">
     <img src="icons/icon-192.png" alt="" class="gLogo">
     <h1>Funz Online</h1>
-    <p class="gSub">Install the app to play! It's free, opens full screen and runs smoother.</p>
-    <button id="gateInstall" class="big">⬇ Install Funz Online</button>
+    <p class="gSub">Funz Online is played in UltraNautic Hub. It's free, opens full screen and runs smoother.</p>
+    <button id="gateInstall" class="big">Open UltraNautic Hub</button>
     <ol id="gateIos" class="gSteps hidden"><li>Tap the <b>Share</b> button <span class="gIc">⬆</span> at the bottom of Safari</li><li>Tap <b>Add to Home Screen</b></li><li>Open <b>Funz Online</b> from your home screen</li></ol>
     <ol id="gateSteps" class="gSteps hidden"></ol>
-    <p id="gateMsg" class="gMsg">Getting the app ready…</p>
+    <p id="gateMsg" class="gMsg"></p>
     <button id="gateBrowser" class="gLink hidden">Can't install? Play in the browser</button>
   </div>
 </div>
@@ -44,8 +43,6 @@
         <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
       </label>
       <button id="playBtn" class="big">Play</button>
-      <button id="installBtn" class="ghost hidden">Install Funz Online</button>
-      <p id="iosHint" class="hint hidden">To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
       <p id="menuMsg" class="msg"></p>
       <p class="ver" id="verLabel">Version 5.5</p>
     </div>
