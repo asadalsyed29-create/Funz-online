@@ -44,7 +44,8 @@ vec3 texDet(vec3 c,inout vec3 n,float dist){
   vec3 W=vW;vec3 w=pow(abs(n),vec3(4.0));w/=(w.x+w.y+w.z);
   float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b)),sat=(mx-mn)/(mx+0.001);
   vec4 t=vec4(0.5,0.5,0.5,0.5);float bk=1.0;B=vec3(0.0);
-  if(uTex<1.5){
+  if(uTex>9.5){float L=uTex-10.0;t=tpl(L,W,w,L<0.5?0.42:L<1.5?0.28:L<2.5?0.3:L<3.5?0.2:L<4.5?0.6:L<5.5?0.5:L<6.5?0.45:L<7.5?0.42:L<8.5?0.3:L<9.5?0.5:L<10.5?0.4:0.35);
+  }else if(uTex<1.5){
     float wSnow=smoothstep(0.8,0.9,mn);
     float wSand=smoothstep(0.1,0.22,c.r-c.b)*smoothstep(0.6,0.75,c.r)*(1.0-wSnow);
     float wGrass=smoothstep(0.04,0.14,c.g-max(c.r,c.b))*(1.0-wSand);

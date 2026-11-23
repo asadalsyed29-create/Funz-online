@@ -266,6 +266,8 @@ class Game {
       else for (const t of sh.tris) this.push(b, closestOnTri(p, t[0], t[1], t[2]), info);
       if (dynamic && b.ground && b.ground.k === k) { const prev = b.lastOff && b.lastOff.k === k ? b.lastOff.o : off; b.carry = [off[0] - prev[0], 0, off[2] - prev[2]]; b.lastOff = { k, o: off }; }
     }
+    // parts from mods (see modkit.js)
+    if (this.mods && !this.realm && !this.cave) this.mods.collide(b, (bb, q) => this.push(bb, q, null), closestOnTri);
   }
   machines(b, opts) {
     const g = b.ground; if (!g) return;
@@ -560,6 +562,7 @@ class Game {
     for (const s of this.St.list.values()) if (s) for (const l of s.lights) addL(l.p, l.r, l.c);
     if (this.cave) for (const l of this.cave.lights) addL(l.p, l.r, l.c);
     if (RL) for (const l of RL.lights) addL(l.p, l.r, l.c);
+    if (this.mods && !this.under) for (const l of this.mods.lights()) addL(l.p, l.r, l.c);
     for (const [kk, part] of this.B.parts) if (part.id === 60 && this.active(kk)) { const [x, y, z] = unkey(kk); addL([x + 0.5, y + 0.6, z + 0.5], 9, [1, 0.85, 0.5]); }
     for (const p of players) if (p.glow) addL([p.p[0], p.p[1] + 0.4, p.p[2]], 10, [0.5, 0.85, 1]);
     if (this.cave) addL([me.p[0], me.p[1] + 1.2, me.p[2]], 10, [0.6, 0.55, 0.45]);
@@ -671,6 +674,7 @@ class Game {
     if (this.sky && !this.under) this.sky.draw(G, t, me);
     if (this.pier) this.pier.draw(G, t, me);
     if (this.arena) this.arena.draw(G, t, players);
+    if (this.mods) { G.mat(0, 0.12, 0.3); this.mods.draw(G, t, false); G.mat(1, 0.35, 0.45); }
     this.stat('creatures');
     // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
     const clear = [];
@@ -728,6 +732,7 @@ class Game {
     G.mat(0, 0.1, 0.3); G.tex(0);
     if (RL && RL.lake) G.draw(RL.lake, null, 1, null, 0.8);
     for (const pc of this.partChunks.values()) G.draw(pc.clear);
+    if (this.mods) { this.mods.draw(G, t, true); G.mat(0, 0.1, 0.3); G.tex(0); }
     for (const [M, sk, A, B] of clear) G.ball(M, sk, A, B);
     if (this.sky && !this.under) { this.sky.drawClear(G, t, me); G.mat(0, 0.1, 0.3); }
     if (o.cursor) G.draw(this.cursorM, M4.model(o.cursor.cell), 1, o.cursor.ok ? [1, 1, 1] : [1, 0.3, 0.3], 1);
@@ -765,6 +770,8 @@ class Game {
     } else if (this.realm) sign(this.realm.exit[0], this.realm.exit[1] + 2.6, this.realm.exit[2], 'Way back', '#ffc45a', 60);
     else sign(this.cave.exit[0], this.cave.exit[1] + 2.4, this.cave.exit[2], 'Way out', '#ffc45a', 40);
     if (o.wireFrom) { const [x, y, z] = o.wireFrom; const s = this.project(x + 0.5, y + 1.2, z + 0.5); if (s) { g.font = '700 12px system-ui'; g.fillStyle = '#ff8a5a'; g.fillText('wire from here', s[0], s[1]); } }
+    if (this.mods) this.mods.overlay(g, (x, y, z) => this.project(x, y, z));
+    if (this.editor) return;
     this.drawCompass(g, me);
     this.drawMinimap(g, players, me);
   }

@@ -115,8 +115,10 @@ class FunPark {
           b.v = [-Math.sin(yaw) * pw, 0, -Math.cos(yaw) * pw]; b.boostT = 0.3; this.charging = false; this.charge = 0; this.rolling = true; this.rollT = 0;
           if (this.mode === 'golf') this.strokes++; Sound.play('jump');
         }
-        if (this.mode === 'golf') { const h = GOLF_HOLES[this.hole]; b.p = this.W(this.at[0], 0.5, this.at[1]); b.v = [0, 0, 0]; }
-        else { b.p = this.W(BOWL.x0 + 1.2, 0.5, this.at[1]); b.v = [0, 0, 0]; }
+        if (!this.rolling) { // still aiming: hold the ball at the start spot (not in the frame it was shot)
+          if (this.mode === 'golf') { b.p = this.W(this.at[0], 0.5, this.at[1]); b.v = [0, 0, 0]; }
+          else { b.p = this.W(BOWL.x0 + 1.2, 0.5, this.at[1]); b.v = [0, 0, 0]; }
+        }
       } else {
         this.rollT += dt;
         if (this.mode === 'golf') {

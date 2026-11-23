@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Mod Editor · Nautic Online</title>
+<meta name="theme-color" content="#26282f">
+<link rel="icon" type="image/png" href="../icons/favicon.png">
+<link rel="stylesheet" href="editor.css?v=1">
+</head>
+<body>
+<div id="rotate"><b>Turn your phone sideways</b><span>The Mod Editor works in landscape mode</span></div>
+<div id="app">
+  <div id="top">
+    <button id="bMods" title="My mods"></button>
+    <span id="modName"></span><span id="saveState"></span>
+    <span class="sep"></span>
+    <button id="bLeft" title="Show or hide the left panel"></button>
+    <button id="bUndo" title="Undo (Ctrl+Z)"></button><button id="bRedo" title="Redo (Ctrl+Y)"></button>
+    <span class="sep"></span>
+    <div class="grp" id="tools"></div>
+    <button id="bSnap" title="Snap to grid"></button>
+    <span class="sep"></span>
+    <button id="bTime" title="Time of day"></button>
+    <button id="bCode" title="Main code of the mod"></button>
+    <button id="bRun" title="Run the code here in the editor"></button>
+    <button id="bTest" class="pri" title="Play the mod in Nautic Online"></button>
+    <button id="bRight" title="Show or hide the properties"></button>
+  </div>
+  <div id="left">
+    <div class="tabs" id="ltabs"><button data-t="add" class="on">Add</button><button data-t="explorer">Explorer</button><button data-t="map">Map</button></div>
+    <div class="pane" id="pAdd"></div>
+    <div class="pane hidden" id="pExplorer"><div class="tree" id="tree"></div></div>
+    <div class="acts hidden" id="treeActs"></div>
+    <div class="pane hidden" id="pMap"></div>
+  </div>
+  <div id="view">
+    <canvas id="game"></canvas><canvas id="ov"></canvas><canvas id="gz"></canvas>
+    <div id="viewTools"></div>
+    <div id="hint"></div>
+    <div id="banner" class="hidden"></div>
+    <div id="toast" class="hidden"></div>
+    <div id="code" class="hidden">
+      <div class="chead"><b id="codeTitle"></b><button id="codeHelp">Commands</button><button id="codeClose"></button></div>
+      <div class="cbody">
+        <div class="ed"><div class="gut" id="gut"></div><div class="edw"><pre id="hl"></pre><textarea id="ta" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea></div></div>
+        <div class="side" id="cside"><div class="pane" id="cmdList"></div></div>
+      </div>
+      <div id="sugg"></div>
+      <div id="errs"></div>
+    </div>
+    <div id="loading"><span>Loading the Nautic Online world…</span><div class="bar"><i></i></div></div>
+  </div>
+  <div id="right"><div class="tabs"><button class="on">Properties</button></div><div class="pane" id="props"></div></div>
+</div>
+<div id="mods" class="hidden">
+  <div class="mhead"><div class="tabs" id="mtabs" style="border:0"><button data-t="mine" class="on">My mods</button><button data-t="gallery">Mod Gallery</button></div><b></b><button id="mNew" class="pri"></button><button id="mImport"></button><button id="mClose"></button></div>
+  <div id="modList"></div>
+  <input type="file" id="fileIn" accept=".nmod,.json,application/json" class="hidden">
+</div>
+<script>window.FUNZ_VERSION = '6.7';</script>
+<script src="../js/icons.js?v=6.7"></script>
+<script src="../js/device.js?v=6.7"></script>
+<script src="../js/gl.js?v=6.7"></script>
+<script src="../js/lib/three.min.js?v=r147"></script>
+<script src="../js/lib/three-post.js?v=r147"></script>
+<script src="../js/textures.js?v=6.7"></script>
+<script src="../js/gl3.js?v=6.7"></script>
+<script src="../js/terrain.js?v=6.7"></script>
+<script src="../js/structures.js?v=6.7"></script>
+<script src="../js/buildings.js?v=6.7"></script>
+<script src="../js/sky.js?v=6.7"></script>
+<script src="../js/realms.js?v=6.7"></script>
+<script src="../js/parts.js?v=6.7"></script>
+<script src="../js/custom.js?v=6.7"></script>
+<script src="../js/models.js?v=6.7"></script>
+<script src="../js/fx.js?v=6.7"></script>
+<script src="../js/sound.js?v=6.7"></script>
+<script src="../js/chase.js?v=6.7"></script>
+<script src="../js/games.js?v=6.7"></script>
+<script src="../js/games2.js?v=6.7"></script>
+<script src="../js/game.js?v=6.7"></script>
+<script src="../js/modkit.js?v=6.7"></script>
+<script src="editor.js?v=1"></script>
+</body>
+</html>
