@@ -16,7 +16,7 @@ const Servers = (() => {
   function clean(s) {
     if (!s || typeof s !== 'object' || typeof s.id !== 'string' || !/^[a-z0-9]{6,16}$/.test(s.id)) return null;
     return { id: s.id, name: String(s.name || 'Server').replace(/[<>]/g, '').slice(0, 30), vis: ['public', 'link', 'private'].includes(s.vis) ? s.vis : 'link',
-      pw: typeof s.pw === 'string' ? s.pw.slice(0, 64) : '', mods: (Array.isArray(s.mods) ? s.mods : []).slice(0, 20).map(NMods.clean),
+      pw: typeof s.pw === 'string' ? s.pw.slice(0, 64) : '', mods: [], // mods were removed (2026-11-23): old servers and links play with none
       made: +s.made || Date.now(), owner: String(s.owner || '').slice(0, 40) };
   }
 

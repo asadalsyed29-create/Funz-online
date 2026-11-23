@@ -333,15 +333,11 @@
     for (const [v, t] of [['public', 'Public'], ['link', 'Link only'], ['private', 'Private']]) { const b = el('button', v === vis ? 'on' : '', t); b.onclick = () => { vis = v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); pwi.classList.toggle('hidden', v !== 'private'); visNote.textContent = VN[v]; }; seg.append(b); }
     const VN = { public: 'Shows in the server list for everyone.', link: 'Not in the list. Anyone with the link can join.', private: 'Not in the list. People need the link and the password.' };
     const visNote = el('p', 'srvNote', VN[vis]); body.append(seg, visNote, pwi);
-    body.append(el('label', 'srvLbl', 'Mods'));
-    const mods = NMods.installed(), picked = new Set();
-    if (!mods.length) body.append(el('p', 'srvNote', 'No Nautic Online mods installed yet. Install some in the Mods tab of UltraNautic Hub.'));
-    for (const m of mods) { const r = el('label', 'srvMod'); const c = el('input'); c.type = 'checkbox'; c.onchange = () => c.checked ? picked.add(m.id) : picked.delete(m.id); r.append(c, el('span', '', m.name)); body.append(r); }
     const make = el('button', 'big', 'Make server');
     make.onclick = async () => {
       const name = ni.value.trim().replace(/[<>]/g, '') || 'My server'; if (vis === 'private' && pwi.value.length < 3) { srvMsg('Pick a password with at least 3 letters.'); return; }
       const id = Servers.newId(), pw = vis === 'private' ? await Servers.hash(pwi.value) : '';
-      const sv = Servers.clean({ id, name, vis, pw, made: Date.now(), owner: (await myIdentity()).fp, mods: mods.filter(m => picked.has(m.id)) });
+      const sv = Servers.clean({ id, name, vis, pw, made: Date.now(), owner: (await myIdentity()).fp, mods: [] });
       sv.pwh = pw; Servers.put(sv); copyLink(sv, true); $('srvScreen').classList.add('hidden'); play(sv);
     };
     body.append(make);
