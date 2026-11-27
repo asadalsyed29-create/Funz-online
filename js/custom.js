@@ -65,6 +65,8 @@ const OWNER_GADGETS = {
 };
 
 // Quests: stat is counted by the game; when it reaches goal you get the coins and anything locked behind the quest.
+// the grind is easier on the beta: every coin you earn counts three times
+function coinsX(n) { return Math.round(n * (typeof window !== 'undefined' && window.NAUTIC_BETA ? 3 : 1)); }
 const QUESTS = [
   { id: 'roll', name: 'First roll', desc: 'Roll 300 metres', stat: 'dist', goal: 300, coins: 20 },
   { id: 'far', name: 'World traveller', desc: 'Roll 10 kilometres', stat: 'dist', goal: 10000, coins: 100 },
@@ -140,12 +142,12 @@ class Progress {
   mark(set, key) { const s = this.sets[set] || (this.sets[set] = {}); if (s[key]) return false; s[key] = 1; this.dirty = true; return true; }
   has(set, key) { return !!(this.sets[set] && this.sets[set][key]); }
   count(set) { return this.sets[set] ? Object.keys(this.sets[set]).length : 0; }
-  give(n) { this.coins += n; this.dirty = true; }
+  give(n) { this.coins += coinsX(n); this.dirty = true; }
   value(q) { return q.stat === 'biomes' || q.stat === 'places' || q.stat === 'kinds' || q.stat === 'ways' || q.stat === 'chests' ? this.count(q.stat) : (this.stats[q.stat] || 0); }
   // returns the quests that were just finished
   check() {
     const out = [];
-    for (const q of QUESTS) if (!this.done[q.id] && this.value(q) >= q.goal) { this.done[q.id] = 1; this.coins += q.coins; this.dirty = true; out.push(q); }
+    for (const q of QUESTS) if (!this.done[q.id] && this.value(q) >= q.goal) { this.done[q.id] = 1; this.coins += coinsX(q.coins); this.dirty = true; out.push(q); }
     return out;
   }
   unlocks(questId) { // what a quest unlocks, as words

@@ -164,7 +164,7 @@
   $('wardBtn').onclick = () => { if ($('wardrobe').classList.contains('hidden') || $('wardrobe').parentElement.id !== 'hud') openWardrobe(true); else openWardrobe(false); };
   function wInfo(t) { const L = myLook(); $('wInfo').textContent = t || ('Wearing: ' + SKINS[L.skin].name + ' skin · ' + HATS[L.hat].name + (L.hat === 'none' ? ' hat' : '') + ' · ' + TRAILS[L.trail].name + (L.trail === 'none' ? ' trail' : ' trail')); }
   function wear(kind, id) {
-    if (kind !== 'og') { look[kind] = id; store.set(kind, id); } renderWardrobe(); drawPreview(); if (G) $('shipBtn').classList.toggle('hidden', !myLook().og.includes('ship'));
+    if (kind !== 'og') { look[kind] = id; store.set(kind, id); } renderWardrobe(); drawPreview(); if (G) $('shipBtn').classList.toggle('hidden', !window.NAUTIC_BETA && !myLook().og.includes('ship'));
     if (G) { const L = myLook(); Object.assign(G.me, L); Object.assign(G.profile, L); if (G.role === 'guest') Net.toKeeper({ t: 'look', ...L }); else renderPeople(); }
   }
 
@@ -232,7 +232,7 @@
   $('nailBtn').onclick = () => toggleNail();
   $('wardClose').innerHTML = icon('close', 18); $('bagClose').innerHTML = icon('close', 18);
   $('gateInstall').textContent = 'Open UltraNautic Hub'; document.querySelectorAll('#gateIos .gIc').forEach(e => { e.innerHTML = icon('share', 16); });
-  $('shipBtn').onclick = () => toggleShip();
+  $('shipBtn').onclick = () => { if (window.NAUTIC_BETA && !(G && G.ship && G.ship.st === 'fly')) { if (typeof openHangar === 'function') openHangar(); } else toggleShip(); };
 
   // ---------- new buttons (only on the beta account for now): map, friends, photo mode, settings ----------
   const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
@@ -242,11 +242,14 @@
     document.body.classList.toggle('photo', on);
     if (on) { BigMap.close(); Extra.closeAll(); const h = $('photoHint'); h.classList.remove('hidden'); clearTimeout(Extra.hintT); Extra.hintT = setTimeout(() => h.classList.add('hidden'), 2200); }
   };
+  let spaceTravel = null;
   if (window.NAUTIC_BETA) {
+    document.body.classList.add('beta');
     const col = document.createElement('div'); col.id = 'sideBtns2';
     col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button><button id="updBtn" title="Updates"></button>';
+    const sb = document.createElement('div'); sb.id = 'shipBtns'; sb.innerHTML = '<button id="unbuckleBtn" class="hidden" title="Unbuckle (U)"></button><button id="decoBtn" class="hidden" title="Decorate"></button><button id="stBtn" class="hidden" title="Build in space"></button>'; $('hud').appendChild(sb);
     if (Device.useTouch) { $('quick').append(...col.children); } else $('hud').appendChild(col); // on phones they join the round buttons at the top
-    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22); $('updBtn').innerHTML = icon('news', 22);
+    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22); $('updBtn').innerHTML = icon('news', 22); $('unbuckleBtn').innerHTML = icon('seat', 20) + '<span>Unbuckle</span>'; $('decoBtn').innerHTML = icon('sofa', 20) + '<span>Decorate</span>'; $('stBtn').innerHTML = icon('build', 20) + '<span>Build station</span>';
     const hint = document.createElement('div'); hint.id = 'photoHint'; hint.className = 'hidden'; hint.textContent = 'Photo mode: drag to look around, tap to bring the buttons back'; document.body.appendChild(hint);
     const panel = (id, title) => { const b = document.createElement('div'); b.id = id; b.className = 'xPanel hidden'; b.innerHTML = '<div class="aHead"><b>' + title + '</b><button class="iconBtn">' + icon('close', 18) + '</button></div><div class="xBody"></div>'; b.querySelector('.iconBtn').onclick = () => b.classList.add('hidden'); $('hud').appendChild(b); return b; };
     const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings'), uBox = panel('updBox', 'Updates');
@@ -257,6 +260,7 @@
       if (wp) { let n = 0; const t = setInterval(() => { n++; if (G && G.game && G.body && ((G.region || 'berekor') === id)) { clearInterval(t); setTimeout(() => { if (!G || !G.game) return; const T = G.game.T; G.body.p = [wp.x, Math.max(T.ground(wp.x, wp.z), SEA) + 2.5, wp.z]; G.body.v = [0, 0, 0]; Sound.play('tp'); }, 1500); } else if (n > 80) clearInterval(t); }, 250); }
       return true;
     };
+    spaceTravel = travel;
     BigMap.init({ travel, region: () => (G && G.region) || 'berekor', game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500),
       teleport: (x, z) => { if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can teleport again when this game is over', 2000); return false; } const T = G.game.T; G.body.p = [x, Math.max(T.ground(x, z), SEA) + 2.5, z]; G.body.v = [0, 0, 0]; G.game.cave = null; G.body.caveLock = null; G.game.waypoint = null; Sound.play('tp'); showToast('Teleported to your waypoint', 1500); return true; } });
     setTimeout(() => BigMap.preload(), 4000);
@@ -317,6 +321,102 @@
       try { localStorage.setItem('nautic.updSeen', NAUTIC_UPDATES[0].name); } catch (e) {} updDot();
     };
     $('updBtn').onclick = () => { if (show(uBox)) renderUpd(); };
+    // ---------- the hangar: pick a ship to call, or buy one with coins ----------
+    const hBox = panel('hangarBox', 'Ships'); hBox.classList.add('wide');
+    let hTier = 0;
+    const ownsShip = id => isOwner() || !!(prog.own.ship || {})[id];
+    const shipPic = (cv, S) => { // a little drawn picture of the ship from above
+      const g = cv.getContext('2d'), w = cv.width, h = cv.height; g.clearRect(0, 0, w, h); g.save(); g.translate(w / 2, h / 2); g.rotate(-Math.PI / 2); g.lineJoin = 'round'; g.lineWidth = 2; g.strokeStyle = '#11141c';
+      const k = w / 9, P = pts => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k)); g.closePath(); }, E = (x, y, rx, ry) => { g.beginPath(); g.ellipse(x * k, y * k, rx * k, ry * k, 0, 0, 7); };
+      const sh = S.shape, body = () => { g.fillStyle = S.c1; g.fill(); g.stroke(); }, sec = () => { g.fillStyle = S.c2; g.fill(); g.stroke(); };
+      if (sh === 'dart' || sh === 'needle') { P([[3.6, 0], [1, 2.6], [-0.4, 2.6], [0.6, 0.8], [-3, 0.6], [-3, -0.6], [0.6, -0.8], [-0.4, -2.6], [1, -2.6]]); sec(); E(0.4, 0, 3.4, sh === 'needle' ? 0.5 : 0.8); body(); }
+      else if (sh === 'pod' || sh === 'beetle') { E(-0.2, 1.3, 1.2, 0.5); sec(); E(-0.2, -1.3, 1.2, 0.5); sec(); E(0, 0, 2.8, 1.3); body(); if (sh === 'beetle') { g.beginPath(); g.moveTo(-2.6, 0); g.lineTo(2, 0); g.stroke(); } }
+      else if (sh === 'manta') { E(0, 0, 2.2, 3.4); sec(); E(0, 0, 2, 1.4); body(); g.beginPath(); g.moveTo(-2, 0); g.lineTo(-4, 0); g.stroke(); }
+      else if (sh === 'saucer') { E(0, 0, 3.2, 3.2); body(); E(0, 0, 1.3, 1.3); g.fillStyle = '#7ad8ff'; g.fill(); g.stroke(); }
+      else if (sh === 'ring') { E(0, 0, 3.2, 3.2); body(); E(0, 0, 2.4, 2.4); g.fillStyle = '#1a2230'; g.fill(); g.stroke(); E(0, 0, 1.4, 0.8); sec(); }
+      else if (sh === 'wedge') { P([[3.6, 0], [-2.6, 2.6], [-2, 0], [-2.6, -2.6]]); body(); P([[1.4, 0], [-1.6, 0.9], [-1.6, -0.9]]); sec(); }
+      else if (sh === 'block') { P([[3.4, 1.1], [3.4, -1.1], [-3, -1.5], [-3, 1.5]]); body(); for (let q = 0; q < 4; q++) { g.fillStyle = S.c2; g.fillRect((-2.6 + q * 1.2) * k, -0.8 * k, 0.8 * k, 1.6 * k); } }
+      else if (sh === 'whale') { E(0, 0, 3.8, 1.6); body(); E(0, 1.9, 1.1, 0.5); sec(); E(0, -1.9, 1.1, 0.5); sec(); }
+      else { P([[4, 0], [2.6, 1.4], [-3.4, 1.4], [-3.4, -1.4], [2.6, -1.4]]); body(); P([[1.2, 1.4], [-2.8, 1.4], [-2.8, 2.6], [1.2, 2.6]]); sec(); P([[1.2, -1.4], [-2.8, -1.4], [-2.8, -2.6], [1.2, -2.6]]); sec(); }
+      g.fillStyle = S.c3; g.shadowColor = S.c3; g.shadowBlur = 8; g.beginPath(); g.arc(-3.3 * k, 0, 0.35 * k, 0, 7); g.fill(); g.restore();
+    };
+    window.openHangar = () => { if (show(hBox)) renderHangar(); };
+    const renderHangar = () => {
+      const body = hBox.querySelector('.xBody'); body.textContent = '';
+      const tabs = document.createElement('div'); tabs.className = 'xSeg hTabs';
+      SHIP_TIERS.forEach((T, i) => { const b = document.createElement('button'); b.textContent = T.name; b.classList.toggle('on', i === hTier); b.onclick = () => { hTier = i; renderHangar(); }; tabs.appendChild(b); });
+      body.appendChild(tabs);
+      const T = SHIP_TIERS[hTier], top = document.createElement('div'); top.className = 'hTop'; top.innerHTML = '<span></span><b class="hCoins"></b>'; top.firstChild.textContent = T.about; top.lastChild.innerHTML = icon('coin', 16) + ' ' + (isOwner() ? '∞' : prog.coins); body.appendChild(top);
+      if (G && G.ship) { const away = document.createElement('button'); away.className = 'mini'; away.textContent = 'Send your ' + (G.ship.id ? SHIPS[G.ship.id].name : 'ship') + ' away'; away.onclick = () => { hBox.classList.add('hidden'); leaveShip(); }; body.appendChild(away); }
+      const grid = document.createElement('div'); grid.className = 'hGrid'; body.appendChild(grid);
+      for (const S of Object.values(SHIPS)) { if (S.tier !== hTier) continue;
+        const card = document.createElement('div'), mine = ownsShip(S.id); card.className = 'hCard' + (mine ? ' own' : '');
+        const cv = document.createElement('canvas'); cv.width = cv.height = 120; shipPic(cv, S);
+        const nm = document.createElement('b'); nm.textContent = S.name;
+        const st = document.createElement('span'); st.className = 'xDim'; st.textContent = 'Speed ' + Math.round(S.speed) + (S.cabin ? ' · cabin' : '');
+        const btn = document.createElement('button'); btn.className = 'mini';
+        if (mine) { btn.textContent = 'Call it'; btn.classList.add('go'); btn.onclick = () => { hBox.classList.add('hidden'); if (G && G.ship) { showToast('Send your ship away first', 1500); return; } toggleShip(S.id); }; }
+        else { const can = prog.coins >= S.cost; btn.innerHTML = icon('coin', 14) + ' ' + S.cost.toLocaleString(); btn.disabled = !can; btn.title = can ? 'Buy it' : 'You need ' + (S.cost - prog.coins).toLocaleString() + ' more coins';
+          btn.onclick = () => bxConfirm('Buy the ' + S.name + ' for ' + S.cost.toLocaleString() + ' coins?', () => { if (prog.coins < S.cost) return; prog.coins -= S.cost; (prog.own.ship || (prog.own.ship = {}))[S.id] = 1; prog.dirty = true; prog.save(); Sound.play('chest'); showToast('The ' + S.name + ' is yours!', 2000); renderHangar(); renderBag(); }); }
+        card.append(cv, nm, st, btn); grid.appendChild(card);
+      }
+    };
+    $('unbuckleBtn').onclick = () => unbuckle();
+    // decorate your cabin: tap a thing to put it down in front of you, or take away the nearest one
+    const dBox = panel('decoBox', 'Decorate your cabin'); dBox.classList.add('wide');
+    $('decoBtn').onclick = () => { if (show(dBox)) renderDeco(); };
+    const renderDeco = () => {
+      const body = dBox.querySelector('.xBody'); body.textContent = ''; const c = G && G.game.cave; if (!c || !c.ship) { dBox.classList.add('hidden'); return; }
+      const list = cabinDecor(c.id), tip = document.createElement('p'); tip.className = 'xDim'; tip.textContent = list.length + ' things in your ' + SHIPS[c.id].name + '. Tap one to put it where you are standing.'; body.appendChild(tip);
+      const grid = document.createElement('div'); grid.className = 'hGrid'; body.appendChild(grid);
+      const rebuild = () => { const was = G.game.caves.get(c.key); const n = new ShipCabin(c.id, c.o); n.ex = was.ex; n.build(G.game.gfx); G.game.caves.set(c.key, n); G.game.cave = n; };
+      for (const [k, d] of Object.entries(DECOR)) { const b = document.createElement('button'); b.className = 'hCard decoCard'; b.innerHTML = '<b></b>'; b.firstChild.textContent = d.name;
+        b.onclick = () => { const p = G.body.p, f = G.game.forward(), x = Math.max(-c.W + 0.8, Math.min(c.W - 0.8, p[0] + f[0] * 1.6 - c.o[0])), z = Math.max(-c.D + 0.8, Math.min(c.D - 0.8, p[2] + f[1] * 1.6 - c.o[2]));
+          const l = cabinDecor(c.id); l.push([k, +x.toFixed(2), +z.toFixed(2), +Math.atan2(-f[0], -f[1]).toFixed(2)]); saveCabinDecor(c.id, l); rebuild(); Sound.play('pickup'); renderDeco(); };
+        grid.appendChild(b); }
+      const rm = document.createElement('button'); rm.className = 'mini'; rm.textContent = 'Take away the nearest thing'; rm.disabled = !list.length;
+      rm.onclick = () => { const p = G.body.p, l = cabinDecor(c.id); let bi = -1, bd = 1e9; l.forEach((d, i) => { const dd = Math.hypot(c.o[0] + d[1] - p[0], c.o[2] + d[2] - p[2]); if (dd < bd) { bd = dd; bi = i; } }); if (bi >= 0) { l.splice(bi, 1); saveCabinDecor(c.id, l); rebuild(); renderDeco(); } };
+      body.appendChild(rm);
+    };
+    // building space stations: tap a part and it appears in front of you, out in space
+    const stBox = panel('stBox', 'Build in space'); stBox.classList.add('wide');
+    $('stBtn').onclick = () => { if (show(stBox)) renderSt(); };
+    const stPic = (cv, k, P) => { const g = cv.getContext('2d'), w = cv.width, c = P.c; g.fillStyle = '#0b1026'; g.fillRect(0, 0, w, w); for (let i = 0; i < 30; i++) { g.fillStyle = 'rgba(255,255,255,' + (0.2 + (i * 37 % 10) / 15) + ')'; g.fillRect((i * 53) % w, (i * 29) % w, 1.5, 1.5); }
+      g.save(); g.translate(w / 2, w / 2); g.fillStyle = c; g.strokeStyle = '#e8eef7'; g.lineWidth = 3; g.shadowColor = c; g.shadowBlur = 10; const r = w * 0.3;
+      if (['hub', 'beacon', 'reactor'].includes(k)) { g.beginPath(); g.arc(0, 0, r * (k === 'beacon' ? 0.5 : 0.9), 0, 7); g.fill(); g.stroke(); }
+      else if (['ring', 'gate'].includes(k)) { g.lineWidth = 8; g.strokeStyle = c; g.beginPath(); g.arc(0, 0, r, 0, 7); g.stroke(); g.fillStyle = '#e8eef7'; g.beginPath(); g.arc(0, 0, 5, 0, 7); g.fill(); }
+      else if (['solar', 'mirror'].includes(k)) { g.fillStyle = '#c8ccd4'; g.fillRect(-r * 1.3, -3, r * 2.6, 6); g.fillStyle = c; for (const sd of [-1, 1]) g.fillRect(sd > 0 ? r * 0.2 : -r * 1.3, -r * 0.6, r * 1.1, r * 1.2); }
+      else if (['tower', 'antenna'].includes(k)) { g.beginPath(); g.moveTo(-r * 0.4, r); g.lineTo(r * 0.4, r); g.lineTo(0, -r * 1.2); g.closePath(); g.fill(); g.stroke(); }
+      else if (k === 'dome') { g.beginPath(); g.arc(0, r * 0.4, r, Math.PI, 0); g.closePath(); g.fillStyle = 'rgba(160,220,255,0.35)'; g.fill(); g.stroke(); g.fillStyle = c; g.fillRect(-r, r * 0.4, r * 2, 6); }
+      else { g.fillRect(-r * 1.1, -r * 0.6, r * 2.2, r * 1.2); g.strokeRect(-r * 1.1, -r * 0.6, r * 2.2, r * 1.2); }
+      g.restore(); };
+    const renderSt = () => {
+      const body = stBox.querySelector('.xBody'); body.textContent = ''; const R = G && G.game.realm;
+      if (!R || R.kind !== 'orbit') { const p = document.createElement('p'); p.textContent = 'Fly a ship up into space to build stations there.'; body.appendChild(p); return; }
+      const list = stationList(), top = document.createElement('div'); top.className = 'hTop'; top.innerHTML = '<span></span><b class="hCoins"></b>'; top.firstChild.textContent = list.length + ' parts built. Tap a part to put it in front of you. Stand on decks and docks!'; top.lastChild.innerHTML = icon('coin', 16) + ' ' + (isOwner() ? '∞' : prog.coins); body.appendChild(top);
+      const grid = document.createElement('div'); grid.className = 'hGrid'; body.appendChild(grid);
+      const rebuild = () => { buildStations(R, G.game.gfx); };
+      for (const [k, P] of Object.entries(STATION_PARTS)) {
+        const card = document.createElement('div'); card.className = 'hCard'; const cv = document.createElement('canvas'); cv.width = cv.height = 96; stPic(cv, k, P);
+        const nm = document.createElement('b'); nm.textContent = P.name; const btn = document.createElement('button'); btn.className = 'mini go'; btn.innerHTML = icon('coin', 14) + ' ' + P.cost.toLocaleString();
+        const can = isOwner() || prog.coins >= P.cost; btn.disabled = !can;
+        btn.onclick = () => { if (!isOwner()) { if (prog.coins < P.cost) return; prog.coins -= P.cost; prog.dirty = true; prog.save(); renderBag(); }
+          const S = G.ship, flying = S && S.st === 'fly', f = G.game.forward(), cp = G.game.cam.pitch, base = flying ? S.p : G.body.p, d = flying ? shipLen(S.id) * 0.5 + 30 : 16;
+          const at = [base[0] + f[0] * d * Math.cos(cp * 0.5), base[1] - (flying ? Math.sin(cp) * d : 2), base[2] + f[1] * d * Math.cos(cp * 0.5)], yaw = Math.round(Math.atan2(-f[0], -f[1]) / (Math.PI / 4)) * Math.PI / 4;
+          const l = stationList(); l.push([k, +(at[0] - R.o[0]).toFixed(1), +(at[1] - R.o[1]).toFixed(1), +(at[2] - R.o[2]).toFixed(1), +yaw.toFixed(3)]); saveStations(l); rebuild(); Sound.play('chest'); showToast(P.name + ' built!', 1200); renderSt(); };
+        card.append(cv, nm, btn); grid.appendChild(card);
+      }
+      const rm = document.createElement('button'); rm.className = 'mini'; rm.textContent = 'Take away the nearest part (half your coins back)'; rm.disabled = !list.length;
+      rm.onclick = () => { const p = G.body.p, l = stationList(); let bi = -1, bd = 1e9; l.forEach((q, i) => { const d = Math.hypot(R.o[0] + q[1] - p[0], R.o[1] + q[2] - p[1], R.o[2] + q[3] - p[2]); if (d < bd) { bd = d; bi = i; } }); if (bi < 0) return; const P = STATION_PARTS[l[bi][0]]; l.splice(bi, 1); saveStations(l); if (!isOwner()) { prog.coins += Math.floor(P.cost / 2); prog.dirty = true; prog.save(); renderBag(); } rebuild(); renderSt(); };
+      body.appendChild(rm);
+    };
+    // a small yes/no box (no browser pop-ups)
+    const bxConfirm = (q, yes) => { const w = document.createElement('div'); w.className = 'bxAsk'; w.innerHTML = '<div><p></p><span><button class="mini">Cancel</button><button class="mini go">Yes</button></span></div>'; w.querySelector('p').textContent = q; const [no, ok] = w.querySelectorAll('button'); no.onclick = () => w.remove(); ok.onclick = () => { w.remove(); yes(); }; document.body.appendChild(w); };
+    // every open menu blurs the game behind it
+    const blur = document.createElement('div'); blur.id = 'menuBlur'; blur.className = 'hidden'; $('hud').appendChild(blur);
+    blur.onclick = () => { Extra.closeAll(); $('bag').classList.add('hidden'); };
+    const MENUS = '#bag:not(.hidden),#adminPanel:not(.hidden),.xPanel:not(.hidden),#hud .wardrobe:not(.hidden)';
+    new MutationObserver(() => { const on = !!document.querySelector(MENUS); blur.classList.toggle('hidden', !on); document.body.classList.toggle('menuOpen', on); }).observe($('hud'), { subtree: true, attributes: true, attributeFilter: ['class'] });
     updDot();
   }
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
@@ -654,7 +754,7 @@
     if (Device.useTouch) { $('touch').classList.remove('hidden'); if (BUILDING) $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
     $('adminBtn').classList.toggle('hidden', !G.me.admin);
-    $('shipBtn').classList.toggle('hidden', !myLook().og.includes('ship'));
+    $('shipBtn').classList.toggle('hidden', !window.NAUTIC_BETA && !myLook().og.includes('ship'));
     onResize(); last = performance.now();
     showToast(Device.useTouch ? 'Joystick to roll · drag to look · jump button to jump' : 'WASD to roll · drag to look · Space to jump · the station is on your minimap!', 5000);
     requestAnimationFrame(loop);
@@ -778,7 +878,7 @@
       Object.assign(p, cleanLook(m, p.admin)); renderPeople();
     } else if (m.t === 'pos') {
       const v = vec(m.p); if (!okVec(v)) return;
-      p.tp = v; p.fly = !!m.fl && !!p.admin; p.big = !!m.big; p.glow = !!m.gl; p.ship = !!m.sh && !!p.admin;
+      p.tp = v; p.fly = !!m.fl && !!p.admin; p.big = !!m.big; p.glow = !!m.gl; p.ship = typeof m.sh === 'string' && SHIPS[m.sh] ? m.sh : !!m.sh && !!p.admin;
     } else if (m.t === 'admin') {
       const nonce = G.nonces.get(id); G.nonces.delete(id);
       if (nonce && typeof m.sig === 'string') Promise.all([adminVerify(nonce, m.sig), typeof m.proof === 'string' ? adminVerify('admin:' + id, m.proof) : false]).then(([ok, pok]) => {
@@ -914,7 +1014,7 @@
       renderPeople();
     } else if (m.t === 'state') {
       G.dayStart = performance.now() - m.phase * DAY_MS; syncClock(m.wt);
-      for (const [id, x, y, z, fl, big, gl, sh] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = !!fl && !!p.admin; p.big = big; p.glow = gl; p.ship = !!sh && !!p.admin; } }
+      for (const [id, x, y, z, fl, big, gl, sh] of m.p) { const p = G.players.get(id); if (p && p !== G.me) { p.tp = [x, y, z]; p.fly = !!fl && !!p.admin; p.big = big; p.glow = gl; p.ship = typeof sh === 'string' && SHIPS[sh] ? sh : !!sh && !!p.admin; } }
     } else if (m.t === 'bye') { const p = G.players.get(m.id); if (p) { sys(p.name + ' left'); G.players.delete(m.id); renderPeople(); } }
     else if (m.t === 'chat') { const p = G.players.get(m.id); if (p) say(p, cleanText(m.text)); }
     else if (m.t === 'emote') { const p = G.players.get(m.id); if (p && EMOTES.includes(m.e)) emote(p, m.e); }
@@ -941,7 +1041,7 @@
   // ---------- items & inventory ----------
   function gotItem(type) {
     const b = G.body.p; G.game.fx.burst([b[0], b[1] + 0.3, b[2]], 18, { cols: type === 'coin' ? ['#ffd24a', '#fff2a8'] : ['#ffffff', ITEMS[type].color, '#fff2a8'], shape: 26, size: 0.18, speed: 3.5, life: 0.8, lift: 1.5 });
-    if (type === 'coin') { prog.give(5); Sound.play('coin'); showToast('+5 coins!', 1000); renderBag(); questCheck(); return; }
+    if (type === 'coin') { prog.give(5); Sound.play('coin'); showToast('+' + coinsX(5) + ' coins!', 1000); renderBag(); questCheck(); return; }
     Sound.play('pickup'); prog.add('items'); if (type === 'star') prog.max('star', 1); if (type === 'key') prog.max('skykey', 1); if (type === 'trophy') prog.max('trophy', 1); questCheck();
     G.inv[type] = (G.inv[type] || 0) + 1; store.set('inv', JSON.stringify(G.inv));
     showToast('Found: ' + ITEMS[type].name + '!', 1500); renderBag();
@@ -973,7 +1073,7 @@
       const done = !!prog.done[q.id], v = Math.min(q.goal, prog.value(q)), row = document.createElement('div'); row.className = 'qRow' + (done ? ' done' : '');
       const un = prog.unlocks(q.id);
       row.innerHTML = '<b></b><span class="rw"></span><small></small><div class="bar"><i></i></div>';
-      row.querySelector('b').innerHTML = done ? icon('check', 14) + ' ' : ''; row.querySelector('b').appendChild(document.createTextNode(q.name)); row.querySelector('.rw').textContent = '+' + q.coins;
+      row.querySelector('b').innerHTML = done ? icon('check', 14) + ' ' : ''; row.querySelector('b').appendChild(document.createTextNode(q.name)); row.querySelector('.rw').textContent = '+' + coinsX(q.coins);
       row.querySelector('small').textContent = q.desc + (un.length ? ' · unlocks ' + un.join(', ') : '') + (done ? '' : ' (' + (q.stat === 'dist' || q.stat === 'swim' ? Math.floor(v) + 'm' : Math.floor(v)) + '/' + q.goal + ')');
       row.querySelector('.bar i').style.width = (v / q.goal * 100) + '%'; qb.appendChild(row);
     }
@@ -988,8 +1088,8 @@
   function questCheck() {
     for (const q of prog.check()) {
       const un = prog.unlocks(q.id);
-      setTimeout(() => { banner('Quest complete!', q.name, '+' + q.coins + ' coins' + (un.length ? ' · unlocked: ' + un.join(', ') : '')); Sound.play('quest'); }, 300);
-      sys('Quest complete: ' + q.name + '! +' + q.coins + ' coins' + (un.length ? '. Unlocked: ' + un.join(', ') : ''));
+      setTimeout(() => { banner('Quest complete!', q.name, '+' + coinsX(q.coins) + ' coins' + (un.length ? ' · unlocked: ' + un.join(', ') : '')); Sound.play('quest'); }, 300);
+      sys('Quest complete: ' + q.name + '! +' + coinsX(q.coins) + ' coins' + (un.length ? '. Unlocked: ' + un.join(', ') : ''));
     }
     renderBag(); if (!$('wardrobe').classList.contains('hidden') && $('wardrobe').parentElement.id === 'hud') renderWardrobe();
   }
@@ -1083,7 +1183,7 @@
     const C = G.chase; if (!C) return;
     const coins = Math.round(C.score / 8);
     prog.give(coins); if (C.intercepted) prog.add('intercepts'); questCheck(); prog.save();
-    showToast('Chase over! ' + Math.floor(C.score) + ' points' + (C.intercepted ? ' · intercept at ' + Math.round(C.best) + ' km/h' : '') + ' · +' + coins + ' coins', 5000);
+    showToast('Chase over! ' + Math.floor(C.score) + ' points' + (C.intercepted ? ' · intercept at ' + Math.round(C.best) + ' km/h' : '') + ' · +' + coinsX(coins) + ' coins', 5000);
     const L = G.game.extraClouds; if (L) { const i = L.indexOf(C.cloud); if (i >= 0) L.splice(i, 1); }
     G.chase = null; G.nail = false; G.chaseCool = performance.now() + 5000; G.game.shake = 0; $('nailBtn').classList.add('hidden'); $('nailBtn').classList.remove('on');
   }
@@ -1411,6 +1511,7 @@
     if (k === 'r') { respawn(); return; }
     if (k === 'o') { $('wardBtn').click(); return; }
     if (k === 'v') { toggleShip(); return; }
+    if (window.NAUTIC_BETA && k === 'u') { unbuckle(); return; }
     if (k === 'n') { toggleNail(); return; }
     if (k === 'm') { $('musicBtn').click(); return; }
     if (window.NAUTIC_BETA && k === 'g') { BigMap.toggle(); return; }
@@ -1490,38 +1591,140 @@
   }
 
   // ---------- the owner ship: it flies down, you jump in, then you fly it from the cockpit ----------
-  function toggleShip() {
-    if (!G || !myLook().og.includes('ship')) return;
+  // id: a ship from the hangar (js/ships.js), or 'og' / nothing for the owner ship
+  function toggleShip(id) {
+    if (!G) return;
     const b = G.body, f = G.game.forward();
-    if (!G.ship) { const tp = [b.p[0] + f[0] * 4, b.p[1] + 2.4, b.p[2] + f[1] * 4]; G.ship = { st: 'arrive', t: 0, from: [tp[0] - f[0] * 45, tp[1] + 35, tp[2] - f[1] * 45], to: tp, p: [...tp], hd: Math.atan2(f[1], f[0]) }; Sound.play('boost'); showToast('Here comes your ship!', 1500); }
-    else if (G.ship.st === 'fly') { G.ship.st = 'away'; G.ship.t = 0; G.me.ship = false; G.game.fpv = null; b.p = [G.ship.p[0], G.ship.p[1] - 1.6, G.ship.p[2]]; b.v = [0, 0, 0]; G.game.cam.pitch = 0.42; $('downBtn').classList.toggle('hidden', !G.me.fly || !Device.useTouch); showToast('Bye ship!', 1000); }
+    if (G.ship) { if (G.ship.st === 'fly' || G.ship.st === 'parked') leaveShip(); return; }
+    if (!id || id === 'og') { if (!myLook().og.includes('ship')) return; id = null; }
+    const big = id ? SHIPS[id].size : 1, L = id ? shipLen(id) : 4, tp = [b.p[0] + f[0] * (L * 0.5 + 4), b.p[1] + (id ? 1.6 * big + 1 : 2.4), b.p[2] + f[1] * (L * 0.5 + 4)];
+    G.ship = { id, st: 'arrive', t: 0, from: [tp[0] - f[0] * (45 + L * 3), tp[1] + 35 + L * 2, tp[2] - f[1] * (45 + L * 3)], to: tp, p: [...tp], hd: Math.atan2(f[1], f[0]) };
+    Sound.play('boost'); showToast(id ? 'Here comes the ' + SHIPS[id].name + '!' : 'Here comes your ship!', 1500);
+  }
+  // inside your ship: the cabin is a room below the world (like a cave) while the ship waits where you parked it
+  function cabinFor(id) { const key = 'cabin:' + id, game = G.game; let c = game.caves.get(key); if (!c) { c = new ShipCabin(id, [((SHIPS[id].n % 10) - 5) * 140, -900 - Math.floor(SHIPS[id].n / 10) * 60, 7000]); c.build(game.gfx); game.caves.set(key, c); } return c; }
+  function enterCabin(atSeat) {
+    const S = G.ship, b = G.body, game = G.game; if (!S || !S.id) return;
+    const c = cabinFor(S.id), gy = Math.max(game.T.ground(S.p[0], S.p[2]), SEA), R = game.realm;
+    c.ex = R && R.space ? { p: [...S.p], r: 2, cave: c.key, space: spaceStandNear(R, S.p) || null } : { p: [S.p[0], gy + 1, S.p[2]], r: 2.5, cave: c.key };
+    game.cave = c; b.p = atSeat ? [c.seat[0] - 1.6, c.o[1] + 1, c.o[2]] : [c.exit[0] + 2.5, c.o[1] + 1, c.exit[2]]; b.v = [0, 0, 0]; b.tpCool = 1; b.caveLock = null; G.me.p = b.p;
+    showToast(atSeat ? 'Unbuckled! Walk around, tap Decorate, roll onto the glowing seat to fly, or out the ring to go outside' : 'Inside the ' + SHIPS[S.id].name, 3000); updShipBtns();
+  }
+  function unbuckle() { const S = G.ship; if (!S || S.st !== 'fly' || !S.id) return; S.st = 'parked'; G.me.ship = false; G.game.fpv = null; G.game.cam.dist = S.camWas || 6; enterCabin(true); }
+  function rebuckle() { const S = G.ship, b = G.body; if (!S) return; G.game.cave = null; G.game.realm = G.game.realmAt(S.p); b.p = [...S.p]; G.me.p = b.p; b.v = [0, 0, 0]; S.st = 'fly'; S.t = 0; G.me.ship = S.id; S.camWas = G.game.cam.dist; G.game.cam.dist = Math.max(8, shipLen(S.id) * 1.35); Sound.play('tp'); showToast('Buckled in. Fly!', 1200); updShipBtns(); }
+  // each frame: the seat inside, and the boarding beam under a parked ship
+  function cabinStep() {
+    const S = G.ship, b = G.body, game = G.game; if (!S || !S.id) return;
+    const c = game.cave;
+    if (c && c.ship && c.id === S.id) { if (Math.hypot(b.p[0] - c.seat[0], b.p[2] - c.seat[2]) < 1.1 && b.p[1] < c.o[1] + 2.5) rebuckle(); return; }
+    const R = game.realm;
+    if (R && R.space && !game.cave) { // walking about in space: roll back to the ship to get in; fall off and you are back inside
+      if (S.st === 'parked' && !b.caveLock && Math.hypot(b.p[0] - S.p[0], b.p[1] - S.p[1], b.p[2] - S.p[2]) < shipLen(S.id) * 0.5 + 4) enterCabin(false);
+      else if (S.st === 'parked' && b.p[1] < R.o[1] - R.half[1] + 150) { enterCabin(false); showToast('You floated off! Back in your ship', 2000); }
+      return;
+    }
+    if (S.st === 'parked' && !game.cave && !b.caveLock) { const gy = Math.max(game.T.ground(S.p[0], S.p[2]), SEA); if (Math.hypot(b.p[0] - S.p[0], b.p[2] - S.p[2]) < 2.6 && b.p[1] < gy + 3 && b.p[1] < S.p[1]) enterCabin(false); }
+  }
+  // ---------- space: fly a ship straight up past the clouds ----------
+  // returns true when the ship jumped somewhere new this frame
+  let spaceHintT = 0;
+  const v3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], len3 = v => Math.hypot(v[0], v[1], v[2]);
+  function faceShip(S, d) { S.hd = Math.atan2(d[2], d[0]); const cam = G.game.cam; cam.yaw = Math.atan2(-Math.cos(S.hd), -Math.sin(S.hd)); cam.pitch = 0.05; S.v = [0, 0, 0]; }
+  function spaceStep(S) {
+    const game = G.game, R = game.realm, now = performance.now();
+    if (!R) {
+      if (game.cave || S.p[1] > 5000) return false; // (still in space, the world just hasn't caught up yet)
+      if (S.p[1] > 900 && now - spaceHintT > 20000) { spaceHintT = now; showToast('Keep flying up to reach space!', 2500); }
+      if (S.p[1] >= 1490) { goSpace(S); return true; }
+      return false;
+    }
+    if (!R.space) return false;
+    const o = R.o, h = R.half;
+    S.p[0] = Math.max(o[0] - h[0] + 30, Math.min(o[0] + h[0] - 30, S.p[0])); S.p[2] = Math.max(o[2] - h[0] + 30, Math.min(o[2] + h[0] - 30, S.p[2])); S.p[1] = Math.max(o[1] - h[1] + 30, Math.min(o[1] + h[1] - 30, S.p[1]));
+    if (R.kind === 'orbit') {
+      const ds = v3(S.p, R.sunAt), dl = len3(ds);
+      if (dl < SUN_R + 90) { S.p = R.sunAt.map((v, i) => v + ds[i] / dl * (SUN_R + 90)); S.v = [0, 0, 0]; if (now - (G.hotT || 0) > 2500) { G.hotT = now; fx('ouch', 'Too hot! Fly away from the sun'); } }
+      for (let k = 0; k < SPACE_PLANETS.length; k++) { const P = SPACE_PLANETS[k]; if (P.at && len3(v3(S.p, P.at)) < P.r + 20) { landOn(S, k); return true; } }
+      const rp = o.map((v, i) => v + RIP.p[i]); if (len3(v3(S.p, rp)) < RIP.r * 0.8) { intoRift(S); return true; }
+    } else {
+      const bp = o.map((v, i) => v + RIFT_BACK.p[i]); if (len3(v3(S.p, bp)) < RIFT_BACK.r * 0.8) { outOfRift(S); return true; }
+    }
+    return false;
+  }
+  const planetHere = () => (REGIONS[G.region || 'berekor'] || {}).planet || 'Nautara';
+  function goSpace(S) {
+    const R = G.game.realmGet('orbit'), k = Math.max(0, SPACE_PLANETS.findIndex(q => q.name === planetHere())), P = SPACE_PLANETS[k], out = v3(P.at, R.sunAt), ol = len3(out);
+    G.spaceFrom = { region: G.region || 'berekor', x: S.p[0], z: S.p[2] };
+    S.p = P.at.map((v, i) => v + out[i] / ol * (P.r + 170) + (i === 1 ? 60 : 0)); faceShip(S, out.map(v => -v)); G.body.p = [...S.p]; G.game.realm = R;
+    banner('Outer space', 'You flew off ' + P.name + '!', 'Fly into a planet to land on it. Somewhere out here is the Rip…', 5000); Sound.play('discover');
+    if (prog.mark('space', 'orbit')) setTimeout(() => { prog.give(500); prog.save(); showToast('First time in space! +' + coinsX(500) + ' coins', 3000); Sound.play('coin'); }, 1500);
+  }
+  function landOn(S, k) {
+    const P = SPACE_PLANETS[k];
+    if (P.name === planetHere()) { // back down where you took off
+      const f = G.spaceFrom && G.spaceFrom.region === (G.region || 'berekor') ? G.spaceFrom : { x: 0, z: 12 };
+      S.p = [f.x, 1380, f.z]; G.body.p = [...S.p]; G.game.realm = null; G.game.cam.pitch = 0.5; banner('Welcome back to ' + P.name, REGIONS[G.region || 'berekor'].name, 'Fly down to land', 3500); Sound.play('tp'); return;
+    }
+    const id = Object.keys(REGIONS).find(r => REGIONS[r].planet === P.name && REGIONS[r].built);
+    if (!id || !spaceTravel) { const away = v3(S.p, P.at), l = len3(away); S.p = P.at.map((v, i) => v + away[i] / l * (P.r + 60)); showToast(P.name + ' is not ready to land on yet', 2000); return; }
+    const ship = S.id, first = prog.mark('planets', P.name);
+    S.v = [0, 0, 0]; S.p = P.at.map((v, i) => v + (i === 1 ? P.r + 40 : 0));
+    setTimeout(() => { if (!G || !spaceTravel(id, null)) return;
+    let n = 0; const t = setInterval(() => { n++; if (G && G.game && G.body && (G.region || 'berekor') === id && n > 6) { clearInterval(t);
+      const b = G.body; G.ship = { id: ship, st: 'fly', t: 0, p: [b.p[0], 700, b.p[2]], hd: 0, v: [0, -30, 0] }; G.me.ship = ship; G.ship.camWas = G.game.cam.dist; G.game.cam.dist = Math.max(8, shipLen(ship) * 1.35); G.game.cam.pitch = 0.5; b.p = [...G.ship.p];
+      banner('You landed on ' + P.name, REGIONS[id].name, 'Fly down, or press U to unbuckle once you land', 4500); Sound.play('discover'); updShipBtns();
+      if (first) { prog.give(750); prog.save(); setTimeout(() => showToast('First visit to ' + P.name + ' from space! +' + coinsX(750) + ' coins', 3000), 2500); }
+    } else if (n > 160) clearInterval(t); }, 250); }, 0);
+  }
+  function intoRift(S) {
+    const R = G.game.realmGet('rift'); S.p = R.o.map((v, i) => v + [0, 260, 420][i]); faceShip(S, [0, 0, -1]); G.body.p = [...S.p]; G.game.realm = R;
+    banner('The Prism Reach', 'You went through the Rip!', 'Visit Tessaron, the cube planet. The little tear behind you goes back.', 6000); Sound.play('discover');
+    if (prog.mark('space', 'rift')) setTimeout(() => { prog.give(1500); prog.save(); showToast('You found the Rip! +' + coinsX(1500) + ' coins', 3500); Sound.play('coin'); }, 2000);
+  }
+  function outOfRift(S) {
+    const R = G.game.realmGet('orbit'), rp = R.o.map((v, i) => v + RIP.p[i]), n = [-RIP.p[0], 0, -RIP.p[2]], nl = len3(n);
+    S.p = rp.map((v, i) => v + n[i] / nl * (RIP.r + 80)); faceShip(S, n); G.body.p = [...S.p]; G.game.realm = R; banner('Outer space', 'Back through the Rip', '', 3000); Sound.play('tp');
+  }
+  function updShipBtns() { const S = G && G.ship, c = G && G.game.cave, R = G && G.game.realm; $('unbuckleBtn').classList.toggle('hidden', !(S && S.id && S.st === 'fly')); $('decoBtn').classList.toggle('hidden', !(c && c.ship)); $('stBtn').classList.toggle('hidden', !(R && R.kind === 'orbit' && !c)); }
+  function leaveShip() {
+    const S = G.ship, b = G.body, game = G.game; if (!S) return;
+    const was = S.st, inCabin = !!(game.cave && game.cave.ship); S.st = 'away'; S.t = 0; G.me.ship = false; game.fpv = null; if (was === 'fly') game.cam.dist = S.camWas || 6;
+    if (inCabin) game.cave = null;
+    if (was === 'parked' && !inCabin) { showToast('Bye ship!', 1000); updShipBtns(); return; }
+    if (S.p[1] > 5000) { respawn(); G.ship = null; showToast('Your ship flew off. You are back on the ground', 2500); updShipBtns(); return; } // sent away in space: back home
+    if (S.id) { const side = [Math.cos(S.hd + Math.PI / 2), Math.sin(S.hd + Math.PI / 2)], L = shipLen(S.id) * 0.5 + 3, x = S.p[0] + side[0] * L, z = S.p[2] + side[1] * L; b.p = [x, was === 'parked' ? Math.max(game.T.ground(x, z), SEA) + 1.5 : S.p[1], z]; }
+    else b.p = [S.p[0], S.p[1] - 1.6, S.p[2]];
+    b.v = [0, 0, 0]; game.cam.pitch = 0.42; $('downBtn').classList.toggle('hidden', !G.me.fly || !Device.useTouch); showToast('Bye ship!', 1000); updShipBtns();
   }
   // returns true while the ship is moving the ball (so normal rolling is skipped)
   function shipStep(dt, ix, iy, up, down) {
     const S = G.ship; if (!S) return false; S.t += dt; const b = G.body, cam = G.game.cam, ease = x => x * x * (3 - 2 * x);
     if (S.st === 'arrive') { const k = ease(Math.min(1, S.t / 1.6)); S.p = S.from.map((v, i) => v + (S.to[i] - v) * k); S.pitch = -0.4 * (1 - k); S.open = ease(Math.max(0, Math.min(1, (S.t - 0.9) / 0.7))); if (S.t >= 1.6) { S.st = 'board'; S.t = 0; S.b0 = [...b.p]; Sound.play('jump'); } return false; }
     if (S.st === 'board') { // jump up and into the seat, then the canopy swings shut
-      const k = Math.min(1, S.t / 1.0), seat = [S.p[0] + Math.cos(S.hd) * 0.95, S.p[1] + 1.3, S.p[2] + Math.sin(S.hd) * 0.95];
+      const so = S.id ? shipSeat(S.id) : [0.95, 1.3, 0], seat = [S.p[0] + Math.cos(S.hd) * so[0], S.p[1] + so[1], S.p[2] + Math.sin(S.hd) * so[0]], k = Math.min(1, S.t / 1.0);
       b.p = S.b0.map((v, i) => v + (seat[i] - v) * ease(k)); b.p[1] += Math.sin(k * Math.PI) * 2.6; b.v = [0, 0, 0];
       S.open = 1 - ease(Math.max(0, Math.min(1, (S.t - 1.05) / 0.5))); if (k >= 1 && S.t > 1.0 && !S.landed) { S.landed = true; Sound.play('land'); }
-      if (S.t >= 1.7) { S.st = 'fly'; G.me.ship = true; cam.pitch = 0.05; cam.yaw = Math.atan2(-Math.cos(S.hd), -Math.sin(S.hd)); Sound.play('tp'); showToast('Flying! Drag to steer, W/joystick to fly, jump to go up, Shift or down to go down, V to get out', 4000); $('downBtn').classList.toggle('hidden', !Device.useTouch); } return true; }
+      if (S.t >= 1.7) { S.st = 'fly'; G.me.ship = S.id || true; if (S.id) { S.camWas = cam.dist; cam.dist = Math.max(8, shipLen(S.id) * 1.35); } cam.pitch = 0.05; cam.yaw = Math.atan2(-Math.cos(S.hd), -Math.sin(S.hd)); Sound.play('tp'); showToast('Flying! Drag to steer, W/joystick to fly, jump to go up, Shift or down to go down, V to get out', 4000); $('downBtn').classList.toggle('hidden', !Device.useTouch); } return true; }
     if (S.st === 'fly') {
-      const cp = Math.cos(cam.pitch), d = [-Math.sin(cam.yaw) * cp, -Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp], rt = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)], sp = 34;
-      const v = [d[0] * -iy * sp + rt[0] * ix * 16, d[1] * -iy * sp + (up ? 12 : 0) - (down ? 12 : 0), d[2] * -iy * sp + rt[2] * ix * 16];
+      const cp = Math.cos(cam.pitch), d = [-Math.sin(cam.yaw) * cp, -Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp], rt = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)], sp = (S.id ? SHIPS[S.id].speed : 34) * (G.game.realm && G.game.realm.space ? 5 : 1), big = S.id ? SHIPS[S.id].size : 1;
+      const v = [d[0] * -iy * sp + rt[0] * ix * 16 * big, d[1] * -iy * sp + ((up ? 12 : 0) - (down ? 12 : 0)) * Math.sqrt(big), d[2] * -iy * sp + rt[2] * ix * 16 * big];
       S.v = (S.v || [0, 0, 0]).map((x, i) => x + (v[i] - x) * Math.min(1, dt * 3)); for (let i = 0; i < 3; i++) S.p[i] += S.v[i] * dt;
-      S.p[0] = Math.max(-LIMIT, Math.min(LIMIT, S.p[0])); S.p[2] = Math.max(-LIMIT, Math.min(LIMIT, S.p[2])); S.p[1] = Math.min(S.p[1], 1500);
-      if (!G.game.realm && !G.game.cave) S.p[1] = Math.max(S.p[1], Math.max(G.game.T.ground(S.p[0], S.p[2]), SEA) + 1.5);
+      if (!G.game.realm) { S.p[0] = Math.max(-LIMIT, Math.min(LIMIT, S.p[0])); S.p[2] = Math.max(-LIMIT, Math.min(LIMIT, S.p[2])); S.p[1] = Math.min(S.p[1], 1500); }
+      if (window.NAUTIC_BETA && S.id && spaceStep(S)) return true;
+      if (!G.game.realm && !G.game.cave) S.p[1] = Math.max(S.p[1], Math.max(G.game.T.ground(S.p[0], S.p[2]), SEA) + 1.5 * big);
       S.hd = Math.atan2(d[2], d[0]); S.pitch = -cam.pitch;
-      b.p = [...S.p]; b.v = [0, 0, 0]; G.game.fpv = [S.p[0] + d[0] * 0.95, S.p[1] + 1.35, S.p[2] + d[2] * 0.95];
+      b.p = [...S.p]; b.v = [0, 0, 0]; G.game.fpv = S.id ? null : [S.p[0] + d[0] * 0.95, S.p[1] + 1.35, S.p[2] + d[2] * 0.95];
       return true;
     }
-    if (S.st === 'away') { S.open = 0; S.p[1] += dt * 25; S.p[0] += Math.cos(S.hd) * dt * 40; S.p[2] += Math.sin(S.hd) * dt * 40; if (S.t > 2.2) G.ship = null; return false; }
+    if (S.st === 'parked') { S.pitch = 0; S.open = 0; if (!G.game.realm && S.p[1] < 5000) { const big = S.id ? SHIPS[S.id].size : 1, hy = Math.max(G.game.T.ground(S.p[0], S.p[2]), SEA) + 2.2 + 1.4 * big; S.p[1] += (hy - S.p[1]) * Math.min(1, dt * 1.5); } return false; }
+    if (S.st === 'away') { S.open = 0; const k = S.id ? Math.sqrt(SHIPS[S.id].size) : 1; S.p[1] += dt * 25 * k; S.p[0] += Math.cos(S.hd) * dt * 40 * k; S.p[2] += Math.sin(S.hd) * dt * 40 * k; if (S.t > 2.2 + k) G.ship = null; return false; }
     return false;
   }
 
   // ---------- activities ----------
   function activities(now) {
     const b = G.body, game = G.game;
+    if (window.NAUTIC_BETA) { cabinStep(); updShipBtns(); if (now - (G.payT || (G.payT = now)) > 120000) { G.payT = now; prog.give(10); prog.save(); renderBag(); showToast('+' + coinsX(10) + ' coins for playing', 1500); } }
     for (const it of game.nearbyItems(b.p)) { // pick up items you roll into
       const pr = G.me.gadget === 'magnet' || (gadgetFx(G.me.gadget) || {}).magnet ? 5.5 : 1.4; if (Math.abs(it.p[0] - b.p[0]) > pr || Math.abs(it.p[2] - b.p[2]) > pr || Math.abs(it.p[1] - b.p[1]) > pr + 0.2) continue;
       if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('You beat the parkour climb!'); } continue; }
@@ -1639,7 +1842,7 @@
     if (!fishing && !skyHold && G.game.arena && G.game.arena.bounce(b)) Sound.play('boost');
     const RR = G.game.realmAt(b.p);
     if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
-    else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
+    else if (!RR && (G.game.cave && G.game.cave.ship ? b.p[1] < G.game.cave.o[1] - 30 : (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30)))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
     m.p = b.p; m.R = b.R; m.r = b.r; m.tp = b.p; m.glow = !!G.effects.glow || gset.has('lantern') || gset.has('aura'); m.big = !!G.effects.big;
     const a = 1 - Math.pow(0.0008, dt); // others glide to where they are and roll
     for (const p of G.players.values()) if (p !== m) {
@@ -1665,12 +1868,12 @@
     G.game.updateCreatures(dt, m, [...G.players.values()], G.wasNight, worldT() % 100000);
 
     if (G.role === 'guest' && G.myId && now - G.lastSend > 66) {
-      G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow, sh: !!m.ship });
+      G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow, sh: typeof m.ship === 'string' ? m.ship : !!m.ship });
       if (now - G.lastHeard > 6000) reconnect();
     }
     if (G.role === 'keeper' && now - G.lastState > 66) {
       G.lastState = now;
-      Net.toAll({ t: 'state', phase: dayPhase(), wt: worldT(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow, !!p.ship]) });
+      Net.toAll({ t: 'state', phase: dayPhase(), wt: worldT(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow, typeof p.ship === 'string' ? p.ship : !!p.ship]) });
     }
 
     const ph = dayPhase(), sun = Math.cos(ph * Math.PI * 2);
@@ -1691,7 +1894,7 @@
     let cursor = null;
     if (mouse && G.myId && !drags.size && G.building) { const k = curTool(); const t = target(mouse.x, mouse.y, k === 0 || k === 'wire' || k === 'cut' ? 'pick' : 'place'); if (t) cursor = t; }
     const items = G.game.nearbyItems(b.p).filter(it => !G.taken.has(it.id) && !(it.type === 'trophy' && G.inv.trophy));
-    if (!NO_RENDER) G.game.render([...G.players.values(), ...G.mgBots.values()], m, { now, dt, dark, chase: G.chase, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0 } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
+    if (!NO_RENDER) G.game.render([...G.players.values(), ...G.mgBots.values()], m, { now, dt, dark, chase: G.chase, shipPitch: G.ship ? G.ship.pitch : 0, shipFx: G.ship && G.ship.st !== 'fly' ? { p: G.ship.p, hd: G.ship.hd, pitch: G.ship.pitch || 0, open: G.ship.open || 0, id: G.ship.id } : null, sunAngle: ph * Math.PI * 2 + Math.PI / 2, cursor, items, race: G.race, wireFrom: G.wireFrom, budget: Device.type === 'phone' ? 7 : 10 });
     requestAnimationFrame(loop);
   }
 })();

@@ -11,7 +11,7 @@ const PORTALS = [];
 
 class Realm {
   constructor(kind, N) { this.kind = kind; Object.assign(this, REALMS[kind]); this.N = N; this.grid = new TriGrid(); this.items = []; this.lights = []; this.meshes = []; this.spawnC = []; }
-  inside(p) { return Math.abs(p[0] - this.o[0]) < 420 && Math.abs(p[2] - this.o[2]) < 420 && Math.abs(p[1] - this.o[1]) < 320; }
+  inside(p) { const h = this.half || [420, 320]; return Math.abs(p[0] - this.o[0]) < h[0] && Math.abs(p[2] - this.o[2]) < h[0] && Math.abs(p[1] - this.o[1]) < h[1]; }
   R(k, s = 0) { return this.N.hash(k, s, 1300 + this.kind.length); }
   // a smooth hilly patch; h(x,z) is the height (local), col(x,z,h,ny) the colour. Adds collision too.
   patch(gl, x0, z0, x1, z1, step, h, col, keep) {
@@ -34,6 +34,7 @@ class Realm {
   build(gl) {
     const o = this.o, R = (k, s) => this.R(k, s), N = this.N, L = (x, y, z) => [o[0] + x, o[1] + y, o[2] + z];
     const add = (mesh, kind = 'world') => this.meshes.push({ mesh, kind });
+    if (this.space) { buildSpace(this, gl); return; }
     if (this.kind === 'space') {
       // the main floating island: a moon-rock disc with craters, a rocky underside
       const isl = (x, z) => { const d = Math.hypot(x, z); if (d > 46) return -6; let h = 2 * Math.sin(x * 0.11) * Math.cos(z * 0.09) + (N.v(x / 9, z / 9, 1301) - 0.5) * 3; for (const [cx, cz, r] of [[12, -8, 7], [-15, 10, 6], [5, 20, 4]]) { const q = Math.hypot(x - cx, z - cz) / r; if (q < 1.3) h += q < 1 ? -(1 - q * q) * 2.4 : (1.3 - q) * 3; } return h - Math.max(0, d - 38) * 0.75; };

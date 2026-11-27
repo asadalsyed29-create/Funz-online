@@ -243,7 +243,7 @@ class Game {
   }
   collide(b) {
     const p = b.p, r = b.r, tris = [];
-    if (this.realm) this.realm.grid.near(p[0], p[2], r + 0.5, tris);
+    if (this.realm) { this.realm.grid.near(p[0], p[2], r + 0.5, tris); if (this.realm.sgrid) this.realm.sgrid.near(p[0], p[2], r + 0.5, tris); }
     else if (this.cave) this.cave.tris(p[0], p[2], r + 0.1, tris);
     else { // terrain
       for (let i = Math.floor((p[0] - r) / CELL); i <= Math.floor((p[0] + r) / CELL); i++) for (let j = Math.floor((p[2] - r) / CELL); j <= Math.floor((p[2] + r) / CELL); j++) this.T.cellTris(i, j, tris);
@@ -300,7 +300,7 @@ class Game {
   // structure doors: caves
   // the special worlds are made the first time someone goes there
   realmGet(kind) { let r = this.realms[kind]; if (!r) { r = this.realms[kind] = new Realm(kind, this.T.N); r.build(this.gfx); } return r; }
-  realmAt(p) { for (const k in REALMS) { const o = REALMS[k].o; if (Math.abs(p[0] - o[0]) < 420 && Math.abs(p[2] - o[2]) < 420 && Math.abs(p[1] - o[1]) < 320) return this.realmGet(k); } return null; }
+  realmAt(p) { for (const k in REALMS) { const o = REALMS[k].o, h = REALMS[k].half || [420, 320]; if (Math.abs(p[0] - o[0]) < h[0] && Math.abs(p[2] - o[2]) < h[0] && Math.abs(p[1] - o[1]) < h[1]) return this.realmGet(k); } return null; }
   triggers(b, fx) {
     if (b.tpCool > 0) return;
     // cannons: roll in and fly along an arc to where it points
@@ -315,8 +315,11 @@ class Game {
     if (this.cave) {
       const e = this.cave.exit;
       if (Math.hypot(b.p[0] - e[0], b.p[1] - e[1], b.p[2] - e[2]) < 1.8) {
+        const t = this.cave.ex;
+        // a ship parked in space: out onto the nearest station or land, or nowhere if there is only empty space
+        if (t.space !== undefined) { if (!t.space) { b.p = [e[0] + 3, e[1], e[2]]; b.v = [0, 0, 0]; b.tpCool = 1.5; fx('ouch', 'No air out there! Park your ship next to a station or some land first'); } else { b.p = [...t.space]; b.v = [0, 0, 0]; b.tpCool = 1.5; b.caveLock = t; this.cave = null; fx('cave-out'); } return; }
         // come out on the lowest ground near the entrance, so you roll away from it and not back in
-        const t = this.cave.ex; let best = null;
+        let best = null;
         for (let k = 0; k < 16; k++) { const a = k / 16 * 6.2832, x = t.p[0] + Math.cos(a) * 9, z = t.p[2] + Math.sin(a) * 9, gy = this.T.ground(x, z); if (!best || gy < best[1]) best = [x, gy, z]; }
         b.p = [best[0], Math.max(best[1], SEA) + 1.2, best[2]]; b.v = [0, 0, 0]; b.tpCool = 1.5; b.caveLock = t; this.cave = null; fx('cave-out');
       }
@@ -440,7 +443,7 @@ class Game {
     c.target = c.target[1] || c.target[0] ? c.target.map((v, i) => (Math.abs(t[i] - v) > 30 ? t[i] : v + (t[i] - v) * Math.min(1, dt * 10))) : t;
     const dir = [Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), Math.cos(c.yaw) * Math.cos(c.pitch)];
     let d = c.dist;
-    for (let s = 0.5; s < c.dist; s += 0.4) {
+    for (let s = 0.5; s < c.dist; s += Math.max(0.4, c.dist / 60)) {
       const x = c.target[0] + dir[0] * s, y = c.target[1] + dir[1] * s, z = c.target[2] + dir[2] * s;
       const blocked = this.cave ? (y > this.cave.ceil(x, z) - 0.3 || y < this.cave.floor(x, z) + 0.3) : this.realm ? (this.realm.floorAt ? y < this.realm.floorAt(x, z) + 0.4 : false) : y < this.T.ground(x, z) + 0.4;
       const part = this.B.get(Math.floor(x), Math.floor(y), Math.floor(z));
@@ -562,8 +565,9 @@ class Game {
     else if (inSt) { amb = [0.24, 0.32, 0.36]; gnd = [0.12, 0.16, 0.18]; sunC = sunC.map(v => v * 0.3); fog = [0.05, 0.12, 0.14]; fogD = 1 / 110; }
     const proj = M4.persp(this.fov, this.w / this.h, 0.25, 8000), view = M4.lookAt(c.eye, c.target, [0, 1, 0]);
     this.vp = M4.mul(proj, view);
-    const sa = o.sunAngle, sun = [Math.cos(sa) * 0.5, Math.max(0.2, Math.sin(sa)), 0.55], sl = Math.hypot(...sun);
-    const sd = [Math.cos(sa) * 0.6, Math.sin(sa), 0.55], sdl = Math.hypot(...sd);
+    const sa = o.sunAngle; let sun = [Math.cos(sa) * 0.5, Math.max(0.2, Math.sin(sa)), 0.55], sl = Math.hypot(...sun);
+    let sd = [Math.cos(sa) * 0.6, Math.sin(sa), 0.55], sdl = Math.hypot(...sd);
+    if (RL && RL.sunAt) { sun = [RL.sunAt[0] - c.target[0], RL.sunAt[1] - c.target[1], RL.sunAt[2] - c.target[2]]; sl = Math.hypot(...sun) || 1; sd = sun; sdl = sl; } // in space the light comes from the real sun
     // camera directions (for the sky and the particles)
     const f = [c.target[0] - c.eye[0], c.target[1] - c.eye[1], c.target[2] - c.eye[2]], fl = Math.hypot(...f); f[0] /= fl; f[1] /= fl; f[2] /= fl;
     const rt = [-f[2], 0, f[0]], rl = Math.hypot(...rt) || 1; rt[0] /= rl; rt[2] /= rl;
@@ -627,6 +631,9 @@ class Game {
     if (RL) {
       for (const m of RL.meshes) { G.flat(m.kind !== 'world'); if (m.kind === 'deco') G.mat(1, 0.2, 0.1); else if (m.kind === 'glow') G.mat(1, 0.5, 0.8); else G.mat(0, 0.1, 0.1); G.tex(m.kind === 'world' ? 2 : 0); G.draw(m.mesh, null, 1, null, m.kind === 'glow' ? 0.6 : 0); }
       if (RL.planet) { G.mat(0, 0.3, 0.2); G.tex(0); G.fog(0); G.draw(RL.planet, null, 1, null, 0.15); G.fog(); }
+      if (RL.big) { G.flat(0); G.mat(0, 0.25, 0.25); G.tex(0); G.fog(0); for (const m of RL.big) G.draw(m); G.fog(); }
+      if (RL.spin) { G.flat(1); G.mat(1, 0.4, 0.5); G.tex(0); for (const s of RL.spin) G.draw(s.mesh, M4.model(s.p, s.rot(t), 1), 1, null, s.glow * 0.3); }
+      if (RL.stMesh) { G.flat(1); G.mat(0, 0.15, 0.3); G.tex(4); G.draw(RL.stMesh); G.mat(1, 0.2, 0.1); G.tex(0); G.draw(RL.stDeco); }
       G.mat(0, 0, 0.06); G.tex(2); G.flat(1);
     }
     this.stat('deco');
@@ -704,7 +711,7 @@ class Game {
       const hd = p._hd || 0, HR = M4.rotY(-hd);
       if (p.ship) { // flying the owner ship
         const pit = Math.max(-0.5, Math.min(0.5, (p === me ? -o.shipPitch : Math.atan2(dy, Math.max(mv, 0.05)) * 0.5) || 0));
-        if (!(p === me && this.fpv)) this.drawShip(M4.model(p.p, M4.mul3(HR, M4.rotZ(pit)), 1), 0);
+        if (!(p === me && this.fpv)) this.drawShip(M4.model(p.p, M4.mul3(HR, M4.rotZ(pit)), 1), 0, p.ship);
         continue;
       }
       const bp = p.p;
@@ -722,7 +729,7 @@ class Game {
       }
     }
     // the ship while it flies in or away (only on this screen)
-    if (o.shipFx) this.drawShip(M4.model(o.shipFx.p, M4.mul3(M4.rotY(-o.shipFx.hd), M4.rotZ(o.shipFx.pitch || 0)), 1), o.shipFx.open || 0);
+    if (o.shipFx) this.drawShip(M4.model(o.shipFx.p, M4.mul3(M4.rotY(-o.shipFx.hd), M4.rotZ(o.shipFx.pitch || 0)), 1), o.shipFx.open || 0, o.shipFx.id);
     // lightning bolts (they glow)
     if (this.bolts) { G.mat(0, 0, 0); G.tex(0); for (const b of this.bolts) if (Math.sin(b.t * 60) > -0.3) G.draw(b.mesh, null, 1, null, 1); }
     // see-through things last
@@ -747,6 +754,7 @@ class Game {
     if (!this.under && !inSt && !this.region) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }
     G.mat(0, 0.1, 0.3); G.tex(0);
     if (RL && RL.lake) G.draw(RL.lake, null, 1, null, 0.8);
+    if (RL && RL.clearM) { G.fog(0); for (const m of RL.clearM) G.draw(m); if (RL.stClear) G.draw(RL.stClear); G.fog(); }
     for (const pc of this.partChunks.values()) G.draw(pc.clear);
     if (this.mods) { this.mods.draw(G, t, true); G.mat(0, 0.1, 0.3); G.tex(0); }
     for (const [M, sk, A, B] of clear) G.ball(M, sk, A, B);
@@ -840,8 +848,9 @@ class Game {
     return out;
   }
   // the owner ship; open (0..1) swings the glass canopy up on its hinge
-  drawShip(SM, open) {
+  drawShip(SM, open, id) {
     const G = this.gfx, gl = G.gl; G.mat(1, 0.35, 0.8);
+    if (typeof id === 'string' && SHIPS[id]) { const m = this.rigFor('ship:' + id, g => shipModelOf(g, id)); G.draw(m, SM, 1, null, 0.4); G.outline(m, SM, 0.03 * SHIPS[id].size); return; }
     const sm = this.rigFor('ship', shipModel); G.draw(sm, SM); G.outline(sm, SM, 0.03);
     const CM = M4.mul(SM, M4.model([-0.05, 0.9, 0], M4.rotZ(open * 1.25), 1));
     const fr = this.rigFor('canopyFrame', canopyFrame); G.draw(fr, M4.mul(CM, M4.model([1.3 - 1.3 * 1.35, 0.02, 0], I3, [1.35, 1, 0.7])));
