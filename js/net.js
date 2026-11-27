@@ -77,5 +77,5 @@ const Net = (() => {
     if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
   }
 
-  return { on, connect, leave, toKeeper, toOne, toAll, drop, count: () => conns.size };
+  return { MAIN_ID, on, connect, leave, toKeeper, toOne, toAll, drop, count: () => conns.size };
 })();

@@ -1,14 +1,16 @@
 // Bakes the big map picture of the whole world (the world is the same every time because of its seed).
 // Run again after changing the land in js/terrain.js:   node tools/bake-map.js   (then: python3 tools/pack-map.py)
+// For a travel region:   REGION=dustmaw node tools/bake-map.js   (then: python3 tools/pack-map.py dustmaw)
 // Writes map/world.raw (RGB, SIZE x SIZE) and map/world.json (size, area, region names).
 const fs = require('fs'), vm = require('vm'), path = require('path');
-const ROOT = path.join(__dirname, '..'), SIZE = +process.env.SIZE || 2048, SPAN = 16000, SEED = 20261115;
+const ROOT = path.join(__dirname, '..'), SIZE = +process.env.SIZE || 2048, SPAN = 16000, REGION = process.env.REGION || 'berekor', FILE = REGION === 'berekor' ? 'world' : REGION;
 const ctx = { console, Math, Map, Set, Float32Array, Uint16Array, Uint32Array, Uint8Array, Int32Array, Array, Object, JSON, performance: { now: () => 0 }, window: { NAUTIC_BETA: true }, document: { createElement: () => ({ getContext: () => null }) }, navigator: { userAgent: '' }, addEventListener() {} };
 vm.createContext(ctx);
-for (const f of ['js/gl.js', 'js/terrain.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
-vm.runInContext('globalThis.K = { Terrain, BIOMES, VOLCANO, STATION, hex, mixC, shadeC, smooth, lavaAt };', ctx);
-const { Terrain, BIOMES, hex, mixC, smooth, lavaAt } = ctx.K;
-const T = new Terrain(SEED), N = T.N, S1 = SIZE + 1, step = SPAN / SIZE;
+for (const f of ['js/gl.js', 'js/isles.js', 'js/terrain.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+vm.runInContext('VOLCANO.on = true; globalThis.K = { Terrain, BIOMES, VOLCANO, STATION, REGIONS, hex, mixC, shadeC, smooth, lavaAt };', ctx);
+const { Terrain, BIOMES, REGIONS, VOLCANO, hex, mixC, smooth, lavaAt } = ctx.K, RG = REGIONS[REGION];
+if (REGION !== 'berekor') { VOLCANO.on = false; vm.runInContext('REGION_NOW = ' + JSON.stringify(REGION), ctx); }
+const T = new Terrain(RG.seed, RG.theme), N = T.N, S1 = SIZE + 1, step = SPAN / SIZE;
 const H = new Float32Array(S1 * S1), Bm = new Uint8Array(S1 * S1);
 const t0 = Date.now();
 for (let j = 0; j < S1; j++) {
@@ -25,6 +27,14 @@ function landColor(b, x, z, h) {
   if (b === 4) c = mixC(hex('#e2b872'), hex('#ecc888'), smooth(0.3, 0.7, N.fbm(x / 110, z / 110, 64, 3)));
   if (b === 6 && h > 95) c = hex('#eef3f9');
   if (b === 11) c = mixC(hex('#7a6658'), hex('#4e4240'), smooth(0.3, 0.7, N.v(x / 40, z / 40, 78)));
+  if (b === 12) c = mixC(hex('#c4683c'), hex('#d98a52'), smooth(0.3, 0.7, N.fbm(x / 90, z / 90, 65, 2)));
+  if (b === 13) c = mixC(hex('#d6c09a'), hex('#c8ae84'), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 66, 2)));
+  if (b === 14) c = hex('#6fa042');
+  if (b === 16) c = mixC(hex('#b8862e'), hex('#c8602a'), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 67, 3)));
+  if (b === 17) c = mixC(hex('#1f5228'), hex('#2e6a30'), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 68, 3)));
+  if (b === 19) c = mixC(hex('#f4f0e8'), hex('#e6decf'), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 70, 2)));
+  if (b === 20) c = mixC(hex('#b07c5c'), hex('#c8a07a'), smooth(0.3, 0.7, N.fbm(x / 60, z / 60, 71, 2)));
+  if (b === 18) c = mixC(hex('#cad4f4'), hex('#e2dcfa'), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 69, 3)));
   return c;
 }
 const out = Buffer.alloc(SIZE * SIZE * 3);
@@ -63,11 +73,11 @@ for (let j = 0; j < SIZE; j++) for (let i = 0; i < SIZE; i++) {
   const o = (j * SIZE + i) * 3;
   out[o] = Math.max(0, Math.min(255, c[0] * g * 255)); out[o + 1] = Math.max(0, Math.min(255, c[1] * g * 255)); out[o + 2] = Math.max(0, Math.min(255, c[2] * g * 255));
 }
-fs.writeFileSync(path.join(ROOT, 'map/world.raw'), out);
+fs.writeFileSync(path.join(ROOT, 'map/' + FILE + '.raw'), out);
 // names of the big lands: flood fill each kind of land on a small grid, name the big ones at their middle
 const L = 256, cell = SIZE / L, bg = new Uint8Array(L * L), seen = new Uint8Array(L * L), labels = [];
 for (let j = 0; j < L; j++) for (let i = 0; i < L; i++) { const b = at(Bm, Math.floor((i + 0.5) * cell), Math.floor((j + 0.5) * cell)); bg[j * L + i] = at(H, Math.floor((i + 0.5) * cell), Math.floor((j + 0.5) * cell)) < -0.4 ? 0 : b; }
-const NAMED = { 3: 'Forest', 4: 'Desert', 5: 'Snowland', 6: 'Mountains', 7: 'Swamp', 8: 'Glow fields', 11: 'Volcano', 1: 'Beach', 2: 'Grassland' }, MIN = { 4: 40, 7: 60, 8: 60, 3: 90, 5: 160, 6: 60, 2: 400, 1: 9999, 11: 1 };
+const NAMED = { 3: 'Forest', 4: RG.theme ? 'Dunes' : 'Desert', 5: 'Snowland', 6: 'Mountains', 7: 'Swamp', 8: 'Glow fields', 11: 'Volcano', 1: 'Beach', 2: 'Grassland', 12: 'Red mesas', 13: 'Dust flats', 14: 'Oasis', 16: 'Autumn woods', 17: 'Elder forest', 18: 'Frostglow', 19: 'Salt flats', 20: 'Badlands' }, MIN = { 16: 60, 17: 60, 18: 60, 4: RG.theme ? 120 : 40, 7: 60, 8: 60, 3: 90, 5: 160, 6: 60, 2: 400, 1: 9999, 11: 1, 12: 50, 13: 80, 14: 12, 19: 60, 20: 60 };
 for (let s = 0; s < L * L; s++) {
   if (seen[s] || !NAMED[bg[s]]) continue;
   const b = bg[s], cells = [s]; seen[s] = 1;
@@ -81,7 +91,8 @@ for (let s = 0; s < L * L; s++) {
 }
 labels.sort((a, b) => b.size - a.size);
 // the islands: every piece of land big enough gets a name (biggest first), with its box and what lands are on it
-const ISLE_NAMES = ['Berekor Mainland', 'Whitecrown', 'Elderwood', 'Mistpeak', 'Hollowfrost', 'Amberleaf', 'Sandscar', 'Saltreach', 'Brannock', 'Ilvary', 'Dune Key', 'Wenn', 'Bogmoor', 'Glimmerholm', 'Wisp Isle', 'Little Tarn', 'Fenrow', 'Quill Isle', 'Lantern Isle', 'Oakum'];
+const ISLE_NAMES = { berekor: ['Berekor Mainland', 'Whitecrown', 'Elderwood', 'Mistpeak', 'Hollowfrost', 'Amberleaf', 'Sandscar', 'Saltreach', 'Brannock', 'Ilvary', 'Dune Key', 'Wenn', 'Bogmoor', 'Glimmerholm', 'Wisp Isle', 'Little Tarn', 'Fenrow', 'Quill Isle', 'Lantern Isle', 'Oakum'],
+  dustmaw: ['Sandhollow', 'Rustmesa', 'Scorchkey', 'Dry Gulch', 'Ochre Atoll', 'Saltpan', 'Redrock', 'Thirstwell', 'Mesa Vell', 'Dustfall', 'Gritstone', 'Hollow Sun', 'Brittle Key', 'Sunbake', 'Copperbluff', 'Bleakwater', 'Tumble Isle', 'Ashen Mesa', 'Pebbleshoal', 'Cinder Dune', 'Dryreed', 'Sandpiper Key', 'Glassmouth', 'Old Well', 'Driftbone'] }[REGION];
 // land joined only by thin necks counts as separate islands: shrink the land, find the pieces, then grow them back
 const ER = +process.env.ER || 6, land = new Uint8Array(L * L); for (let c = 0; c < L * L; c++) land[c] = bg[c] !== 0 ? 1 : 0;
 let core = land.slice(); for (let e = 0; e < ER; e++) { const nx = core.slice(); for (let j = 0; j < L; j++) for (let i = 0; i < L; i++) { const c = j * L + i; if (!core[c]) continue; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = i + a, nj = j + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L || !core[nj * L + ni]) { nx[c] = 0; break; } } } core = nx; }
@@ -93,7 +104,7 @@ while (front.length) { const nf = []; for (const c of front) { const ci = c % L,
 const isles = [];
 for (let k = 0; k < pieces.length; k++) {
   const cells = []; for (let c = 0; c < L * L; c++) if (own[c] === k) cells.push(c);
-  if (cells.length < 40) continue;
+  if (cells.length < (RG.theme ? 70 : 40)) continue;
   let x0 = L, x1 = 0, z0 = L, z1 = 0; const kinds = {};
   for (const c of cells) { const ci = c % L, cj = (c / L) | 0; x0 = Math.min(x0, ci); x1 = Math.max(x1, ci); z0 = Math.min(z0, cj); z1 = Math.max(z1, cj); kinds[bg[c]] = (kinds[bg[c]] || 0) + 1; }
   const W = v => Math.round(-SPAN / 2 + v * SPAN / L), set = new Set(cells);
@@ -101,6 +112,15 @@ for (let k = 0; k < pieces.length; k++) {
   isles.push({ x0: W(x0), z0: W(z0), x1: W(x1 + 1), z1: W(z1 + 1), size: cells.length, lands, cells: set, home: set.has((L / 2) * L + L / 2) });
 }
 isles.sort((a, b) => (b.home - a.home) || (b.size - a.size));
+// keep the island numbers of the region's island table (its themes and landmarks go by these numbers)
+const TBL = vm.runInContext({ berekor: 'BEREKOR_ISLES', dustmaw: 'DUST_ISLES' }[REGION] || 'null', ctx);
+if (TBL) {
+  for (const it of isles) { const v = {}; for (const c of it.cells) { const k = TBL.at(-SPAN / 2 + ((c % L) + 0.5) * SPAN / L, -SPAN / 2 + (((c / L) | 0) + 0.5) * SPAN / L); if (k >= 0) v[k] = (v[k] || 0) + 1; } const e = Object.entries(v).sort((a, b) => b[1] - a[1])[0]; it.tk = e ? +e[0] : 999; }
+  const used = new Set(), ord = isles.slice().sort((a, b) => b.size - a.size); for (const it of ord) { if (used.has(it.tk)) it.tk = 999; used.add(it.tk); }
+  const fixed = isles.filter(it => it.tk < 999).sort((a, b) => a.tk - b.tk), rest = isles.filter(it => it.tk >= 999);
+  isles.length = 0; let k = 0; for (const it of fixed) { while (k < it.tk) { isles.push(null); k++; } isles.push(it); k++; } for (const it of rest) isles.push(it);
+  for (let q = isles.length - 1; q >= 0; q--) if (!isles[q]) isles[q] = { x0: 0, z0: 0, x1: 0, z1: 0, size: 0, lands: [], cells: new Set(), gone: true };
+}
 // where to write each island's name: its spot farthest from the sea
 const far = new Int32Array(L * L).fill(-1); let fr = []; for (let c = 0; c < L * L; c++) if (!land[c]) { far[c] = 0; fr.push(c); }
 while (fr.length) { const nf = []; for (const c of fr) { const ci = c % L, cj = (c / L) | 0; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = ci + a, nj = cj + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L) continue; const n = nj * L + ni; if (far[n] < 0) { far[n] = far[c] + 1; nf.push(n); } } } fr = nf; }
@@ -110,5 +130,5 @@ isles.forEach((it, k) => { it.name = ISLE_NAMES[k] || 'Isle ' + (k + 1); });
 for (const lb of labels) { const ci = Math.floor((lb.x + SPAN / 2) / SPAN * L), cj = Math.floor((lb.z + SPAN / 2) / SPAN * L); const it = isles.find(q => q.cells.has(cj * L + ci)); lb.isle = it ? isles.indexOf(it) : -1; }
 // a small mask of the islands so a tap on the map knows which island it hit
 const mask = Buffer.alloc(L * L); isles.forEach((it, k) => { for (const c of it.cells) mask[c] = k + 1; });
-fs.writeFileSync(path.join(ROOT, 'map/world.json'), JSON.stringify({ size: SIZE, span: SPAN, region: 'Berekor', labels, isles: isles.map(({ cells, home, ...r }) => r), grid: L, mask: mask.toString('base64') }));
+fs.writeFileSync(path.join(ROOT, 'map/' + FILE + '.json'), JSON.stringify({ size: SIZE, span: SPAN, region: RG.name, labels, isles: isles.map(({ cells, home, ...r }) => r), grid: L, mask: mask.toString('base64') }));
 console.log('done in', ((Date.now() - t0) / 1000).toFixed(0) + 's,', labels.length, 'names');

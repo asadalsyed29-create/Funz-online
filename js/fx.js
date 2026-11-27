@@ -56,9 +56,10 @@ class Particles {
     else if (inStation) { kind = 'station'; rate = 10; }
     else if (biome === 5) { kind = 'snow'; rate = 40; }
     else if (biome === 8) { kind = 'glow'; rate = 16; }
-    else if (biome === 3) { kind = night > 0.4 ? 'fire' : 'leaf'; rate = night > 0.4 ? 10 : 6; }
+    else if (biome === 18) { kind = Math.random() < 0.5 ? 'snow' : 'glow'; rate = 24; }
+    else if (biome === 3 || biome === 16 || biome === 17) { kind = night > 0.4 ? 'fire' : 'leaf'; rate = night > 0.4 ? 10 : 6; }
     else if (biome === 7 || biome === 2) { kind = night > 0.4 ? 'fire' : (biome === 2 ? 'pollen' : 'leaf'); rate = night > 0.4 ? 10 : 4; }
-    else if (biome === 4) { kind = 'sand'; rate = 10; }
+    else if (biome === 4 || biome === 12 || biome === 13) { kind = 'sand'; rate = biome === 13 ? 16 : 10; }
     else if (biome === 11) { kind = 'ember'; rate = 14; }
     else if (biome === 1) { kind = 'pollen'; rate = 2; }
     if (!kind) return;

@@ -235,7 +235,7 @@
   $('shipBtn').onclick = () => toggleShip();
 
   // ---------- new buttons (only on the beta account for now): map, friends, photo mode, settings ----------
-  const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
+  const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox', 'travelBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
   try { Extra.look = Math.max(0.4, Math.min(2.2, +localStorage.getItem('funz.look') || 1)); } catch (e) {}
   Extra.setPhoto = on => {
     if (!window.NAUTIC_BETA || Extra.photo === on) return; Extra.photo = on;
@@ -244,13 +244,14 @@
   };
   if (window.NAUTIC_BETA) {
     const col = document.createElement('div'); col.id = 'sideBtns2';
-    col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button>';
+    col.innerHTML = '<button id="travelBtn" title="Travel"></button><button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button>';
     if (Device.useTouch) { $('quick').append(...col.children); } else $('hud').appendChild(col); // on phones they join the round buttons at the top
-    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22);
+    $('travelBtn').innerHTML = icon('planet', 22); $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22);
     const hint = document.createElement('div'); hint.id = 'photoHint'; hint.className = 'hidden'; hint.textContent = 'Photo mode: drag to look around, tap to bring the buttons back'; document.body.appendChild(hint);
     const panel = (id, title) => { const b = document.createElement('div'); b.id = id; b.className = 'xPanel hidden'; b.innerHTML = '<div class="aHead"><b>' + title + '</b><button class="iconBtn">' + icon('close', 18) + '</button></div><div class="xBody"></div>'; b.querySelector('.iconBtn').onclick = () => b.classList.add('hidden'); $('hud').appendChild(b); return b; };
-    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings');
-    BigMap.init({ game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500) });
+    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings'), tBox = panel('travelBox', 'Travel');
+    BigMap.init({ region: () => (G && G.region) || 'berekor', game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500),
+      teleport: (x, z) => { if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can teleport again when this game is over', 2000); return false; } const T = G.game.T; G.body.p = [x, Math.max(T.ground(x, z), SEA) + 2.5, z]; G.body.v = [0, 0, 0]; G.game.cave = null; G.body.caveLock = null; G.game.waypoint = null; Sound.play('tp'); showToast('Teleported to your waypoint', 1500); return true; } });
     setTimeout(() => BigMap.preload(), 4000);
     const show = b => { const was = !b.classList.contains('hidden'); Extra.closeAll(); $('bag').classList.add('hidden'); if (!was) b.classList.remove('hidden'); return !was; };
     $('mapBtn').onclick = () => BigMap.open();
@@ -294,6 +295,24 @@
     };
     try { const mv = localStorage.getItem('funz.musicVol'), sv = localStorage.getItem('funz.sfxVol'); if (mv != null) Sound.music = +mv; if (sv != null) Sound.sfx = +sv; } catch (e) {}
     $('setBtn').onclick = () => { if (show(sBox)) renderSet(); };
+    // travel: every planet and its regions; the built ones can be visited
+    const renderTravel = () => {
+      const body = tBox.querySelector('.xBody'); body.textContent = ''; const here = (G && G.region) || 'berekor', planets = [];
+      for (const [id, r] of Object.entries(REGIONS)) { let p = planets.find(q => q.name === r.planet); if (!p) planets.push(p = { name: r.planet, list: [] }); p.list.push([id, r]); }
+      for (const p of planets) {
+        const t = document.createElement('div'); t.className = 'aTitle'; t.textContent = 'Planet ' + p.name; body.appendChild(t);
+        for (const [id, r] of p.list) {
+          const row = document.createElement('div'); row.className = 'xRow';
+          const tx = document.createElement('div'); tx.className = 'xName'; tx.style.whiteSpace = 'normal'; tx.innerHTML = '<span></span><div class="xDim"></div>'; tx.firstChild.textContent = r.name; tx.lastChild.textContent = r.about;
+          const go = document.createElement('button'); go.className = 'mini';
+          if (id === here) { go.textContent = 'You are here'; go.disabled = true; }
+          else if (!r.built) { go.textContent = 'Not built yet'; go.disabled = true; row.classList.add('off'); }
+          else { go.textContent = 'Travel'; go.onclick = () => { if (!G) return; const srv = G.server; tBox.classList.add('hidden'); leave('Travelling to ' + r.name + '…'); play(srv, id === 'berekor' ? null : id); }; }
+          row.append(tx, go); body.appendChild(row);
+        }
+      }
+    };
+    $('travelBtn').onclick = () => { if (show(tBox)) renderTravel(); };
   }
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
   try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}
@@ -555,9 +574,11 @@
     return s[1] < g + 0.4 ? [s[0], g + 1.5, s[2]] : s;
   }
 
-  async function play(server) {
+  async function play(server, region) {
     const name = myName(); if (!name) return;
-    saveKey = server ? 'srvworld.' + server.id : 'world5';
+    region = window.NAUTIC_BETA && region && REGIONS[region] && REGIONS[region].built && region !== 'berekor' ? region : null;
+    VOLCANO.on = !!window.NAUTIC_BETA && !region;
+    saveKey = (server ? 'srvworld.' + server.id : 'world5') + (region ? '.' + region : '');
     Sound.start();
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     $('serversBtn').disabled = true; menuMsg('Entering the world…');
@@ -565,7 +586,7 @@
     modSig = ''; clearInterval(modTimer);
     const s = saved(), B = new Builds(); if (BUILDING) B.load(s.parts, s.wires);
     let game;
-    try { game = new Game($('game'), $('ov'), SEED, B); }
+    try { game = new Game($('game'), $('ov'), SEED, B, region); }
     catch (e) { console.error(e); $('serversBtn').disabled = false; menuMsg('Your device can\'t show 3D graphics (WebGL). Try another browser.'); return; }
     game.radius = Device.type === 'phone' ? 4 : Device.type === 'tablet' ? 5 : 6; game.near = Device.type === 'phone' ? 1.3 : 2.3;
     if (Device.type !== 'computer') { game.maxDpr = 1.5; game.maxClouds = 1400; game.maxLights = 5; } else game.maxDpr = 1.25;
@@ -573,7 +594,7 @@
     game.allPartsChanged();
     game.onTouch = () => { prog.add('touched'); questCheck(); };
     const circ = new Circuits(B); for (const l of s.levers || []) circ.levers.add(l);
-    const spawn = (server && server.test && safeSpawn(game, server.at)) || safeSpawn(game, store.json('spawn5', null)) || defaultSpawn();
+    const spawn = region ? defaultSpawn() : (server && server.test && safeSpawn(game, server.at)) || safeSpawn(game, store.json('spawn5', null)) || defaultSpawn();
     const body = game.newBody([spawn[0] + (Math.random() - .5), spawn[1] + 1, spawn[2] + (Math.random() - .5)]);
     G = {
       role: null, myId: null, players: new Map(), mgBots: new Map(), B, game, circ, body,
@@ -583,7 +604,7 @@
       taken: new Map(), drops: new Map(), wx: 'auto', frozen: false, effects: {}, inv: store.json('inv', {}), race: null, raceCool: 0,
       board: Array.isArray(s.board) ? s.board.slice(0, 5) : [], spawn, lastSpawnPad: '', wireFrom: null,
       profile: { name, ...myLook(), dev: Device.short, devType: Device.type },
-      server: server || null, mod: {},
+      server: server || null, mod: {}, region,
       names: new Map((s.names || []).filter(e => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'string')), pending: new Set(),
     };
     G.me = { id: 'me', ...G.profile, p: body.p, R: body.R, r: body.r };
@@ -594,7 +615,7 @@
 
   async function connectWorld(first) {
     let role;
-    try { role = G.test ? 'offline' : await Net.connect(G.server ? Servers.worldId(G.server.id) : null); } catch (e) { role = 'offline'; }
+    try { role = G.test ? 'offline' : await Net.connect((G.server ? Servers.worldId(G.server.id) : Net.MAIN_ID) + (G.region ? '.' + G.region : '')); } catch (e) { role = 'offline'; }
     if (!G) { Net.leave(); return; }
     G.role = role; G.lastHeard = performance.now();
     if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' }); return; }
@@ -608,6 +629,7 @@
       else if (!owner && !isRandomName(G.me.name) && k.fp && !reservedName(G.me.name)) { G.names.set(key, k.fp); G.dirty = true; } }
     if (first) enterGame();
     G.reconnecting = false; renderPeople();
+    if (first && G.region) setTimeout(() => { if (G) banner('Welcome to', REGIONS[G.region].name, 'Planet ' + REGIONS[G.region].planet, 3500); }, 600);
     if (G.test) { $('roomLabel').textContent = G.server.name; $('leaveBtn').textContent = 'Back to editor'; sys('Testing your mod. Only you are here, and nothing is saved. Press Back to editor when you are done.'); }
     else if (role === 'offline') { $('roomLabel').innerHTML = '<i class="live off"></i>Offline'; sys('Could not reach the world, so you are exploring offline. Your builds are saved on this device.'); }
     else if (G.server) { $('roomLabel').innerHTML = '<i class="live"></i>'; $('roomLabel').appendChild(document.createTextNode(G.server.name)); sys(first ? 'Welcome to ' + G.server.name + '! The server stays open: when everyone leaves, it is saved and picks up again when someone comes back.' : 'Back online.'); }
@@ -665,7 +687,7 @@
     leave(id) {
       if (!G || G.role !== 'keeper') return;
       const p = G.players.get(id); if (!p) return;
-      G.players.delete(id); renderPeople(); G.game.arena.hostRemove(id);
+      G.players.delete(id); renderPeople(); if (G.game.arena) G.game.arena.hostRemove(id);
       Net.toAll({ t: 'bye', id }); sys(p.name + ' left');
     },
     closed() { if (G && G.role === 'guest') reconnect(); },
@@ -786,7 +808,7 @@
     } else if (m.t === 'take') {
       tryTake(p, m.id, m.type);
     } else if (m.t === 'mg') {
-      if (m.a === 'join' && allow(id, 'mg', 3, 4000)) { const r = G.game.arena.hostJoin(id, m.k, p.name); if (r) Net.toOne(id, { t: 'mg', s: { note: r } }); }
+      if (m.a === 'join' && G.game.arena && allow(id, 'mg', 3, 4000)) { const r = G.game.arena.hostJoin(id, m.k, p.name); if (r) Net.toOne(id, { t: 'mg', s: { note: r } }); }
     } else if (m.t === 'race') {
       const time = num(m.time, 5, 3600); if (time != null && allow(id, 'r', 2, 10000)) recordRace(p.name, time);
     } else if (m.t === 'adminCmd') {
@@ -1105,6 +1127,7 @@
     if (s.ph === 'end' && s.res && mine && G.mgPaid !== s.rid) { const r = s.res[G.myId]; if (Array.isArray(r)) { G.mgPaid = s.rid; const coins = Math.max(0, Math.min(60, r[0] | 0)); prog.give(coins); prog.add('arenaRounds'); if (r[2]) prog.add(s.k === 'tag' ? 'tagWins' : 'hideWins'); questCheck(); prog.save(); banner(s.k === 'tag' ? 'Tag' : 'Hide and seek', r[2] ? 'You win!' : 'Round over', cleanText(String(r[1])), 5000); Sound.play(r[2] ? 'quest' : 'coin'); } }
   }
   function arenaStep(now, dt) {
+    if (!G.game.arena) return;
     const A = G.game.arena, b = G.body, pad = A.padAt(b.p), mg = G.mg;
     if (pad && now > (G.mgJoin || 0) && !(mg && mg.ids.includes(G.myId) && mg.ph !== 'end')) { G.mgJoin = now + 2000; if (G.role === 'guest') Net.toKeeper({ t: 'mg', a: 'join', k: pad }); else { const r = A.hostJoin(G.myId, pad, G.me.name); if (r) showToast(r, 2600); } }
     if (G.role !== 'guest') { const s = A.hostTick(dt, now, hostIO); if (s) { if (now - (G.mgSent || 0) > 100 || s.ph === 'gone') { G.mgSent = now; Net.toAll({ t: 'mg', s }); } mgRecv(s); } }
@@ -1447,7 +1470,7 @@
     prog.max('high', Math.floor(b.p[1]));
     if (now - (G.lastTrack || 0) < 1000) return; G.lastTrack = now;
     const game = G.game, inSt = insideStation(b.p), cave = game.cave || game.realm, info = game.T.info(b.p[0], b.p[2]);
-    if (!cave && !inSt && info.b >= 1 && info.b <= 8) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
+    if (!cave && !inSt && ((info.b >= 1 && info.b <= 8) || (info.b >= 12 && info.b <= 20 && info.b !== 15))) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
     if (inSt || nearStation(b.p[0], b.p[2], 70)) prog.max('station', 1);
     if (VOLCANO.on && !cave && Math.hypot(b.p[0] - VOLCANO.x, b.p[2] - VOLCANO.z) < VOLCANO.R * 0.6) prog.max('volcano', 1);
     // discovering places (they get their names on the compass and map)
@@ -1458,7 +1481,7 @@
     Sound.setRain(game.rain || 0);
     if (game.realm) { Sound.setMood(game.realm.mood); return; }
     if (G.modMusic) { Sound.setMood(G.modMusic); return; }
-    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station', 11: 'volcano' }[info.b] || 'meadow'));
+    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station', 11: 'volcano', 12: 'desert', 13: 'desert', 14: 'beach', 15: 'desert', 16: 'forest', 17: 'forest', 18: 'snow', 19: 'desert', 20: 'desert' }[info.b] || 'meadow'));
   }
 
   // ---------- the owner ship: it flies down, you jump in, then you fly it from the cockpit ----------
@@ -1502,9 +1525,9 @@
       if (G.role === 'guest') Net.toKeeper({ t: 'take', id: it.id, type: it.type }); else tryTake(G.me, it.id, it.type);
     }
     // parkour checkpoints
-    for (const cp of game.landmarks[1].checkpoints) if (Math.hypot(b.p[0] - cp[0], b.p[1] - cp[1], b.p[2] - cp[2]) < 2 && G.lastSpawnPad !== cp.join()) { G.lastSpawnPad = cp.join(); G.spawn = [...cp]; store.set('spawn5', JSON.stringify(G.spawn)); showToast('Checkpoint! You\'ll respawn here', 1500); }
+    if (!game.region) for (const cp of game.landmarks[1].checkpoints) if (Math.hypot(b.p[0] - cp[0], b.p[1] - cp[1], b.p[2] - cp[2]) < 2 && G.lastSpawnPad !== cp.join()) { G.lastSpawnPad = cp.join(); G.spawn = [...cp]; store.set('spawn5', JSON.stringify(G.spawn)); showToast('Checkpoint! You\'ll respawn here', 1500); }
     // storm chase
-    { const cp = CHASE_START, gy = game.T.ground(cp[0], cp[2]);
+    if (!game.region) { const cp = CHASE_START, gy = game.T.ground(cp[0], cp[2]);
       if (!G.chase && !G.race && now > (G.chaseCool || 0) && Math.hypot(b.p[0] - cp[0], b.p[2] - cp[2]) < 1.8 && Math.abs(b.p[1] - gy) < 2.5) startChase(now); }
     const rs = game.raceStart; // ring race
     if (!G.race && now > G.raceCool && Math.hypot(b.p[0] - rs[0], b.p[2] - rs[2]) < 1.6 && Math.abs(b.p[1] - rs[1]) < 2) {
@@ -1555,7 +1578,7 @@
     else if (kind === 'cave-out') showToast('Back outside!', 1200);
     else if (kind === 'spawn') {
       const k = arg.join(','); if (G.lastSpawnPad === k) return; G.lastSpawnPad = k;
-      G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; store.set('spawn5', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);
+      G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; if (!G.region) store.set('spawn5', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);
     }
   }
 
@@ -1602,12 +1625,12 @@
     for (const k of m.og || []) gset.add(k);
     if (G.chase && !G.chase.update(dt, b, now, G.nail)) endChase();
     if (G.game.park) G.game.park.update(dt, b, input, now, parkUI);
-    const fishing = G.game.pier.update(dt, b, input, now, gameUI, { night: G.dark > 0.3, rain: (G.game.rain || 0) > 0.3 });
-    const skyHold = G.game.sky.update(dt, b, now, gameUI, G.game.cam);
+    const fishing = G.game.pier && G.game.pier.update(dt, b, input, now, gameUI, { night: G.dark > 0.3, rain: (G.game.rain || 0) > 0.3 });
+    const skyHold = G.game.sky && G.game.sky.update(dt, b, now, gameUI, G.game.cam);
     if (!fishing && !skyHold && !shipStep(dt, ix, iy, input.up, input.down)) G.game.step(b, input, dt, { fly: m.fly, big: !!G.effects.big || !!MP.big, fast: !!G.effects.fast, superJump: !!G.effects.superJump, g: gset, fx, mod: { speed: (gfx && gfx.speed || 1) * (MP.speed > 0 ? Math.min(MP.speed, 6) : 1), jump: (gfx && gfx.jump || 1) * (MP.jump > 0 ? Math.min(MP.jump, 8) : 1), gravity: MP.gravity != null ? Math.max(0, Math.min(MP.gravity, 5)) : null } });
     modsFrame(dt);
     if (G.chase && G.chase.anchor) { b.p = [...G.chase.anchor]; b.v = [0, 0, 0]; }
-    if (!fishing && !skyHold && G.game.arena.bounce(b)) Sound.play('boost');
+    if (!fishing && !skyHold && G.game.arena && G.game.arena.bounce(b)) Sound.play('boost');
     const RR = G.game.realmAt(b.p);
     if (RR && b.p[1] < RR.o[1] - 70) { b.p = [...RR.start]; b.v = [0, 0, 0]; showToast('Whoops! Back to the start', 1200); }
     else if (!RR && (b.p[1] < -780 || (b.p[1] < -60 && b.p[1] > -150) || (G.game.cave && b.p[1] < G.game.cave.o[1] - 30))) { respawn(); showToast('Oops! Back to your spawn point', 1500); }
@@ -1653,7 +1676,7 @@
     const chips = Object.entries(G.effects).map(([k, t]) => ({ fast: 'Speed', big: 'Big', superJump: 'Super jump', glow: 'Glow' }[k] + ' ' + Math.ceil((t - now) / 1000) + 's'));
     if (G.chase) { const C = G.chase, left = Math.max(0, C.T - (now - C.t0) / 1000); chips.unshift((C.alive > 0.05 ? EF_NAMES[C.ef] + ' tornado ' + Math.round(C.near) + ' m' : 'Storm chase · a tornado is forming…') + ' · ' + Math.floor(C.score) + ' pts · ' + Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') + (G.nail ? ' · nailed down' : '')); if (C.msg) chips.unshift(C.msg.text); }
     { const pc = G.game.park && G.game.park.chip(); if (pc) chips.unshift(pc); }
-    for (const c of [G.game.sky.chip(), G.game.pier.chip(), mgChip()]) if (c) chips.unshift(c);
+    for (const c of [G.game.sky && G.game.sky.chip(), G.game.pier && G.game.pier.chip(), mgChip()]) if (c) chips.unshift(c);
     if (G.race) chips.unshift('Race ' + ((now - G.race.start) / 1000).toFixed(1) + 's · ring ' + (G.race.next + 1) + '/12');
     const ct = chips.join('  ·  '); if ($('effects').textContent !== ct) $('effects').textContent = ct;
     $('effects').classList.toggle('hidden', !ct);
