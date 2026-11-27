@@ -235,7 +235,7 @@
   $('shipBtn').onclick = () => toggleShip();
 
   // ---------- new buttons (only on the beta account for now): map, friends, photo mode, settings ----------
-  const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox', 'travelBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
+  const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
   try { Extra.look = Math.max(0.4, Math.min(2.2, +localStorage.getItem('funz.look') || 1)); } catch (e) {}
   Extra.setPhoto = on => {
     if (!window.NAUTIC_BETA || Extra.photo === on) return; Extra.photo = on;
@@ -244,13 +244,20 @@
   };
   if (window.NAUTIC_BETA) {
     const col = document.createElement('div'); col.id = 'sideBtns2';
-    col.innerHTML = '<button id="travelBtn" title="Travel"></button><button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button>';
+    col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button>';
     if (Device.useTouch) { $('quick').append(...col.children); } else $('hud').appendChild(col); // on phones they join the round buttons at the top
-    $('travelBtn').innerHTML = icon('planet', 22); $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22);
+    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22);
     const hint = document.createElement('div'); hint.id = 'photoHint'; hint.className = 'hidden'; hint.textContent = 'Photo mode: drag to look around, tap to bring the buttons back'; document.body.appendChild(hint);
     const panel = (id, title) => { const b = document.createElement('div'); b.id = id; b.className = 'xPanel hidden'; b.innerHTML = '<div class="aHead"><b>' + title + '</b><button class="iconBtn">' + icon('close', 18) + '</button></div><div class="xBody"></div>'; b.querySelector('.iconBtn').onclick = () => b.classList.add('hidden'); $('hud').appendChild(b); return b; };
-    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings'), tBox = panel('travelBox', 'Travel');
-    BigMap.init({ region: () => (G && G.region) || 'berekor', game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500),
+    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings');
+    // travel happens from the big map: leave this world and join the same server in the other region (and go to a waypoint there)
+    const travel = (id, wp) => {
+      if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can travel when this game is over', 2000); return false; }
+      const r = REGIONS[id]; if (!r || !r.built) return false; const srv = G.server; leave('Travelling to ' + r.name + '…'); play(srv, id === 'berekor' ? null : id);
+      if (wp) { let n = 0; const t = setInterval(() => { n++; if (G && G.game && G.body && ((G.region || 'berekor') === id)) { clearInterval(t); setTimeout(() => { if (!G || !G.game) return; const T = G.game.T; G.body.p = [wp.x, Math.max(T.ground(wp.x, wp.z), SEA) + 2.5, wp.z]; G.body.v = [0, 0, 0]; Sound.play('tp'); }, 1500); } else if (n > 80) clearInterval(t); }, 250); }
+      return true;
+    };
+    BigMap.init({ travel, region: () => (G && G.region) || 'berekor', game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500),
       teleport: (x, z) => { if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can teleport again when this game is over', 2000); return false; } const T = G.game.T; G.body.p = [x, Math.max(T.ground(x, z), SEA) + 2.5, z]; G.body.v = [0, 0, 0]; G.game.cave = null; G.body.caveLock = null; G.game.waypoint = null; Sound.play('tp'); showToast('Teleported to your waypoint', 1500); return true; } });
     setTimeout(() => BigMap.preload(), 4000);
     const show = b => { const was = !b.classList.contains('hidden'); Extra.closeAll(); $('bag').classList.add('hidden'); if (!was) b.classList.remove('hidden'); return !was; };
@@ -295,24 +302,6 @@
     };
     try { const mv = localStorage.getItem('funz.musicVol'), sv = localStorage.getItem('funz.sfxVol'); if (mv != null) Sound.music = +mv; if (sv != null) Sound.sfx = +sv; } catch (e) {}
     $('setBtn').onclick = () => { if (show(sBox)) renderSet(); };
-    // travel: every planet and its regions; the built ones can be visited
-    const renderTravel = () => {
-      const body = tBox.querySelector('.xBody'); body.textContent = ''; const here = (G && G.region) || 'berekor', planets = [];
-      for (const [id, r] of Object.entries(REGIONS)) { let p = planets.find(q => q.name === r.planet); if (!p) planets.push(p = { name: r.planet, list: [] }); p.list.push([id, r]); }
-      for (const p of planets) {
-        const t = document.createElement('div'); t.className = 'aTitle'; t.textContent = 'Planet ' + p.name; body.appendChild(t);
-        for (const [id, r] of p.list) {
-          const row = document.createElement('div'); row.className = 'xRow';
-          const tx = document.createElement('div'); tx.className = 'xName'; tx.style.whiteSpace = 'normal'; tx.innerHTML = '<span></span><div class="xDim"></div>'; tx.firstChild.textContent = r.name; tx.lastChild.textContent = r.about;
-          const go = document.createElement('button'); go.className = 'mini';
-          if (id === here) { go.textContent = 'You are here'; go.disabled = true; }
-          else if (!r.built) { go.textContent = 'Not built yet'; go.disabled = true; row.classList.add('off'); }
-          else { go.textContent = 'Travel'; go.onclick = () => { if (!G) return; const srv = G.server; tBox.classList.add('hidden'); leave('Travelling to ' + r.name + '…'); play(srv, id === 'berekor' ? null : id); }; }
-          row.append(tx, go); body.appendChild(row);
-        }
-      }
-    };
-    $('travelBtn').onclick = () => { if (show(tBox)) renderTravel(); };
   }
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
   try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}

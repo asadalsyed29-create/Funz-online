@@ -6,12 +6,15 @@ const BigMap = (() => {
   let data = null, img = null, dimg = null, viewR = null, mask = null, loading = null, isOpen = false, host = null, loadedFor = null;
   let view = { cx: 0, cz: 0, k: 0.05 }, isle = -1, placing = false, raf = 0, shade = new Map();
   const ptrs = new Map(); let pinch = null, tapStart = null;
-  let style = 'drawn'; try { style = localStorage.getItem('funz.mapstyle') || 'drawn'; } catch (e) {}
+  let mode = 'region', farWay = null; // mode: 'region' or 'planets'; farWay = a waypoint put in a region you're not in yet
   const BUILT = () => Object.keys(REGIONS).filter(k => REGIONS[k].built);
   const TAGS = { berekor: 'Where every journey starts', dustmaw: 'Hot sand, old bones and one very big cactus' };
 
   const regionNow = () => (host && host.region && host.region()) || 'berekor';
   const viewing = () => viewR || regionNow(), here = () => viewing() === regionNow();
+  // the waypoint shown on this map: the game's one where you are, or one waiting in another region
+  const getWay = () => { if (here()) { const g = host.game(); return g && g.waypoint; } return farWay && farWay.region === viewing() ? farWay : null; };
+  const setWay = w => { if (here()) { const g = host.game(); if (g) g.waypoint = w; farWay = null; } else farWay = w ? { region: viewing(), x: w.x, z: w.z } : null; };
   function load() {
     const want = viewing();
     if (loading && loadedFor === want) return loading;
@@ -46,24 +49,24 @@ const BigMap = (() => {
     const el = document.createElement('div'); el.id = 'mapScreen'; el.className = 'hidden';
     el.innerHTML = `<div class="mapBox">
       <div class="mapHead"><button id="mapBack" class="mBtn hidden"></button><b id="mapTitle"></b>
-        <button id="mapWay" class="mBtn"></button><button id="mapGo" class="mBtn hidden"></button><button id="mapStyle" class="mBtn"></button><button id="mapMe" class="mBtn"></button><button id="mapOut" class="mBtn"></button><button id="mapIn" class="mBtn"></button><button id="mapClose" class="mBtn"></button></div>
+        <button id="mapWay" class="mBtn"></button><button id="mapGo" class="mBtn hidden"></button><button id="mapTravel" class="mBtn hidden"></button><button id="mapPlanets" class="mBtn"></button><button id="mapMe" class="mBtn"></button><button id="mapOut" class="mBtn"></button><button id="mapIn" class="mBtn"></button><button id="mapClose" class="mBtn"></button></div>
       <div class="mapWrap"><canvas id="mapCv"></canvas><div id="mapMsg"></div><button id="mapPrev" class="mArrow">‹</button><button id="mapNext" class="mArrow">›</button></div>
       <div id="mapInfo"></div></div>`;
     document.body.appendChild(el);
     $('mapWay').innerHTML = icon('go', 16) + ' Waypoint';
     $('mapMe').innerHTML = icon('spawn', 16) + ' Me'; $('mapOut').textContent = '−'; $('mapIn').textContent = '+'; $('mapClose').innerHTML = icon('close', 18);
     $('mapBack').innerHTML = '<span class="flip">' + icon('bring', 16) + '</span> Whole map';
-    $('mapGo').innerHTML = icon('bring', 16) + ' Go there'; $('mapGo').onclick = () => { const g = host.game(); if (g && g.waypoint && host.teleport(g.waypoint.x, g.waypoint.z)) close(); };
-    const setStyleBtn = () => { $('mapStyle').textContent = style === 'drawn' ? 'Drawn' : 'Photo'; };
-    setStyleBtn(); $('mapStyle').onclick = () => { style = style === 'drawn' ? 'photo' : 'drawn'; try { localStorage.setItem('funz.mapstyle', style); } catch (e) {} setStyleBtn(); };
-    const flip = d => { const L = BUILT(), i = L.indexOf(viewing()); viewR = L[(i + d + L.length) % L.length]; placing = false; updateWayBtn(); data = null; info(); load().then(() => { if (isOpen) showWorld(); }).catch(() => { $('mapMsg').textContent = 'Could not load the map. Check your connection and try again.'; }); };
+    $('mapGo').innerHTML = icon('bring', 16) + ' Go there';
+    $('mapGo').onclick = () => { const w = getWay(); if (!w) return; if (here()) { if (host.teleport(w.x, w.z)) close(); } else if (host.travel(viewing(), w)) { farWay = null; close(); } };
+    $('mapTravel').innerHTML = icon('planet', 16) + ' Travel here'; $('mapTravel').onclick = () => { if (host.travel(viewing(), null)) close(); };
+    $('mapPlanets').innerHTML = icon('planet', 16) + ' Planets'; $('mapPlanets').onclick = () => { mode === 'planets' ? showRegion(viewing()) : showPlanets(); };
+    const flip = d => { const L = BUILT(), i = L.indexOf(viewing()); showRegion(L[(i + d + L.length) % L.length]); };
     for (const [id, d] of [['mapPrev', -1], ['mapNext', 1]]) $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); flip(d); });
     $('mapClose').onclick = close; $('mapBack').onclick = () => showWorld(true);
     $('mapIn').onclick = () => zoomAt(1.6); $('mapOut').onclick = () => zoomAt(1 / 1.6);
     $('mapMe').onclick = () => { const me = host.me(); if (!here()) { viewR = null; data = null; load().then(() => { if (isOpen) { showWorld(); $('mapMe').click(); } }); return; } if (me) { view.cx = me.x; view.cz = me.z; view.k = Math.max(view.k, 0.12); clampView(); } };
     $('mapWay').onclick = () => {
-      const g = host.game(); if (g && g.waypoint && !placing) { g.waypoint = null; updateWayBtn(); info(); return; }
-      if (!here()) { host.toast('You can only put a waypoint in the region you are in.'); return; }
+      if (getWay() && !placing) { setWay(null); updateWayBtn(); info(); return; }
       placing = !placing; updateWayBtn(); info();
     };
     const cv = $('mapCv');
@@ -97,12 +100,51 @@ const BigMap = (() => {
   function fit() { if (isle >= 0) showIsle(isle); else { view.k = minK(); clampView(); } }
 
   function tap(px, py) {
+    if (mode === 'planets') { tapPlanet(px, py); return; }
     const [x, z] = toWorld(px, py);
     if (placing) {
-      const g = host.game(); if (g) { g.waypoint = { x, z }; host.toast('Waypoint set. Follow the yellow marker on your compass!'); }
+      setWay({ x, z }); host.toast(here() ? 'Waypoint set. Follow the yellow marker on your compass!' : 'Waypoint set in ' + regionName() + '. Tap Go there to travel straight to it.');
       placing = false; updateWayBtn(); info(); return;
     }
     if (isle < 0) { const k = isleAt(x, z); if (k >= 0) showIsle(k); }
+  }
+  // ---------- the planets map ----------
+  const PLANET_LOOK = { Nautara: ['#3f8fd8', '#6cc06a', '#1d4a8a'], Kelar: ['#2fb8c4', '#f0dca0', '#13607a'], Vyrnox: ['#d8582a', '#3a2a28', '#6a1e10'], Oskarr: ['#d8e8f8', '#9cc0e8', '#5a7aa8'], Artex: ['#8a8e98', '#f0c040', '#3a3e48'] };
+  let planetHits = [];
+  function planetList() { const out = []; for (const [id, r] of Object.entries(REGIONS)) { let p = out.find(q => q.name === r.planet); if (!p) out.push(p = { name: r.planet, regions: [] }); p.regions.push({ id, ...r }); } return out; }
+  function showPlanets() { mode = 'planets'; placing = false; isle = -1; $('mapTitle').textContent = 'Planets'; $('mapBack').classList.add('hidden'); updateWayBtn(); info(); }
+  function showRegion(id) {
+    mode = 'region'; viewR = id === regionNow() ? null : id; placing = false; updateWayBtn(); if (loadedFor !== viewing()) data = null; info();
+    load().then(() => { if (isOpen && mode === 'region') showWorld(); }).catch(() => { $('mapMsg').textContent = 'Could not load the map. Check your connection and try again.'; });
+  }
+  function tapPlanet(px, py) {
+    const hit = planetHits.find(q => Math.hypot(px - q.x, py - q.y) < q.r + 14); if (!hit) return;
+    const built = hit.p.regions.filter(r => r.built);
+    if (!built.length) { host.toast('Planet ' + hit.p.name + ' is not built yet.'); return; }
+    showRegion(built.some(r => r.id === regionNow()) ? regionNow() : built[0].id);
+  }
+  function drawPlanets(g, w, h) {
+    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#0b1330'); sky.addColorStop(1, '#1a1440'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 140; i++) { const x = (Math.sin(i * 91.7) * 0.5 + 0.5) * w, y = (Math.sin(i * 37.3 + 2) * 0.5 + 0.5) * h, r = (i % 7 === 0) ? 1.4 : 0.8; g.fillStyle = 'rgba(255,255,240,' + (0.35 + (i % 5) * 0.12) + ')'; g.fillRect(x, y, r, r); }
+    const ps = planetList(), n = ps.length, cur = (REGIONS[regionNow()] || {}).planet || 'Nautara', R = Math.max(18, Math.min(w / (n * 3.4), h * 0.17)); planetHits = [];
+    g.strokeStyle = 'rgba(244,234,210,.25)'; g.lineWidth = 1.5; g.setLineDash([6, 6]); g.beginPath(); g.moveTo(w * 0.08, h * 0.42); g.lineTo(w * 0.92, h * 0.42); g.stroke(); g.setLineDash([]);
+    ps.forEach((p, k) => {
+      const x = w * (0.12 + 0.76 * (n > 1 ? k / (n - 1) : 0.5)), y = h * 0.42 + (k % 2 ? -h * 0.06 : h * 0.04), L = PLANET_LOOK[p.name] || ['#888', '#aaa', '#444'], built = p.regions.some(r => r.built);
+      planetHits.push({ x, y, r: R, p });
+      if (p.name === cur) { g.strokeStyle = '#ffe14a'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, R + 7, 0, 7); g.stroke(); }
+      g.save(); g.beginPath(); g.arc(x, y, R, 0, 7); g.clip();
+      g.fillStyle = L[0]; g.fillRect(x - R, y - R, R * 2, R * 2);
+      for (let b = 0; b < 5; b++) { g.fillStyle = L[1]; g.beginPath(); g.ellipse(x + Math.sin(k * 3 + b * 2.1) * R * 0.55, y + Math.cos(k * 5 + b * 1.7) * R * 0.5, R * (0.18 + (b % 3) * 0.08), R * (0.12 + (b % 2) * 0.08), b, 0, 7); g.fill(); }
+      const sh = g.createRadialGradient(x - R * 0.4, y - R * 0.4, R * 0.1, x, y, R * 1.1); sh.addColorStop(0, 'rgba(255,255,255,.25)'); sh.addColorStop(0.6, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,10,.55)'); g.fillStyle = sh; g.fillRect(x - R, y - R, R * 2, R * 2);
+      if (!built) { g.fillStyle = 'rgba(10,14,30,.45)'; g.fillRect(x - R, y - R, R * 2, R * 2); }
+      g.restore(); g.strokeStyle = '#2a2e38'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, R, 0, 7); g.stroke();
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      const tx = (t, yy, font, fill) => { g.font = font; g.lineJoin = 'round'; g.lineWidth = 3; g.strokeStyle = 'rgba(20,16,10,.9)'; g.strokeText(t, x, yy); g.fillStyle = fill; g.fillText(t, x, yy); };
+      tx(p.name, y + R + 16, '700 16px Georgia, serif', '#fff4dc');
+      let yy = y + R + 33; for (const r of p.regions) { tx(r.name, yy, (r.built ? '600 ' : 'italic 500 ') + '11px Georgia, serif', r.id === regionNow() ? '#ffe14a' : r.built ? '#e8f0ff' : 'rgba(220,220,230,.5)'); yy += 14; }
+      if (p.name === cur) tx('You are here', y - R - 16, '700 12px system-ui', '#ffe14a');
+      else if (!built) tx('Not built yet', y - R - 14, 'italic 600 11px system-ui', 'rgba(220,220,230,.7)');
+    });
   }
   const regionName = () => (REGIONS[viewing()] || {}).name || 'Berekor';
   function showWorld() { isle = -1; $('mapBack').classList.add('hidden'); $('mapTitle').textContent = (viewing() === 'berekor' ? 'Berekor region' : regionName()) + ', planet ' + ((REGIONS[viewing()] || {}).planet || 'Nautara'); view.cx = 0; view.cz = 0; view.k = minK(); clampView(); info(); }
@@ -111,13 +153,22 @@ const BigMap = (() => {
     view.cx = (it.x0 + it.x1) / 2; view.cz = (it.z0 + it.z1) / 2; view.k = clampK(Math.min(w / ((it.x1 - it.x0) * pad), h / ((it.z1 - it.z0) * pad)));
     $('mapBack').classList.remove('hidden'); $('mapTitle').textContent = it.name; info();
   }
-  function updateWayBtn() { const g = host && host.game(); $('mapGo').classList.toggle('hidden', !(g && g.waypoint) || placing || !here()); $('mapWay').classList.toggle('on', placing); $('mapWay').innerHTML = icon('go', 16) + (placing ? ' Tap the map' : g && g.waypoint ? ' Clear waypoint' : ' Waypoint'); }
+  function updateWayBtn() {
+    const w = host && getWay(), pl = mode === 'planets';
+    $('mapGo').classList.toggle('hidden', !w || placing || pl); $('mapTravel').classList.toggle('hidden', here() || pl || !!w);
+    $('mapWay').classList.toggle('hidden', pl); $('mapMe').classList.toggle('hidden', pl); $('mapIn').classList.toggle('hidden', pl); $('mapOut').classList.toggle('hidden', pl);
+    $('mapPrev').classList.toggle('hidden', pl); $('mapNext').classList.toggle('hidden', pl);
+    $('mapPlanets').innerHTML = icon('planet', 16) + (pl ? ' Back to map' : ' Planets');
+    $('mapWay').classList.toggle('on', placing); $('mapWay').innerHTML = icon('go', 16) + (placing ? ' Tap the map' : w ? ' Clear waypoint' : ' Waypoint');
+  }
   function info() {
-    const el = $('mapInfo'); if (!data) { el.textContent = ''; return; }
+    const el = $('mapInfo');
+    if (mode === 'planets') { el.textContent = 'Tap a planet to see its map. From there you can travel to any region that is built.'; return; }
+    if (!data) { el.textContent = ''; return; }
     if (placing) { el.textContent = 'Tap anywhere on the map to put your waypoint there.'; return; }
     if (isle >= 0) { const it = data.isles[isle], names = it.lands.map(b => ({ 1: 'beaches', 2: 'grassland', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountains', 7: 'swamp', 8: 'glow fields', 11: 'the volcano', 12: 'red mesas', 13: 'dust flats', 14: 'oases', 16: 'autumn woods', 17: 'elder forest', 18: 'frostglow', 19: 'salt flats', 20: 'hoodoo badlands' }[b])).filter(Boolean); const IS = viewing() === 'berekor' ? (typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES : null) : viewing() === 'dustmaw' && typeof DUST_ISLES !== 'undefined' ? DUST_ISLES : null, mk = IS ? IS.marks.find(m => m.isle === isle) : null, th = IS ? THEME_TXT[IS.themes[isle]] : '';
       el.textContent = it.name + ': ' + (th || names.join(', ')) + (mk ? '. Landmark: ' + STRUCT_TYPES[mk.type] : '') + '.'; return; }
-    el.textContent = data.isles.filter(q => !q.gone).length + ' islands in ' + regionName() + '. Tap an island to see its map.' + (here() ? '' : ' You are not in this region: use Travel to go there.');
+    el.textContent = data.isles.filter(q => !q.gone).length + ' islands in ' + regionName() + '. Tap an island to see its map.' + (here() ? '' : ' Tap Travel here to go, or put a waypoint and tap Go there.');
   }
 
   // ---------- drawing ----------
@@ -161,7 +212,8 @@ const BigMap = (() => {
     const cv = $('mapCv'), [w, h] = size(), dpr = Math.min(2, window.devicePixelRatio || 1);
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + 'px'; cv.style.height = h + 'px'; }
     const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const drawn = style === 'drawn' && dimg;
+    if (mode === 'planets') { $('mapMsg').textContent = ''; drawPlanets(g, w, h); return; }
+    const drawn = !!dimg;
     g.fillStyle = drawn ? '#6487b0' : '#132f5c'; g.fillRect(0, 0, w, h);
     if (!data) { $('mapMsg').textContent = 'Drawing the map…'; return; }
     $('mapMsg').textContent = '';
@@ -212,9 +264,9 @@ const BigMap = (() => {
         lab(q.name, px, py + r + 9, '700 11px system-ui', q.col, q.big ? 8 : 3);
       }
     }
+    const wpt = getWay();
+    if (wpt) { const [px, py] = toScreen(wpt.x, wpt.z); g.fillStyle = '#ffe14a'; g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(px, py); g.lineTo(px - 6, py - 12); g.arc(px, py - 15, 7, Math.PI * 0.8, Math.PI * 2.2); g.closePath(); g.fill(); g.stroke(); g.fillStyle = '#0a1124'; g.beginPath(); g.arc(px, py - 15, 2.5, 0, 7); g.fill(); }
     if (gm && here()) {
-      // the waypoint: a yellow pin
-      if (gm.waypoint) { const [px, py] = toScreen(gm.waypoint.x, gm.waypoint.z); g.fillStyle = '#ffe14a'; g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(px, py); g.lineTo(px - 6, py - 12); g.arc(px, py - 15, 7, Math.PI * 0.8, Math.PI * 2.2); g.closePath(); g.fill(); g.stroke(); g.fillStyle = '#0a1124'; g.beginPath(); g.arc(px, py - 15, 2.5, 0, 7); g.fill(); }
       // other players
       for (const p of gm.lastPlayers || []) { if (!p || !p.p || p === gm.lastMe) continue; const [px, py] = toScreen(p.p[0], p.p[2]); if (px < -20 || py < -20 || px > w + 20 || py > h + 20) continue; g.fillStyle = p.color || '#fff'; g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill(); g.stroke(); if (p.name) lab(p.name, px, py - 11, '700 11px system-ui', '#fff', 7); }
     }
@@ -248,7 +300,7 @@ const BigMap = (() => {
   }
 
   function open() {
-    build(); if (isOpen) return; isOpen = true; $('mapScreen').classList.remove('hidden'); placing = false; updateWayBtn();
+    build(); if (isOpen) return; isOpen = true; $('mapScreen').classList.remove('hidden'); placing = false; mode = 'region'; viewR = null; updateWayBtn();
     const ready = () => { const me = host.me(); showWorld(); if (me) { const k = isleAt(me.x, me.z); if (k >= 0) showIsle(k); } };
     viewR = null; if (loadedFor !== viewing()) data = null;
     if (data) ready(); else { info(); load().then(() => { if (isOpen) ready(); }).catch(() => { $('mapMsg').textContent = 'Could not load the map. Check your connection and try again.'; }); }
