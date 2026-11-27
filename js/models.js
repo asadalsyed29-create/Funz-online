@@ -383,12 +383,12 @@ function itemModel(gl, type) {
 // ---------- creatures (friendly, they hop around and run off if you come close) ----------
 const CREATURES = {
   hopper: { name: 'Hopper', biomes: [2, 9], speed: 3, hop: true },
-  deer: { name: 'Antlerbuck', biomes: [3], speed: 4 },
-  fox: { name: 'Fox', biomes: [3, 2], speed: 4.5 },
-  crab: { name: 'Sand crab', biomes: [1, 4], speed: 2.5 },
+  deer: { name: 'Antlerbuck', biomes: [3, 16, 17], speed: 4 },
+  fox: { name: 'Fox', biomes: [3, 2, 16], speed: 4.5 },
+  crab: { name: 'Sand crab', biomes: [1, 4, 14], speed: 2.5 },
   turtle: { name: 'Beach turtle', biomes: [1], speed: 1 },
-  lizard: { name: 'Sun lizard', biomes: [4], speed: 3.5 },
-  penguin: { name: 'Snowpuff', biomes: [5], speed: 1.8, waddle: true },
+  lizard: { name: 'Sun lizard', biomes: [4, 12, 13], speed: 3.5 },
+  penguin: { name: 'Snowpuff', biomes: [5, 18], speed: 1.8, waddle: true },
   slime: { name: 'Bog blob', biomes: [7], speed: 1.5, hop: true },
   frog: { name: 'Frog', biomes: [7], speed: 2.5, hop: true },
   moth: { name: 'Glowmoth', biomes: [8], speed: 2, fly: true },

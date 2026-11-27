@@ -300,3 +300,7 @@ body.photo #ov{opacity:0}
 #mapMsg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:700;color:#fff;pointer-events:none}
 #mapInfo{font-size:13px;opacity:.85;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-height:440px){.mapHead b{font-size:14px}.mBtn{padding:5px 8px;font-size:12px}#mapInfo{font-size:12px}}
+.xRow.off{opacity:.55}
+.xRow .mini{flex:none}
+.mArrow{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:64px;border-radius:8px;background:rgba(42,46,56,.82);color:#f4ead2;font:700 30px Georgia,serif;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid rgba(244,234,210,.55)}
+#mapPrev{left:6px}#mapNext{right:6px}

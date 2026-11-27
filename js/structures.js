@@ -39,14 +39,20 @@ class Structures {
     const N = this.N, r = N.hash(rx, rz, 900);
     const x = rx * REG + REG / 2 + (N.hash(rx, rz, 901) - 0.5) * 90, z = rz * REG + REG / 2 + (N.hash(rx, rz, 902) - 0.5) * 90;
     if (Math.abs(x) > LIMIT - 200 || Math.abs(z) > LIMIT - 200) return null;
-    if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110 || (VOLCANO.on && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.R + 60)) return null;
+    if (this.T.theme) { if (Math.hypot(x, z) < 120) return null; for (const sp of DUST_SPECIALS) if (Math.hypot(x - sp.x, z - sp.z) < sp.r * 1.4) return null; }
+    else if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110 || (VOLCANO.on && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.R + 60)) return null;
+    // every Berekor island has its own landmark in the middle (beta)
+    const MK = this.T.theme === 'dust' ? (typeof DUST_ISLES !== 'undefined' ? DUST_ISLES.marks : []) : VOLCANO.on && typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES.marks : [];
+    for (const m of MK) if (Math.floor(m.x / REG) === rx && Math.floor(m.z / REG) === rz) {
+      const mi = this.T.info(m.x, m.z); return { key: rx + ',' + rz, type: m.type, x: m.x, z: m.z, y: mi.h, b: mi.b, rot: N.hash(rx, rz, 904) * 6.28, seed: Math.floor(N.hash(rx, rz, 905) * 1e6) };
+    }
     const inf = this.T.info(x, z); if (inf.h < 1.2) return null;
     const pick = (opts) => opts[Math.floor(N.hash(rx, rz, 903) * opts.length)];
     let type = null;
     const hilly = Math.abs(this.T.h(x + 12, z) - this.T.h(x - 12, z)) + Math.abs(this.T.h(x, z + 12) - this.T.h(x, z - 12)) > 9;
     if ((rx === 1 && rz === 0) || ((inf.b === 6 || hilly) && r < 0.75) || r > 0.9) type = 'cave';
     else if (r < 0.5) type = { 2: pick(['ruins', 'circle', 'village', 'tower']), 3: pick(['bigtree', 'cabin', 'ruins']), 4: pick(['pyramid', 'ruins', 'pod']),
-      5: pick(['igloo', 'frozen', 'pod']), 6: pick(['tower', 'cave']), 7: pick(['stilts', 'ruins']), 8: pick(['arch', 'shroomring']), 1: pick(['wreck', 'lighthouse']) }[inf.b] || null;
+      5: pick(['igloo', 'frozen', 'pod']), 6: pick(['tower', 'cave']), 7: pick(['stilts', 'ruins']), 8: pick(['arch', 'shroomring']), 1: pick(['wreck', 'lighthouse']), 12: pick(['pyramid', 'ruins', 'tower']), 13: pick(['pod', 'ruins']), 14: pick(['village', 'cabin']), 16: pick(['cabin', 'village', 'ruins']), 17: pick(['bigtree', 'ruins']), 18: pick(['igloo', 'frozen']), 19: pick(['pod', 'circle']), 20: pick(['arch', 'cave', 'tower']) }[inf.b] || null;
     if (!type) return null;
     let rot = N.hash(rx, rz, 904) * 6.28;
     if (type === 'cave') { // the cave mouth looks downhill
@@ -268,8 +274,8 @@ function buildStation(gl, st) {
   s.door = door;
   return s;
 }
-const insideStation = p => Math.hypot(p[0] - STATION.x, p[1] - STATION.ground, p[2] - STATION.z) < STATION.R - 1 && p[1] > STATION.ground - 2;
-const nearStation = (x, z, pad = 18) => Math.hypot(x - STATION.x, z - STATION.z) < STATION.R + pad;
+const insideStation = p => !REGION_NOW && Math.hypot(p[0] - STATION.x, p[1] - STATION.ground, p[2] - STATION.z) < STATION.R - 1 && p[1] > STATION.ground - 2;
+const nearStation = (x, z, pad = 18) => !REGION_NOW && Math.hypot(x - STATION.x, z - STATION.z) < STATION.R + pad;
 
 // ---------- caves: a separate underground level under each cave entrance ----------
 class Cave {

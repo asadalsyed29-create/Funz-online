@@ -3,7 +3,7 @@ const SEA = 0, LIMIT = 8000, CHUNK = 64, CELL = 4, CN = CHUNK / CELL;
 const STATION = { x: 640, z: -420, ground: 10, R: 60 };
 // the one volcano: a tall cone with a lava lake in its crater
 const VOLCANO = { x: -350, z: 1750, R: 430, rim: 60, top: 165, lava: 128, on: typeof window !== 'undefined' && !!window.NAUTIC_BETA };
-let SPAWN_H = 6; // set from the land around the plaza when the world is made
+let SPAWN_H = 6; let REGION_NOW = null; // the travel region being played (null = Berekor) // set from the land around the plaza when the world is made
 
 const BIOMES = {
   0: { name: 'Ocean', ground: '#c9b47f' },
@@ -18,6 +18,15 @@ const BIOMES = {
   9: { name: 'Plaza', ground: '#d8c9a8' },
   11: { name: 'Volcano', ground: '#4a403c', rock: '#2f2a28' },
   10: { name: 'Station grounds', ground: '#98a0aa' },
+  12: { name: 'Red mesas', ground: '#c4683c', rock: '#9a4a2a' },
+  13: { name: 'Dust flats', ground: '#d6c09a', rock: '#b09a78' },
+  14: { name: 'Oasis', ground: '#7fae4a' },
+  15: { name: 'Landing', ground: '#d8c9a8' },
+  16: { name: 'Autumn woods', ground: '#9a8a3c' },
+  17: { name: 'Elder forest', ground: '#2f6430' },
+  18: { name: 'Frostglow', ground: '#d4dcf6', rock: '#9aa6c8' },
+  19: { name: 'Salt flats', ground: '#ece6dc', rock: '#c8bcae' },
+  20: { name: 'Hoodoo badlands', ground: '#b07c5c', rock: '#8a5a40' },
 };
 
 class Noise {
@@ -37,9 +46,30 @@ class Noise {
 }
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
+// The regions you can travel to. Each has its own seed and its own kind of land. (Berekor is the first world.)
+const REGIONS = {
+  berekor: { name: 'Berekor', planet: 'Nautara', about: 'Mixed lands: forests, snow, glow fields, deserts and the volcano', seed: 20261115, built: true },
+  dustmaw: { name: 'Dustmaw Reaches', planet: 'Nautara', about: 'Dusty desert islands, red mesas, oases, The Cactus and Bonewash', seed: 77310429, theme: 'dust', built: true },
+  lumen: { name: 'Lumenhollow', planet: 'Nautara', about: 'A glowing night region' },
+  kelar: { name: 'Kelar Coasts', planet: 'Kelar', about: 'Beaches, reefs and warm seas' },
+  tidewild: { name: 'Tidewild', planet: 'Kelar', about: 'Mangroves and tide pools' },
+  cinder: { name: 'Cinderfall', planet: 'Vyrnox', about: 'Lava islands' },
+  ashveil: { name: 'Ashveil', planet: 'Vyrnox', about: 'A grey ash forest' },
+  glacier: { name: 'Glacier Sea', planet: 'Oskarr', about: 'Ice and frozen oceans' },
+  aurora: { name: 'Aurora Shelf', planet: 'Oskarr', about: 'Lights over the ice' },
+  rustworks: { name: 'Rustworks', planet: 'Artex', about: 'Abandoned machines, the Broken Bridge and the underground power station' },
+  stacks: { name: 'Neon Stacks', planet: 'Artex', about: 'Islands of empty towers and lit-up walkways' },
+};
+// the special islands of Dustmaw (each gets its own round island raised out of the sea)
+const DUST_SPECIALS = [
+  { id: 'cactus', name: 'The Cactus', x: 1150, z: -820, r: 180 },
+  { id: 'bonewash', name: 'Bonewash', x: -1400, z: 640, r: 220 },
+];
+
 class Terrain {
-  constructor(seed) {
-    this.N = new Noise(seed); this.cache = new Map();
+  constructor(seed, theme) {
+    this.N = new Noise(seed); this.cache = new Map(); this.theme = theme || null;
+    if (this.theme === 'dust') { this.flat = false; SPAWN_H = 4.2; this.flat = true; return; }
     // The plaza and the station sit level with the land around them (never down in a pit).
     this.flat = false;
     const ring = (cx, cz, r) => { let s = 0; for (let k = 0; k < 12; k++) s += this.info(cx + Math.cos(k / 12 * 6.2832) * r, cz + Math.sin(k / 12 * 6.2832) * r).h; return s / 12; };
@@ -49,6 +79,7 @@ class Terrain {
   }
   // height + biome numbers at a point
   info(x, z) {
+    if (this.theme === 'dust') return this.infoDust(x, z);
     const N = this.N, d0 = Math.hypot(x, z), dS = Math.hypot(x - STATION.x, z - STATION.z);
     const edge = Math.max(0, (Math.max(Math.abs(x), Math.abs(z)) - 6400) / 1600);
     const cont = N.fbm(x / 1700, z / 1700, 1, 4) + 0.32 * Math.exp(-(d0 * d0) / 490000) + 0.3 * Math.exp(-(dS * dS) / 360000) - edge * 0.7;
@@ -84,6 +115,20 @@ class Terrain {
       const wS = smooth(190, 100, dS); if (wS > 0) { h += (STATION.ground - h) * wS; if (wS > 0.9) b = 10; }
     }
     if (b < 0 && vol > 0.5) b = 11;
+    // each island of Berekor has its own kind of land (beta)
+    let isle = -1;
+    if (b < 0 && VOLCANO.on && h >= 1.6 && typeof BEREKOR_ISLES !== 'undefined') {
+      isle = BEREKOR_ISLES.at(x, z); const th = isle > 0 ? BEREKOR_ISLES.themes[isle] : '';
+      if (th === 'snow') b = h > 60 && mnt > 0.3 ? 6 : 5;
+      else if (th === 'frost') b = h > 70 && mnt > 0.3 ? 5 : 18;
+      else if (th === 'elder') b = h > 60 && mnt > 0.3 ? 6 : 17;
+      else if (th === 'autumn') b = h > 60 && mnt > 0.3 ? 6 : 16;
+      else if (th === 'peaks') b = h > 85 ? 5 : h > 22 || mnt > 0.15 ? 6 : 3;
+      else if (th === 'desert') b = 4;
+      else if (th === 'swamp') b = h > 40 ? 3 : 7;
+      else if (th === 'meadow') b = h > 60 && mnt > 0.3 ? 6 : 2;
+      else if (th === 'glow') b = 8;
+    }
     if (b < 0) {
       if (h < -1.5) b = 0; else if (h < 1.6 && swampW < 0.5) b = 1;
       else if (h > 60 && mnt > 0.3) b = temp < 0.38 || h > 110 ? 5 : 6;
@@ -95,6 +140,47 @@ class Terrain {
       else b = 2;
     }
     return { h, b, temp, moist, vol };
+  }
+  // Dustmaw Reaches: many dry islands with dunes, flat dusty plains, stepped red mesas and a few green oases
+  infoDust(x, z) {
+    const N = this.N, d0 = Math.hypot(x, z), st = v => (v - 0.5) * 1.7 + 0.5;
+    const edge = Math.max(0, (Math.max(Math.abs(x), Math.abs(z)) - 6000) / 1500);
+    let cont = N.fbm(x / 1050, z / 1050, 101, 4) + 0.5 * Math.exp(-(d0 * d0) / 300000) - edge * 0.8;
+    for (const s of DUST_SPECIALS) { const d = Math.hypot(x - s.x, z - s.z); cont = Math.max(cont - (d < s.r * 2.2 ? 0.25 * smooth(s.r * 2.2, s.r * 1.4, d) : 0), 0.46 + 0.12 * smooth(s.r, s.r * 0.4, d) - (d > s.r ? 1 : 0)); }
+    const land = cont - 0.5, lw = Math.max(0, Math.min(1, land * 6 + 0.35));
+    let h = land * 110 + (N.fbm(x / 210, z / 210, 107, 3) - 0.5) * 12 * lw;
+    // each island has its own kind of desert (big mesas, tall dunes, rock spires, palm oases or salt flats)
+    const kind = typeof DUST_ISLES !== 'undefined' && h > -4 ? (DUST_ISLES.themes[DUST_ISLES.at(x, z)] || '') : '';
+    // mesas: flat tops with cliffs, cut into steps like layered rock
+    const mn = st(N.fbm(x / 640, z / 640, 113, 3)), pl = (kind === 'mesa' ? smooth(0.44, 0.48, mn) : kind ? 0 : smooth(0.6, 0.64, mn)) * Math.max(0, Math.min(1, land * 10));
+    let special = null; for (const s of DUST_SPECIALS) if (Math.hypot(x - s.x, z - s.z) < s.r * 1.3) special = s;
+    if (pl > 0 && !special) {
+      let top = h + 16 + N.v(x / 300, z / 300, 117) * 26; const t = top / 7; top = (Math.floor(t) + smooth(0.8, 1, t - Math.floor(t))) * 7;
+      h += (top - h) * pl;
+    }
+    // dunes on the sand
+    const flatW = kind === 'dunes' || kind === 'oasis' || kind === 'hoodoo' ? 0 : kind === 'salt' ? 1 : smooth(0.42, 0.34, st(N.fbm(x / 520, z / 520, 119, 2)));
+    if (kind === 'dunes' && h > 2) { const w = Math.sin(x / 34 + z / 90 + N.v(x / 120, z / 120, 121) * 7) * 0.5 + 0.5; h += Math.pow(w, 1.6) * 16 * Math.min(1, (h - 2) / 5); }
+    else if (h > 2 && pl < 0.5) h += (Math.sin(x / 19 + N.v(x / 70, z / 70, 121) * 6) * 0.5 + 0.5) * 6 * (1 - flatW) * Math.min(1, (h - 2) / 4);
+    if (kind === 'salt' && h > 2) h = 2.6 + (h - 2.6) * 0.12 + (N.v(x / 8, z / 8, 125) - 0.5) * 0.15;      // salt: almost dead flat
+    if (kind === 'hoodoo' && h > 2) { const r = 1 - Math.abs(2 * N.fbm(x / 140, z / 140, 127, 3) - 1); h += r * r * 22 * Math.min(1, (h - 2) / 6); } // badlands: gullies and ridges
+    // oases: a dip with a little pond in the middle
+    const oa = st(N.fbm(x / 420, z / 420, 123, 2)), oasisW = (kind === 'oasis' ? smooth(0.58, 0.66, oa) : kind ? 0 : smooth(0.78, 0.86, oa)) * (1 - pl) * (special ? 0 : 1);
+    if (oasisW > 0 && h > 2) h += (-2.2 - h) * oasisW * (kind === 'oasis' ? smooth(0.74, 0.84, oa) : smooth(0.82, 0.92, oa)) + (3 - h) * oasisW * 0.4;
+    // the landing at the start: flat sand
+    let b = -1; const wP = smooth(70, 30, d0); if (wP > 0) { h += (SPAWN_H - h) * wP; if (d0 < 24) b = 15; }
+    if (special) { const d = Math.hypot(x - special.x, z - special.z); if (d < special.r * 0.75) h += (Math.max(h, 4.5) - h) * smooth(special.r * 0.75, special.r * 0.55, d); }
+    if (b < 0) {
+      if (h < -1.5) b = 0; else if (h < 1.6) b = 1;
+      else if (special) b = 4;
+      else if (pl > 0.45) b = 12;
+      else if (oasisW > 0.35 || (kind === 'oasis' && oa > 0.48)) b = 14;
+      else if (kind === 'salt') b = 19;
+      else if (kind === 'hoodoo') b = 20;
+      else if (flatW > 0.5) b = 13;
+      else b = 4;
+    }
+    return { h, b, temp: 0.8, moist: 0.2, vol: 0, pl, special: special ? special.id : null };
   }
   h(x, z) { return this.info(x, z).h; }
   // height at a grid vertex (cached, used by physics)
@@ -128,6 +214,15 @@ function groundColor(T, x, z, info, ny, h) {
   if (info.b === 3) c = mixC(hex('#3f8f45'), hex('#57983e'), smooth(0.3, 0.7, T.N.v(x / 70, z / 70, 62)));
   if (info.b === 6 && h > 95) c = hex('#eef3f9');
   if (h < -1.2) c = mixC(hex('#d8c48f'), hex('#6f8a7a'), Math.min(1, -h / 25));
+  if (info.b === 16) c = mixC(hex('#a8903a'), hex('#c07a34'), smooth(0.3, 0.7, T.N.v(x / 60, z / 60, 87)));
+  if (info.b === 17) c = mixC(hex('#2f6430'), hex('#3e7434'), smooth(0.3, 0.7, T.N.v(x / 50, z / 50, 88)));
+  if (info.b === 18) c = mixC(hex('#d4dcf6'), hex('#e6e2fa'), smooth(0.3, 0.7, T.N.v(x / 40, z / 40, 89)));
+  if (info.b === 12) { const band = Math.floor(h / 3.5 + T.N.v(x / 60, z / 60, 83) * 1.5); c = hex(['#c4683c', '#d98a52', '#a85434', '#e0a872', '#b8603a'][((band % 5) + 5) % 5]); }
+  if (info.b === 19) { c = mixC(hex('#f2eee6'), hex('#e4dccc'), smooth(0.3, 0.7, T.N.v(x / 30, z / 30, 90))); const cr = Math.abs(T.N.v(x / 3.2, z / 3.2, 91) - 0.5); c = mixC(c, hex('#b8aa96'), smooth(0.05, 0.0, cr) * 0.6); } // salt crust with cracks
+  if (info.b === 20) { const band = Math.floor(h / 2.6 + T.N.v(x / 50, z / 50, 92) * 1.2); c = hex(['#b07c5c', '#c8a07a', '#9a6248', '#d8b894', '#a8705a', '#e2cba8'][((band % 6) + 6) % 6]); } // striped badland rock
+  if (info.b === 13) c = mixC(hex('#d6c09a'), hex('#c8ae84'), smooth(0.3, 0.7, T.N.v(x / 30, z / 30, 84)));
+  if (info.b === 14) c = mixC(hex('#6fa042'), hex('#8cbc52'), smooth(0.3, 0.7, T.N.v(x / 25, z / 25, 85)));
+  if (info.b === 4 && T.theme === 'dust') c = mixC(hex('#e8c48a'), hex('#dcae70'), smooth(0.3, 0.7, T.N.v(x / 50, z / 50, 86)));
   if (info.b === 11) {
     c = mixC(hex('#5a4c44'), hex('#383030'), smooth(0.3, 0.7, T.N.v(x / 40, z / 40, 78)));
     c = mixC(c, hex('#7a4a34'), smooth(0.62, 0.8, T.N.v(Math.atan2(z - VOLCANO.z, x - VOLCANO.x) * 6, Math.hypot(x - VOLCANO.x, z - VOLCANO.z) / 90, 81)) * 0.7); // rusty streaks down the slope
@@ -197,10 +292,10 @@ function buildTerrainChunk(gl, T, cx, cz, decos) {
   for (let j = 0; j < CN; j++) for (let i = 0; i < CN; i++) {
     const gx = cx * CN + i, gz = cz * CN + j, r = N.hash(gx, gz, 501);
     const x = gx * CELL + 0.6 + N.hash(gx, gz, 502) * (CELL - 1.2), z = gz * CELL + 0.6 + N.hash(gx, gz, 503) * (CELL - 1.2);
-    const info = inf(i, j); if (info.b === 9 || info.b === 10) continue;
+    const info = inf(i, j); if (info.b === 9 || info.b === 10 || info.b === 15 || info.special) continue;
     if (info.b === 11 && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.rim + 4) continue; // nothing grows in the crater
-    if (Math.abs(x - 120) < 62 && Math.abs(z + 40) < 56) continue; // the Fun Park deck and its ramps
-    if ((Math.abs(x - 100) < 72 && Math.abs(z + 160) < 72) || (x > -580 && x < -458 && z > -14 && z < 18)) continue; // the game arena, the fishing pier and its bait shop
+    if (!T.theme && Math.abs(x - 120) < 62 && Math.abs(z + 40) < 56) continue; // the Fun Park deck and its ramps
+    if (!T.theme && ((Math.abs(x - 100) < 72 && Math.abs(z + 160) < 72) || (x > -580 && x < -458 && z > -14 && z < 18))) continue; // the game arena, the fishing pier and its bait shop
     const y = T.ground(x, z); if (y < SEA - 0.3 && info.b !== 7 && info.b !== 0) continue;
     const s = 0.8 + N.hash(gx, gz, 504) * 0.6, rot = N.hash(gx, gz, 505) * 6.28;
     decorate(dmb, colliders, info.b, r, x, y, z, s, rot, N.hash(gx, gz, 506), decos);
@@ -260,6 +355,46 @@ function decorate(mb, col, b, r, x, y, z, s, rot, r2, decos) {
     else if (r < 0.08) crystals(mb, x, y, z, s, r2 > 0.5 ? '#ff8ff0' : '#8ff6ff');
     else if (r < 0.2) glowGrass(mb, x, y, z, r2);
     else if (r < 0.22) glowFlower(mb, x, y, z, r2);
+  } else if (b === 12) { // red mesas: red boulders, dry scrub
+    if (r < 0.03) stone(s * 1.4, r2 < 0.5 ? '#a85434' : '#c4683c');
+    else if (r < 0.05) deadBush(mb, x, y, z, s);
+    else if (r < 0.06) tuft(mb, x, y, z, '#a89a5a', 0.8);
+  } else if (b === 13) { // dust flats: tumbleweeds, bleached bones, cracked stones
+    if (r < 0.012) stone(s * 0.8, '#b09a78');
+    else if (r < 0.026) deadBush(mb, x, y, z, s * 1.2);
+    else if (r < 0.031) bones(mb, x, y, z, rot);
+    else if (r < 0.04) tuft(mb, x, y, z, '#b8a86a', 0.7);
+  } else if (b === 14) { // oasis: palms, reeds, grass and flowers
+    if (r < 0.05) { palm(mb, x, y, z, s * 1.1, rot); cyl(0.3, 6 * s); }
+    else if (r < 0.14) tuft(mb, x, y, z, r2 < 0.5 ? '#5aa84a' : '#78b84e', s);
+    else if (r < 0.2 && y < 1.5) reeds(mb, x, y, z, r2);
+    else if (r < 0.23) flowers(mb, x, y, z, r2);
+  } else if (b === 19) { // salt flats: salt crystal clumps and the odd bleached stone
+    if (r < 0.01) crystals(mb, x, y, z, s * 0.7, r2 > 0.5 ? '#fff4f0' : '#f4d8e0');
+    else if (r < 0.016) stone(s * 0.6, '#d8ccbc');
+    else if (r < 0.019) bones(mb, x, y, z, rot);
+  } else if (b === 20) { // hoodoo badlands: tall rock spires with cap stones, boulders, dead bushes
+    if (r < 0.022) { hoodoo(mb, x, y, z, s * (1 + r2 * 1.4), r2); cyl(1.1 * s, 9 * s); }
+    else if (r < 0.04) stone(s * 1.3, r2 < 0.5 ? '#9a6248' : '#b07c5c');
+    else if (r < 0.055) deadBush(mb, x, y, z, s);
+  } else if (b === 15) { // the landing: nothing
+  } else if (b === 16) { // autumn woods: orange, red and gold trees, fallen leaves
+    if (r < 0.07) { roundTree(mb, x, y, z, s * 1.15, ['#e0892e', '#d8b03a', '#c8502a', '#e8c040'][Math.floor(r2 * 4)], r2); cyl(0.35 * s, 6 * s); }
+    else if (r < 0.085) { birch(mb, x, y, z, s, r2); cyl(0.25 * s, 6 * s); }
+    else if (r < 0.15) tuft(mb, x, y, z, r2 < 0.5 ? '#c87a2a' : '#b8902e', s);
+    else if (r < 0.17) shrooms(mb, x, y, z, r2);
+    else if (r < 0.185) log(mb, x, y, z, s, rot);
+  } else if (b === 17) { // elder forest: huge old trees, ferns and mossy logs
+    if (r < 0.012) { pine(mb, x, y, z, s * 2.6, false, r2); cyl(0.9 * s, 17 * s); }
+    else if (r < 0.02) { roundTree(mb, x, y, z, s * 2.3, '#2f7a3a', r2); cyl(0.9 * s, 13 * s); }
+    else if (r < 0.2) fern(mb, x, y, z, s * 1.2, rot);
+    else if (r < 0.215) log(mb, x, y, z, s * 1.4, rot);
+    else if (r < 0.235) shrooms(mb, x, y, z, r2);
+  } else if (b === 18) { // frostglow: ice spikes and glowing crystals on pale snow
+    if (r < 0.03) { iceSpike(mb, x, y, z, s * 1.3); cyl(0.7 * s, 5 * s); }
+    else if (r < 0.06) crystals(mb, x, y, z, s, r2 > 0.5 ? '#9ff0ff' : '#d0a0ff');
+    else if (r < 0.075) snowBush(mb, x, y, z, s);
+    else if (r < 0.13) glowGrass(mb, x, y, z, r2);
   } else if (b === 11) { // volcano: dark lava rocks, burnt trees and a few glowing stones
     if (r < 0.05) stone(s * 1.3, r2 < 0.5 ? '#3a3230' : '#4a3e38');
     else if (r < 0.065) { deadTree(mb, x, y, z, s * 0.8, rot); cyl(0.3 * s, 4 * s); }
@@ -483,6 +618,12 @@ function cactus(mb, x, y, z, s, rot, r2 = 0.5) {
 function deadBush(mb, x, y, z, s) { mb.up = true; const c = hex('#8a6a42'); for (let k = 0; k < 5; k++) { const a = k * 1.3; mb.cyl(x, y - 0.1, z, 0.05, 0.02, 0.9 * s, 3, c, false, a); mb.at([x, y, z], M4.mul3(M4.rotY(a), M4.rotZ(0.6))); mb.cyl(0, 0, 0, 0.04, 0.01, 0.8 * s, 3, c, false); mb.reset(); }  mb.up = false; }
 function bones(mb, x, y, z, rot) { const c = hex('#f2ead8'); mb.at([x, y + 0.15, z], M4.mul3(M4.rotY(rot), M4.rotZ(Math.PI / 2))); for (let k = 0; k < 5; k++) mb.cyl(0, -1 + k * 0.45, 0, 0.08, 0.06, 0.2, 5, c); mb.cyl(0, -1.2, 0, 0.05, 0.05, 2.4, 5, c); mb.reset(); mb.ico(x + Math.cos(rot) * 1.4, y + 0.25, z + Math.sin(rot) * 1.4, 0.32, 1, () => c); }
 function seashell(mb, x, y, z, r) { mb.up = true; const c = hex(r > 0.5 ? '#ffb3a7' : '#f4e0c8'); for (let k = 0; k < 6; k++) { const a0 = -1 + k * 0.33, a1 = a0 + 0.33; mb.tri([x, y + 0.02, z], [x + Math.sin(a1) * 0.3, y + 0.1, z + Math.cos(a1) * 0.3], [x + Math.sin(a0) * 0.3, y + 0.1, z + Math.cos(a0) * 0.3], shadeC(c, k % 2 ? 1 : 0.85), true); }  mb.up = false; }
+// a hoodoo: a tall striped rock spire that narrows in the middle, with a darker cap stone on top
+function hoodoo(mb, x, y, z, s, r2) {
+  const C = ['#c8a07a', '#a8705a', '#d8b894', '#9a6248'], n = 3 + Math.floor(r2 * 2); let yy = y - 0.6, rad = 1.3 * s;
+  for (let k = 0; k < n; k++) { const hh = (2 + r2) * s, r1 = rad * (k === n - 1 ? 0.7 : 0.82); mb.cyl(x, yy, z, rad, r1, hh, 7, hex(C[(k + Math.floor(r2 * 4)) % 4])); yy += hh; rad = r1 * 1.05; }
+  rock(mb, x, yy + 0.2 * s, z, rad * 1.5, '#5a3e30', r2);
+}
 function iceSpike(mb, x, y, z, s) { mb.cyl(x, y - 0.5, z, 0.8 * s, 0, 5 * s, 6, glowC(hex('#bfe6ff'))); mb.cyl(x + 0.7 * s, y - 0.5, z + 0.3, 0.4 * s, 0, 2.5 * s, 5, hex('#d8f0ff')); mb.cyl(x - 0.5 * s, y - 0.5, z - 0.4, 0.35 * s, 0, 2 * s, 5, hex('#e8f6ff')); }
 function snowBush(mb, x, y, z, s) { puffs(mb, x, y, z, s, '#3f6a4a', 0.5, [[0, 0.4, 0, 0.75], [0.5, 0.3, 0.2, 0.5]]); mb.sph([x, y + 0.85 * s, z], [0.65 * s, 0.25 * s, 0.6 * s], 8, hex('#f4f8fc'), 0.1); }
 // a realistic crystal: a six-sided prism with a pointed six-sided tip. Every face catches the light a bit

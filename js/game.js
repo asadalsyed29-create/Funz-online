@@ -22,29 +22,36 @@ function rayTri(o, d, a, b, c) {
 }
 
 class Game {
-  constructor(canvas, overlay, seed, B) {
+  constructor(canvas, overlay, seed, B, region) {
     this.gfx = makeGfx(canvas, (() => { let q = null; try { q = window.NAUTIC_BETA && localStorage.getItem('funz.gfx'); } catch (e) {} return q === 'low' || q === 'mid' || q === 'high' ? q : Device.type === 'computer' ? 'high' : 'mid'; })()); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
-    this.T = new Terrain(seed); this.St = new Structures(this.T); this.B = B;
+    this.region = region || null; REGION_NOW = this.region;
+    this.T = new Terrain(region ? REGIONS[region].seed : seed, region ? REGIONS[region].theme : null); this.St = new Structures(this.T); this.B = B;
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
-    this.landmarks = buildLandmarks(this.gfx, this.St);
-    this.park = new FunPark(this); this.landmarks.push(this.park.build(this.gfx, this.St));
-    this.sky = new SkyRace(this, this.park); this.landmarks.push(this.sky.build(this.gfx, this.St));
-    this.pier = new FishingPier(this); this.landmarks.push(this.pier.build(this.gfx, this.St));
-    this.arena = new GameArena(this); this.landmarks.push(this.arena.build(this.gfx, this.St));
-    // sky islands, cannons, and the portals to the special worlds
-    for (const isle of buildSkyIslands(this.gfx, this.St)) this.landmarks.push(isle);
-    if (VOLCANO.on) this.landmarks.push(buildVolcano(this.gfx, this.T));
-    this.cannons = cannonList(this.T); this.cannonM = cannonModel(this.gfx); // a cannon near the plaza shoots you up to the sky islands, and cannons hop you between them
     this.realms = {}; this.realm = null;
-    const T0 = this.T;
-    this.portals = [
-      { kind: 'space', p: [STATION.x + STATION.R + 26, T0.ground(STATION.x + STATION.R + 26, STATION.z) + 1, STATION.z], r: 2.6, label: 'Space elevator', col: '#b48cff' },
-      { kind: 'sea', p: [-560, 0.4, 84], r: 2.8, label: 'Dive to the Coral kingdom', col: '#5ff0e0' },
-      { kind: 'crystal', p: [-140, T0.ground(-140, 120) + 1, 120], r: 2.6, label: 'Crystal hollow', col: '#ff8ff0' },
-    ];
-    PORTALS.push(...this.portals);
-    this.portalM = this.portals.map(pt => { const mb = new MeshBuilder(); mb.push(pt.p, M4.rotX(Math.PI / 2)); mb.tor([0, 0, 0], 2.2, 0.28, 40, 10, glowC(hex(pt.col))); mb.pop(); mb.push([pt.p[0], pt.p[1] - 1.2, pt.p[2]]); mb.lathe([[3.2, -0.6], [3.4, 0], [3, 0.5], [0, 0.55]], 24, hex('#5a5f70'), 0.2); mb.pop(); return mb.build(this.gfx); });
-    const rr = raceRings(this.T); this.rings = rr.rings; this.raceStart = rr.start;
+    if (this.region) { // a travel region: its own places, none of Berekor's
+      this.landmarks = buildDustLandmarks(this.gfx, this.St, this.T);
+      this.park = this.sky = this.pier = this.arena = null; this.cannons = []; this.cannonM = null; this.portals = []; this.portalM = [];
+      this.rings = []; this.raceStart = [1e6, -1e6, 1e6];
+    } else {
+      this.landmarks = buildLandmarks(this.gfx, this.St);
+      this.park = new FunPark(this); this.landmarks.push(this.park.build(this.gfx, this.St));
+      this.sky = new SkyRace(this, this.park); this.landmarks.push(this.sky.build(this.gfx, this.St));
+      this.pier = new FishingPier(this); this.landmarks.push(this.pier.build(this.gfx, this.St));
+      this.arena = new GameArena(this); this.landmarks.push(this.arena.build(this.gfx, this.St));
+      // sky islands, cannons, and the portals to the special worlds
+      for (const isle of buildSkyIslands(this.gfx, this.St)) this.landmarks.push(isle);
+      if (VOLCANO.on) this.landmarks.push(buildVolcano(this.gfx, this.T));
+      this.cannons = cannonList(this.T); this.cannonM = cannonModel(this.gfx); // a cannon near the plaza shoots you up to the sky islands, and cannons hop you between them
+      const T0 = this.T;
+      this.portals = [
+        { kind: 'space', p: [STATION.x + STATION.R + 26, T0.ground(STATION.x + STATION.R + 26, STATION.z) + 1, STATION.z], r: 2.6, label: 'Space elevator', col: '#b48cff' },
+        { kind: 'sea', p: [-560, 0.4, 84], r: 2.8, label: 'Dive to the Coral kingdom', col: '#5ff0e0' },
+        { kind: 'crystal', p: [-140, T0.ground(-140, 120) + 1, 120], r: 2.6, label: 'Crystal hollow', col: '#ff8ff0' },
+      ];
+      PORTALS.push(...this.portals);
+      this.portalM = this.portals.map(pt => { const mb = new MeshBuilder(); mb.push(pt.p, M4.rotX(Math.PI / 2)); mb.tor([0, 0, 0], 2.2, 0.28, 40, 10, glowC(hex(pt.col))); mb.pop(); mb.push([pt.p[0], pt.p[1] - 1.2, pt.p[2]]); mb.lathe([[3.2, -0.6], [3.4, 0], [3, 0.5], [0, 0.55]], 24, hex('#5a5f70'), 0.2); mb.pop(); return mb.build(this.gfx); });
+      const rr = raceRings(this.T); this.rings = rr.rings; this.raceStart = rr.start;
+    }
     this.ringM = this.ringModel('#48d6ac'); this.ringNext = this.ringModel('#ffc45a'); this.ringDone = this.ringModel('#8a93a8');
     this.water = this.waterModel(); this.shadow = this.shadowModel(); this.cursorM = this.cursorModel(); this.cloudM = buildCloudModels(this.gfx, this.T.N); this.cloudCells = new Map(); this.flash = 0; this.rain = 0;
     this.fx = new Particles();
@@ -334,7 +341,7 @@ class Game {
       const inf = this.T.info(x, z), y = this.T.ground(x, z);
       if (y < SEA - 0.5 || inf.b === 9 || inf.b === 10) continue;
       const r = N.hash(cx, cz + k * 13, 603);
-      const type = r < 0.12 ? 'coin' : ({ 1: 'shell', 2: 'feather', 3: 'mushroom', 4: 'gem', 5: 'crystal', 6: 'crystal', 7: 'mushroom', 8: 'crystal' }[inf.b] || 'coin');
+      const type = r < 0.12 ? 'coin' : ({ 1: 'shell', 2: 'feather', 3: 'mushroom', 4: 'gem', 5: 'crystal', 6: 'crystal', 7: 'mushroom', 8: 'crystal', 12: 'gem', 13: 'gem', 14: 'shell', 16: 'mushroom', 17: 'mushroom', 18: 'crystal', 19: 'crystal', 20: 'gem' }[inf.b] || 'coin');
       out.push({ id: 'c:' + cx + ':' + cz + ':' + k, type, p: [x, y + 0.6, z] });
     }
     return out;
@@ -543,6 +550,7 @@ class Game {
     // lightning only comes out of a real thunderstorm cloud: a bolt from its base to the ground, then thunder after the sound travels
     if (stormNear && !this.under && !inSt && Math.random() < (o.dt || 0.016) * 0.22) this.strike(stormNear, c.target);
     if (this.bolts && this.bolts.length) this.bolts = this.bolts.filter(b => { b.t -= o.dt || 0.016; if (b.t <= 0) { G.free(b.mesh); return false; } return true; });
+    if (this.region === 'dustmaw' && !RL) { const k2 = 1 - night * 0.8; hor = L3(hor, [0.9, 0.74, 0.55], 0.45 * k2); zen = L3(zen, [0.62, 0.6, 0.62], 0.2 * k2); fog = hor; fogD *= 1.3; sunC = L3(sunC, [1.05, 0.88, 0.7], 0.3 * k2); }
     if (this.flash > 0) { const f = this.flash; amb = amb.map(v => v + f * 0.7); zen = L3(zen, [0.85, 0.88, 1], f * 0.5); hor = L3(hor, [0.8, 0.82, 0.95], f * 0.4); fog = hor; this.flash = Math.max(0, f - (o.dt || 0.016) * 6); }
     if (!this.under && c.eye[1] < SEA - 0.2) { fog = [0.08, 0.3, 0.42]; fogD = 1 / 38; amb = [0.25, 0.42, 0.5]; sunC = sunC.map(v => v * 0.5); } // under the water
     if (RL) { zen = RL.zen; hor = RL.hor; fog = RL.fog; fogD = RL.fogD; amb = RL.amb; gnd = RL.amb.map(v => v * 0.5); sunC = RL.sunC; night = RL.stars ? 1 : 0; }
@@ -648,7 +656,7 @@ class Game {
     // glowing rings
     G.mat(1, 0.5, 0.8);
     if (!this.under) for (const bo of this.St.boosts) if (vis(bo.p[0], bo.p[2], far)) G.draw(this.ringNext, M4.model(bo.p, M4.rotY(bo.yaw), 1.7), 1, null, 0.6);
-    if (!this.under) {
+    if (!this.under && !this.region) {
       this.rings.forEach((r, i) => { if (!vis(r.x, r.z, far)) return; const m = o.race ? (i === o.race.next ? this.ringNext : i < o.race.next ? this.ringDone : this.ringM) : this.ringM; G.draw(m, M4.model([r.x, r.y, r.z], M4.rotY(r.yaw)), 1, null, 0.6); });
       { const cp = CHASE_START, cy = this.T.ground(cp[0], cp[2]) + 0.2; G.draw(o.chase ? this.ringDone : this.ringM, M4.model([cp[0], cy, cp[2]], [1, 0, 0, 0, 0, 1, 0, -1, 0], 0.7), 1, [0.75, 0.6, 1], 0.6); }
       const rs = this.raceStart; G.draw(o.race ? this.ringDone : this.ringNext, M4.model([rs[0], rs[1], rs[2]], [1, 0, 0, 0, 0, 1, 0, -1, 0], 0.7), 1, null, 0.6);
@@ -730,7 +738,7 @@ class Game {
       G.fog();
     }
     if (o.chase) o.chase.drawFunnel(G, t);
-    if (!this.under && !inSt) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }
+    if (!this.under && !inSt && !this.region) { const stn = this.landmarks[2]; if (stn.halo && vis(stn.x, stn.z, 3000)) { G.mat(0, 0, 0); G.fog(1 / 2600); G.draw(stn.halo, null, 1, null, 1); G.fog(); } }
     G.mat(0, 0.1, 0.3); G.tex(0);
     if (RL && RL.lake) G.draw(RL.lake, null, 1, null, 0.8);
     for (const pc of this.partChunks.values()) G.draw(pc.clear);
@@ -762,10 +770,12 @@ class Game {
     if (!this.cave) {
       for (const s of this.landmarks) { if (s.signs) for (const sg of s.signs) sign(sg.p[0], sg.p[1], sg.p[2], sg.t, '#5ff0e0', s.station ? 160 : 60); }
       for (const s of this.St.list.values()) if (s && s.label) sign(s.x, s.y + (s.type === 'cave' ? 9 : 12), s.z, s.label, '#ffd27a', 70);
-      const pk = this.landmarks[1]; sign(pk.start[0], pk.start[1] + 2.5, pk.start[2], 'Parkour climb: trophy at the top', '#b8a8ff', 50);
-      if (!o.race) sign(this.raceStart[0], this.raceStart[1] + 1.6, this.raceStart[2], 'Ring race: roll here to start', '#ffc45a', 45);
+      const pk = this.region ? null : this.landmarks[1]; if (pk) sign(pk.start[0], pk.start[1] + 2.5, pk.start[2], 'Parkour climb: trophy at the top', '#b8a8ff', 50);
+      if (this.region) { /* no ring race or storm chase in travel regions */ }
+      else if (!o.race) sign(this.raceStart[0], this.raceStart[1] + 1.6, this.raceStart[2], 'Ring race: roll here to start', '#ffc45a', 45);
       else { const r = this.rings[o.race.next]; if (r) { const s = this.project(r.x, r.y + 2.2, r.z); if (s) { g.font = '800 16px system-ui'; g.fillStyle = '#ffc45a'; g.fillText(String(o.race.next + 1), s[0], s[1]); } } }
-      if (!o.chase) sign(CHASE_START[0], this.T.ground(CHASE_START[0], CHASE_START[2]) + 1.8, CHASE_START[2], 'Storm chase: roll here to start', '#c9a8ff', 45);
+      if (this.region) { /* none */ }
+      else if (!o.chase) sign(CHASE_START[0], this.T.ground(CHASE_START[0], CHASE_START[2]) + 1.8, CHASE_START[2], 'Storm chase: roll here to start', '#c9a8ff', 45);
       else if (o.chase.alive > 0.05) sign(o.chase.p[0], o.chase.p[1] + 30, o.chase.p[2], EF_NAMES[o.chase.ef] + ' tornado · ' + Math.round(o.chase.near) + ' m', '#ff8a7a', 3000);
       for (const pt of this.portals) sign(pt.p[0], pt.p[1] + 3.2, pt.p[2], pt.label, pt.col, 90);
       for (const cn of this.cannons) if (cn.name) sign(cn.p[0], cn.p[1] + 3.4, cn.p[2], cn.name, '#ffc45a', 50);
@@ -803,8 +813,7 @@ class Game {
     // places ahead of you: their names once you've found them, a ? before that
     const known = this.known || new Set(), near = this.places(me.p[0], me.p[2], 900).map(q => ({ ...q, d: Math.hypot(q.x - me.p[0], q.z - me.p[2]) })).filter(q => q.d > 15 && Math.abs(bearing(q.x - me.p[0], q.z - me.p[2])) < Math.PI * 0.45).sort((a, b) => a.d - b.d).slice(0, 3);
     for (const q of near) mark(q.x, q.z, known.has(q.key) || q.always ? q.col : '#c8ccd8', known.has(q.key) || q.always ? q.name : '?');
-    mark(0, 0, '#ffc45a', 'Plaza');
-    mark(STATION.x, STATION.z, '#5ff0e0', 'Station');
+    if (!this.region) { mark(0, 0, '#ffc45a', 'Plaza'); mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); }
     if (this.waypoint) mark(this.waypoint.x, this.waypoint.z, '#ffe14a', 'Waypoint');
     g.restore();
   }
@@ -816,6 +825,7 @@ class Game {
       if (p) out.push({ x: p.x, z: p.z, key: 's:' + p.key, kind: p.type, name: STRUCT_TYPES[p.type], col: p.type === 'cave' ? '#b8a8ff' : '#ffffff' });
     }
     for (const pt of this.portals) out.push({ x: pt.p[0], z: pt.p[2], key: 'portal:' + pt.kind, kind: 'portal', name: pt.label, col: pt.col, always: true });
+    if (this.region) { out.push({ x: 0, z: 0, key: 'landing', kind: 'landing', name: 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of DUST_SPECIALS) out.push({ x: sp.x, z: sp.z, key: sp.id, kind: sp.id, name: sp.name, col: '#ff9f5a', always: true }); return out; }
     out.push({ x: 44, z: 38, key: 'parkour', kind: 'parkour', name: 'Parkour', col: '#ff9f5a', always: true });
     out.push({ x: PARK.x, z: PARK.z, key: 'funpark', kind: 'park', name: 'Fun Park', col: '#7aff9a', always: true });
     out.push({ x: PIER.end[0] + 30, z: 0, key: 'pier', kind: 'pier', name: 'Fishing pier', col: '#5ab8ff', always: true });
@@ -892,7 +902,7 @@ class Game {
     if (!this.cave && !this.realm) {
       const known = this.known || new Set();
       for (const q of this.places(me.p[0], me.p[2], MAPSPAN * 0.75)) { if (Math.hypot(q.x - me.p[0], q.z - me.p[2]) * sc > size / 2 - 8) continue; const k = known.has(q.key) || q.always; mark(q.x, q.z, k ? q.col : 'rgba(200,204,216,.8)', Math.hypot(q.x - me.p[0], q.z - me.p[2]) < MAPSPAN * 0.35 ? (k ? q.name : '?') : ''); }
-      mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', '');
+      if (!this.region) { mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', ''); }
       if (this.waypoint) mark(this.waypoint.x, this.waypoint.z, '#ffe14a', '');
     }
     this.miniBox = [cx, cy, size / 2];
