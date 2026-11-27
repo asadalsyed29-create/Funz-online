@@ -23,7 +23,7 @@ function rayTri(o, d, a, b, c) {
 
 class Game {
   constructor(canvas, overlay, seed, B) {
-    this.gfx = makeGfx(canvas, Device.type === 'computer' ? 'high' : 'mid'); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
+    this.gfx = makeGfx(canvas, (() => { let q = null; try { q = window.NAUTIC_BETA && localStorage.getItem('funz.gfx'); } catch (e) {} return q === 'low' || q === 'mid' || q === 'high' ? q : Device.type === 'computer' ? 'high' : 'mid'; })()); this.canvas = canvas; this.ov = overlay; this.o = overlay.getContext('2d');
     this.T = new Terrain(seed); this.St = new Structures(this.T); this.B = B;
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
     this.landmarks = buildLandmarks(this.gfx, this.St);
@@ -33,6 +33,7 @@ class Game {
     this.arena = new GameArena(this); this.landmarks.push(this.arena.build(this.gfx, this.St));
     // sky islands, cannons, and the portals to the special worlds
     for (const isle of buildSkyIslands(this.gfx, this.St)) this.landmarks.push(isle);
+    if (VOLCANO.on) this.landmarks.push(buildVolcano(this.gfx, this.T));
     this.cannons = cannonList(this.T); this.cannonM = cannonModel(this.gfx); // a cannon near the plaza shoots you up to the sky islands, and cannons hop you between them
     this.realms = {}; this.realm = null;
     const T0 = this.T;
@@ -627,7 +628,8 @@ class Game {
         if (!inSt) { G.tex(0); G.fog(1 / 2600); G.draw(s.beam); }
         G.tex(4);
         G.fog();
-      } else if (vis(s.x, s.z, s.far || far + 80, s.rad || 30)) { if (s.far) G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.mesh); if (s.far) G.fog(); }
+      } else if (s.hideNear && Math.hypot(c.eye[0] - s.x, c.eye[2] - s.z) < s.hideNear) continue;
+      else if (vis(s.x, s.z, s.far || far + 80, s.rad || 30)) { if (s.far) G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.mesh); if (s.far) G.fog(); }
     }
     if (!this.under) for (const s of this.St.list.values()) if (s && vis(s.x, s.z, far, 40)) G.draw(s.mesh);
     if (!this.under) {
@@ -771,6 +773,7 @@ class Game {
     else sign(this.cave.exit[0], this.cave.exit[1] + 2.4, this.cave.exit[2], 'Way out', '#ffc45a', 40);
     if (o.wireFrom) { const [x, y, z] = o.wireFrom; const s = this.project(x + 0.5, y + 1.2, z + 0.5); if (s) { g.font = '700 12px system-ui'; g.fillStyle = '#ff8a5a'; g.fillText('wire from here', s[0], s[1]); } }
     if (this.mods) this.mods.overlay(g, (x, y, z) => this.project(x, y, z));
+    if (this.waypoint && !this.cave && !this.realm) { const wp = this.waypoint, d = Math.hypot(wp.x - me.p[0], wp.z - me.p[2]); if (d < 25) this.waypoint = null; else if (d < 600) sign(wp.x, this.T.ground(wp.x, wp.z) + 4, wp.z, 'Waypoint ' + (d < 1000 ? Math.round(d / 5) * 5 + 'm' : (d / 1000).toFixed(1) + 'km'), '#ffe14a', 99999); }
     if (this.editor) return;
     this.drawCompass(g, me);
     this.drawMinimap(g, players, me);
@@ -802,6 +805,7 @@ class Game {
     for (const q of near) mark(q.x, q.z, known.has(q.key) || q.always ? q.col : '#c8ccd8', known.has(q.key) || q.always ? q.name : '?');
     mark(0, 0, '#ffc45a', 'Plaza');
     mark(STATION.x, STATION.z, '#5ff0e0', 'Station');
+    if (this.waypoint) mark(this.waypoint.x, this.waypoint.z, '#ffe14a', 'Waypoint');
     g.restore();
   }
   // places near you for the compass and the map: structures, portals and the parkour
@@ -816,6 +820,7 @@ class Game {
     out.push({ x: PARK.x, z: PARK.z, key: 'funpark', kind: 'park', name: 'Fun Park', col: '#7aff9a', always: true });
     out.push({ x: PIER.end[0] + 30, z: 0, key: 'pier', kind: 'pier', name: 'Fishing pier', col: '#5ab8ff', always: true });
     out.push({ x: ARENA.x, z: ARENA.z, key: 'arena', kind: 'arena', name: 'Game arena', col: '#ff5ad8', always: true });
+    if (VOLCANO.on) out.push({ x: VOLCANO.x, z: VOLCANO.z, key: 'volcano', kind: 'volcano', name: 'Volcano', col: '#ff7a2a', always: true });
     return out;
   }
   // the owner ship; open (0..1) swings the glass canopy up on its hinge
@@ -847,6 +852,7 @@ class Game {
   rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   // minimap: turns with the camera (up is the way you're looking) and redraws a few rows each frame
   drawMinimap(g, players, me) {
+    this.lastPlayers = players; this.lastMe = me;
     const S = 128, MAPSPAN = 860, span = 520, mg = this.mini.getContext('2d');
     if (this.mini.width !== S) { this.mini.width = this.mini.height = S; this.miniCenter = null; }
     if (!this.miniCenter || Math.hypot(me.p[0] - this.miniCenter[0], me.p[2] - this.miniCenter[1]) > 150) {
@@ -887,7 +893,9 @@ class Game {
       const known = this.known || new Set();
       for (const q of this.places(me.p[0], me.p[2], MAPSPAN * 0.75)) { if (Math.hypot(q.x - me.p[0], q.z - me.p[2]) * sc > size / 2 - 8) continue; const k = known.has(q.key) || q.always; mark(q.x, q.z, k ? q.col : 'rgba(200,204,216,.8)', Math.hypot(q.x - me.p[0], q.z - me.p[2]) < MAPSPAN * 0.35 ? (k ? q.name : '?') : ''); }
       mark(STATION.x, STATION.z, '#5ff0e0', 'Station'); mark(0, 0, '#ffc45a', '');
+      if (this.waypoint) mark(this.waypoint.x, this.waypoint.z, '#ffe14a', '');
     }
+    this.miniBox = [cx, cy, size / 2];
     this.place = this.realm ? this.realm.name : this.cave ? 'Cave' : insideStation(me.p) ? 'Inside the station' : BIOMES[this.T.info(me.p[0], me.p[2]).b].name + (this.weather ? ' · ' + this.weather : '');
   }
 }

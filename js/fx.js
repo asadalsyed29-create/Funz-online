@@ -59,6 +59,7 @@ class Particles {
     else if (biome === 3) { kind = night > 0.4 ? 'fire' : 'leaf'; rate = night > 0.4 ? 10 : 6; }
     else if (biome === 7 || biome === 2) { kind = night > 0.4 ? 'fire' : (biome === 2 ? 'pollen' : 'leaf'); rate = night > 0.4 ? 10 : 4; }
     else if (biome === 4) { kind = 'sand'; rate = 10; }
+    else if (biome === 11) { kind = 'ember'; rate = 14; }
     else if (biome === 1) { kind = 'pollen'; rate = 2; }
     if (!kind) return;
     const n = Math.floor(this.amb * rate); this.amb -= n / rate;
@@ -69,6 +70,7 @@ class Particles {
       else if (kind === 'fire') this.emit([p[0], c[1] - 1 + Math.random() * 3, p[2]], { v: [0, 0.15, 0], life: 4, size: 0.07, col: [1, 0.9, 0.35], shape: 20, drag: 0, wob: 1.2 });
       else if (kind === 'leaf') this.emit([p[0], c[1] + 8 + Math.random() * 4, p[2]], { v: [0.6, -0.9, 0.3], life: 9, size: 0.13, col: rgb(['#6cc04a', '#9ad85a', '#e0a83a', '#d8763a'][k % 4]), shape: 8, drag: 0, wob: 1.8 });
       else if (kind === 'pollen') this.emit(p, { v: [0.3, 0.1, 0.2], life: 5, size: 0.05, col: [1, 1, 0.85], shape: 20, a: 0.6, drag: 0, wob: 0.8 });
+      else if (kind === 'ember') { if (k % 3) this.emit([p[0], c[1] - 2 + Math.random() * 3, p[2]], { v: [0.3, 1.1 + Math.random(), 0.2], life: 4, size: 0.05 + Math.random() * 0.04, col: [1, 0.45 + Math.random() * 0.3, 0.1], shape: 20, drag: 0, wob: 1.4 }); else this.emit([p[0], c[1] + 2 + Math.random() * 4, p[2]], { v: [0.5, 0.3, 0.2], life: 7, size: 0.18 + Math.random() * 0.12, col: [0.3, 0.27, 0.27], shape: 0, a: 0.35, drag: 0, wob: 0.6 }); }
       else if (kind === 'sand') this.emit([p[0], c[1] - 1 + Math.random() * 2, p[2]], { v: [2.2, 0.1, 0.8], life: 3, size: 0.06, col: [0.95, 0.85, 0.6], shape: 0, a: 0.7, drag: 0 });
       else if (kind === 'bubble') this.emit([p[0], c[1] - 3, p[2]], { v: [0, 1.6, 0], life: 4, size: 0.08 + Math.random() * 0.08, col: [0.8, 0.95, 1], shape: 5, drag: 0, wob: 0.5, a: 0.8 });
       else if (kind === 'cave') this.emit(p, { v: [0, 0.1, 0], life: 6, size: 0.05, col: [0.4, 1, 0.9], shape: 20, drag: 0, wob: 0.5 });

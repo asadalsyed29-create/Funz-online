@@ -39,7 +39,7 @@ class Structures {
     const N = this.N, r = N.hash(rx, rz, 900);
     const x = rx * REG + REG / 2 + (N.hash(rx, rz, 901) - 0.5) * 90, z = rz * REG + REG / 2 + (N.hash(rx, rz, 902) - 0.5) * 90;
     if (Math.abs(x) > LIMIT - 200 || Math.abs(z) > LIMIT - 200) return null;
-    if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110) return null;
+    if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110 || (VOLCANO.on && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.R + 60)) return null;
     const inf = this.T.info(x, z); if (inf.h < 1.2) return null;
     const pick = (opts) => opts[Math.floor(N.hash(rx, rz, 903) * opts.length)];
     let type = null;
@@ -335,4 +335,35 @@ class Cave {
       out.push([f(i, j), f(i + 1, j + 1), f(i + 1, j)], [f(i, j), f(i, j + 1), f(i + 1, j + 1)], [c(i, j), c(i + 1, j), c(i + 1, j + 1)], [c(i, j), c(i + 1, j + 1), c(i, j + 1)]);
     }
   }
+}
+
+// The volcano seen from far away: a copy of its cone (a little smaller, so the real ground covers it up close)
+// with its glowing lava, and a tall plume of smoke over the crater.
+function buildVolcano(gl, T) {
+  const V = VOLCANO, mb = new MeshBuilder(), dmb = new MeshBuilder(), NA = 72, NR = 40, P = [];
+  const s = { key: 'volcano', items: [], lights: [], triggers: [], label: null, x: V.x, z: V.z, far: 3600, rad: V.R, hideNear: 230 };
+  for (let r = 0; r <= NR; r++) for (let a = 0; a < NA; a++) {
+    const rr = (r / NR) * V.R * 0.98, th = a / NA * 6.2832, x = V.x + Math.cos(th) * rr, z = V.z + Math.sin(th) * rr, h = T.info(x, z).h - 3.5;
+    P.push([x, h, z]);
+  }
+  const at = (r, a) => P[r * NA + ((a % NA) + NA) % NA];
+  for (let r = 0; r <= NR; r++) for (let a = 0; a < NA; a++) {
+    const p = at(r, a), q0 = at(Math.max(0, r - 1), a), q1 = at(Math.min(NR, r + 1), a), w0 = at(r, a - 1), w1 = at(r, a + 1);
+    const u = [q1[0] - q0[0], q1[1] - q0[1], q1[2] - q0[2]], v = [w1[0] - w0[0], w1[1] - w0[1], w1[2] - w0[2]];
+    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; if (r === 0) n = [0, 1, 0]; if (n[1] < 0) n = n.map(k => -k); const l = Math.hypot(...n) || 1;
+    mb.vert(p, [n[0] / l, n[1] / l, n[2] / l], vertexColor(T, p[0], p[2], p[1] + 3.5, n[1] / l));
+  }
+  for (let r = 0; r < NR; r++) for (let a = 0; a < NA; a++) { const A = r * NA + a, B = r * NA + (a + 1) % NA, C = (r + 1) * NA + a, D = (r + 1) * NA + (a + 1) % NA; mb.i.push(A, B, C, C, B, D); }
+  s.mesh = mb.build(gl);
+  // smoke: soft grey puffs rising from the crater and leaning with the wind
+  const R = k => { const t = Math.sin(k * 127.1 + 311.7) * 43758.5453; return t - Math.floor(t); };
+  for (let k = 0; k < 40; k++) {
+    const t = k / 39, y = V.top + 40 + t * 280, drift = t * t * 130, r = 16 + t * 44 + R(k) * 12;
+    const x = V.x + drift + (R(k + 50) - 0.5) * 30 * (1 + t), z = V.z + drift * 0.45 + (R(k + 90) - 0.5) * 30 * (1 + t), g = 0.5 + t * 0.25 + R(k + 7) * 0.06;
+    dmb.ico(x, y, z, [r, r * 0.7, r], 2, (a, b) => [g + b * 0.1, g * 0.97 + b * 0.1, g * 0.95 + b * 0.1, 0.38 - t * 0.12]);
+  }
+  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.2832; dmb.ico(V.x + Math.cos(a) * 22, V.lava + 8 + R(k + 3) * 6, V.z + Math.sin(a) * 22, [16, 6, 16], 1, () => [0.55, 0.42, 0.38, 0.25]); }
+  s.deco = dmb.build(gl);
+  s.lights.push({ p: [V.x, V.lava + 10, V.z], r: 45, c: [0.7, 0.28, 0.08] });
+  return s;
 }
