@@ -1,6 +1,8 @@
 // The massive low-poly world: noise, height, biomes, chunk meshes and decorations.
 const SEA = 0, LIMIT = 8000, CHUNK = 64, CELL = 4, CN = CHUNK / CELL;
 const STATION = { x: 640, z: -420, ground: 10, R: 60 };
+// the one volcano: a tall cone with a lava lake in its crater
+const VOLCANO = { x: -350, z: 1750, R: 430, rim: 60, top: 165, lava: 128, on: typeof window !== 'undefined' && !!window.NAUTIC_BETA };
 let SPAWN_H = 6; // set from the land around the plaza when the world is made
 
 const BIOMES = {
@@ -14,6 +16,7 @@ const BIOMES = {
   7: { name: 'Swamp', ground: '#5d7a3e' },
   8: { name: 'Glow fields', ground: '#6e5fb0', rock: '#4f4680' },
   9: { name: 'Plaza', ground: '#d8c9a8' },
+  11: { name: 'Volcano', ground: '#4a403c', rock: '#2f2a28' },
   10: { name: 'Station grounds', ground: '#98a0aa' },
 };
 
@@ -63,12 +66,24 @@ class Terrain {
     if (swampW > 0) h = h + (0.4 + (N.v(x / 14, z / 14, 41) - 0.5) * 2.4 - h) * swampW * 0.85;
     const desertW = smooth(0.58, 0.66, temp) * smooth(0.46, 0.38, moist);
     if (desertW > 0 && h > 2) h += (Math.sin(x / 23 + N.v(x / 60, z / 60, 43) * 6) * 0.5 + 0.5) * 5 * desertW;
+    // the volcano: the land rises into a steep cone with ridges running down it, and a bowl at the top
+    const dV = Math.hypot(x - VOLCANO.x, z - VOLCANO.z); let vol = 0;
+    if (VOLCANO.on && dV < VOLCANO.R) {
+      const a = Math.atan2(z - VOLCANO.z, x - VOLCANO.x), V = VOLCANO;
+      const f = Math.max(0, Math.min(1, (V.R - dV) / (V.R - V.rim)));
+      const ridge = (Math.sin(a * 9 + N.v(Math.cos(a) * 2 + 9, Math.sin(a) * 2 + 9, 73) * 7) * 0.5 + 0.5) * Math.sin(Math.min(1, f * 1.4) * 3.1416);
+      const top = V.top + (N.v(Math.cos(a) * 3 + 20, Math.sin(a) * 3 + 20, 74) - 0.5) * 14;
+      h += (top - h) * Math.pow(f, 1.45) + ridge * 7 + (N.fbm(x / 26, z / 26, 75, 2) - 0.5) * 6 * f;
+      if (dV < V.rim) { const k = smooth(V.rim, V.rim - 26, dV); h = top + (V.lava - 4 - top) * k + (N.v(x / 9, z / 9, 76) - 0.5) * 2 * (1 - k); }
+      vol = smooth(V.R * 0.86, V.R * 0.6, dV + (N.v(a * 3, 4, 77) - 0.5) * 60);
+    }
     // flat places: the plaza and the station grounds
     let b = -1;
     if (this.flat) {
       const wP = smooth(75, 30, d0); if (wP > 0) { h += (SPAWN_H - h) * wP; if (d0 < 27) b = 9; }
       const wS = smooth(190, 100, dS); if (wS > 0) { h += (STATION.ground - h) * wS; if (wS > 0.9) b = 10; }
     }
+    if (b < 0 && vol > 0.5) b = 11;
     if (b < 0) {
       if (h < -1.5) b = 0; else if (h < 1.6 && swampW < 0.5) b = 1;
       else if (h > 60 && mnt > 0.3) b = temp < 0.38 || h > 110 ? 5 : 6;
@@ -79,7 +94,7 @@ class Terrain {
       else if (moist > 0.52) b = 3;
       else b = 2;
     }
-    return { h, b, temp, moist };
+    return { h, b, temp, moist, vol };
   }
   h(x, z) { return this.info(x, z).h; }
   // height at a grid vertex (cached, used by physics)
@@ -113,7 +128,25 @@ function groundColor(T, x, z, info, ny, h) {
   if (info.b === 3) c = mixC(hex('#3f8f45'), hex('#57983e'), smooth(0.3, 0.7, T.N.v(x / 70, z / 70, 62)));
   if (info.b === 6 && h > 95) c = hex('#eef3f9');
   if (h < -1.2) c = mixC(hex('#d8c48f'), hex('#6f8a7a'), Math.min(1, -h / 25));
+  if (info.b === 11) {
+    c = mixC(hex('#5a4c44'), hex('#383030'), smooth(0.3, 0.7, T.N.v(x / 40, z / 40, 78)));
+    c = mixC(c, hex('#7a4a34'), smooth(0.62, 0.8, T.N.v(Math.atan2(z - VOLCANO.z, x - VOLCANO.x) * 6, Math.hypot(x - VOLCANO.x, z - VOLCANO.z) / 90, 81)) * 0.7); // rusty streaks down the slope
+    c = mixC(c, hex('#8a8580'), smooth(VOLCANO.top - 60, VOLCANO.top - 10, h) * 0.55);                                                                   // pale ash near the top
+  }
   return c;
+}
+// lava: the lake in the crater and a few glowing streams running down the cone (alpha 0.8 makes it glow)
+function lavaAt(T, x, z, h) {
+  const V = VOLCANO, d = Math.hypot(x - V.x, z - V.z); if (!V.on || d > V.R * 0.8) return 0;
+  if (h < V.lava + 0.5 && d < V.rim) return 1;
+  const a = Math.atan2(z - V.z, x - V.x), N = T.N;
+  let s = 0;
+  for (const [a0, w] of [[0.7, 1], [2.9, 0.8], [4.6, 0.9]]) {
+    const off = a - a0 - (N.v(d / 40, a0 * 5, 79) - 0.5) * 0.5 * (d / V.R), da = Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) * d;
+    const len = V.rim + (V.R * 0.75 - V.rim) * w;
+    if (d > V.rim - 6 && d < len) s = Math.max(s, smooth(5.5 - 3 * (d - V.rim) / len, 1.5, da) * smooth(len, len - 40, d));
+  }
+  return s;
 }
 function vertexColor(T, x, z, h, ny) {
   // average a few spots around so the edges between biomes are soft
@@ -125,6 +158,15 @@ function vertexColor(T, x, z, h, ny) {
     const rk = smooth(0.84, 0.66, ny); if (rk > 0) c = mixC(c, hex(B.rock || (h > 80 ? '#8a8a92' : '#8a857c')), rk);   // steep = rock
     if (h > 1.6 && h < 3.5 && inf.b !== 7) c = mixC(c, hex('#e8d49c'), smooth(3.5, 2, h) * 0.6);                       // sandy edge by the sea
     if (h > -0.6 && h < 0.9 && inf.b !== 7) c = shadeC(c, 0.86);                                                        // wet sand
+  }
+  if (inf.vol > 0) {
+    const lv = lavaAt(T, x, z, h);
+    if (lv > 0.5) { // dark cooling crust with bright cracks of lava between the plates
+      const n = T.N.v(x / 7, z / 7, 80), crack = 1 - Math.abs(n * 2 - 1), hot = smooth(0.78, 0.9, crack);
+      c = mixC(mixC(hex('#4a2018'), hex('#7a2a10'), smooth(0.3, 0.7, T.N.v(x / 20, z / 20, 82))), mixC(hex('#ff7a1a'), hex('#ffc24a'), smooth(0.9, 1, crack)), hot);
+      if (hot > 0.5) c[3] = 0.8;
+    }
+    else if (lv > 0.05) c = mixC(c, hex('#2a1a16'), lv * 1.6);
   }
   return c;
 }
@@ -156,6 +198,7 @@ function buildTerrainChunk(gl, T, cx, cz, decos) {
     const gx = cx * CN + i, gz = cz * CN + j, r = N.hash(gx, gz, 501);
     const x = gx * CELL + 0.6 + N.hash(gx, gz, 502) * (CELL - 1.2), z = gz * CELL + 0.6 + N.hash(gx, gz, 503) * (CELL - 1.2);
     const info = inf(i, j); if (info.b === 9 || info.b === 10) continue;
+    if (info.b === 11 && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.rim + 4) continue; // nothing grows in the crater
     if (Math.abs(x - 120) < 62 && Math.abs(z + 40) < 56) continue; // the Fun Park deck and its ramps
     if ((Math.abs(x - 100) < 72 && Math.abs(z + 160) < 72) || (x > -580 && x < -458 && z > -14 && z < 18)) continue; // the game arena, the fishing pier and its bait shop
     const y = T.ground(x, z); if (y < SEA - 0.3 && info.b !== 7 && info.b !== 0) continue;
@@ -217,6 +260,11 @@ function decorate(mb, col, b, r, x, y, z, s, rot, r2, decos) {
     else if (r < 0.08) crystals(mb, x, y, z, s, r2 > 0.5 ? '#ff8ff0' : '#8ff6ff');
     else if (r < 0.2) glowGrass(mb, x, y, z, r2);
     else if (r < 0.22) glowFlower(mb, x, y, z, r2);
+  } else if (b === 11) { // volcano: dark lava rocks, burnt trees and a few glowing stones
+    if (r < 0.05) stone(s * 1.3, r2 < 0.5 ? '#3a3230' : '#4a3e38');
+    else if (r < 0.065) { deadTree(mb, x, y, z, s * 0.8, rot); cyl(0.3 * s, 4 * s); }
+    else if (r < 0.072) crystals(mb, x, y, z, s * 0.7, '#ff7a2a');
+    else if (r < 0.09) deadBush(mb, x, y, z, s);
   } else if (b === 0 && y > -14) { // under the sea, close to the beach
     if (r < 0.05) coral(mb, x, y, z, s, r2);
     else if (r < 0.1) seaweed(mb, x, y, z, r2);
@@ -317,7 +365,7 @@ function bush(mb, x, y, z, s, c, r2 = 0.5) {
 }
 function rock(mb, x, y, z, s, c, r2 = 0.5) {
   // a boulder with flat broken faces, a smaller rock leaning on it, pebbles, and moss on top in green places
-  const moss = c !== '#c9965a' && c !== '#b8b0a0' && r2 > 0.55, base = hue(c, r2), mc = [0.42, 0.62, 0.32, 1];
+  const moss = c !== '#c9965a' && c !== '#b8b0a0' && c !== '#3a3230' && c !== '#4a3e38' && r2 > 0.55, base = hue(c, r2), mc = [0.42, 0.62, 0.32, 1];
   const col = (a, b) => b > 0.55 && moss ? mixC(base, mc, 0.65) : shadeC(base, 0.78 + b * 0.2 + a * 0.06);
   const wob = (a, b, c2) => 0.16 * Math.sin(a * 3 + r2 * 9) * Math.cos(c2 * 4 + r2 * 5) + 0.08 * Math.sin(b * 6 + r2 * 3);
   mb.ico(x, y + 0.05 * s, z, [s * (0.95 + r2 * 0.3), s * 0.78, s * (0.85 + (1 - r2) * 0.3)], 1, col, false, null, wob);

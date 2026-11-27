@@ -40,6 +40,8 @@ const ICON_PATHS = {
   kick: F('M14 6l6 6-6 6z') + '<path d="M3 12h15M14 6l6 6-6 6"/><path d="M5 5v14"/>',
   ban: F('M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z') + '<circle cx="12" cy="12" r="9.5"/><path d="M5.3 5.3l13.4 13.4"/>',
   smile: F('M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19z') + '<circle cx="12" cy="12" r="9.5"/><path d="M7.5 13.5a5 5 0 0 0 9 0"/><circle cx="8.8" cy="9.5" r="1" fill="currentColor"/><circle cx="15.2" cy="9.5" r="1" fill="currentColor"/>',
+  friends: F('M9 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM2.5 20a6.5 6.5 0 0 1 13 0z') + '<circle cx="9" cy="7.5" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18 15.5c-2.6-1.8-4-3.2-4-4.8a2 2 0 0 1 4-.6 2 2 0 0 1 4 .6c0 1.6-1.4 3-4 4.8z" fill="currentColor" fill-opacity=".5"/>',
+  camera: F('M3 8h4l1.8-2.5h6.4L17 8h4v11.5H3z') + '<path d="M3 8h4l1.8-2.5h6.4L17 8h4v11.5H3z"/><circle cx="12" cy="13.3" r="3.6"/><path d="M18 10.5h.5"/>',
   map: F('M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z') + '<path d="M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 3.5V18M15 6v14.5"/>',
   speed: F('M13 2L4 14h7l-1 8 9-12h-7z') + '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   nail: '<path d="M6 4h12"/><path d="M9 4l1.5 2h3L15 4"/><path d="M12 6v12l-1 3"/><path d="M12 6v13"/>',

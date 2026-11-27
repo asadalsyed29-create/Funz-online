@@ -33,3 +33,6 @@ const Device = (() => {
   return { type, os, icon, label, touch, useTouch, standalone,
     short: `${label}${os !== 'Unknown' ? ' · ' + os : ''}` };
 })();
+
+// New things being tried out first: only the Outernautica account sees them until they are released.
+window.NAUTIC_BETA = (() => { try { const a = JSON.parse(localStorage.getItem('ultranautic.account') || 'null'); return !!a && String(a.name || '').toLowerCase() === 'outernautica'; } catch (e) { return false; } })();

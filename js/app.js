@@ -233,6 +233,68 @@
   $('wardClose').innerHTML = icon('close', 18); $('bagClose').innerHTML = icon('close', 18);
   $('gateInstall').textContent = 'Open UltraNautic Hub'; document.querySelectorAll('#gateIos .gIc').forEach(e => { e.innerHTML = icon('share', 16); });
   $('shipBtn').onclick = () => toggleShip();
+
+  // ---------- new buttons (only on the beta account for now): map, friends, photo mode, settings ----------
+  const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
+  try { Extra.look = Math.max(0.4, Math.min(2.2, +localStorage.getItem('funz.look') || 1)); } catch (e) {}
+  Extra.setPhoto = on => {
+    if (!window.NAUTIC_BETA || Extra.photo === on) return; Extra.photo = on;
+    document.body.classList.toggle('photo', on);
+    if (on) { BigMap.close(); Extra.closeAll(); const h = $('photoHint'); h.classList.remove('hidden'); clearTimeout(Extra.hintT); Extra.hintT = setTimeout(() => h.classList.add('hidden'), 2200); }
+  };
+  if (window.NAUTIC_BETA) {
+    const col = document.createElement('div'); col.id = 'sideBtns2';
+    col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button>';
+    if (Device.useTouch) { $('quick').append(...col.children); } else $('hud').appendChild(col); // on phones they join the round buttons at the top
+    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22);
+    const hint = document.createElement('div'); hint.id = 'photoHint'; hint.className = 'hidden'; hint.textContent = 'Photo mode: drag to look around, tap to bring the buttons back'; document.body.appendChild(hint);
+    const panel = (id, title) => { const b = document.createElement('div'); b.id = id; b.className = 'xPanel hidden'; b.innerHTML = '<div class="aHead"><b>' + title + '</b><button class="iconBtn">' + icon('close', 18) + '</button></div><div class="xBody"></div>'; b.querySelector('.iconBtn').onclick = () => b.classList.add('hidden'); $('hud').appendChild(b); return b; };
+    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings');
+    BigMap.init({ game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500) });
+    setTimeout(() => BigMap.preload(), 4000);
+    const show = b => { const was = !b.classList.contains('hidden'); Extra.closeAll(); $('bag').classList.add('hidden'); if (!was) b.classList.remove('hidden'); return !was; };
+    $('mapBtn').onclick = () => BigMap.open();
+    $('photoBtn').onclick = () => Extra.setPhoto(true);
+    // friends: everyone in this server, with a button to go to them
+    const renderFriends = () => {
+      const body = fBox.querySelector('.xBody'); body.textContent = ''; if (!G) return;
+      const list = [...G.players.values()].filter(p => p !== G.me);
+      if (!list.length) { const e = document.createElement('p'); e.className = 'aEmpty'; e.textContent = 'Nobody else is in this server right now.'; body.appendChild(e); return; }
+      const busy = G.chase || G.mg || G.race;
+      for (const p of list) {
+        const row = document.createElement('div'); row.className = 'xRow';
+        const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = p.color;
+        const nm = document.createElement('span'); nm.className = 'xName'; nm.textContent = p.name;
+        const d = p.p ? Math.hypot(p.p[0] - G.body.p[0], p.p[2] - G.body.p[2]) : 0; const far = document.createElement('span'); far.className = 'xDim'; far.textContent = d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1) + ' km';
+        const go = document.createElement('button'); go.className = 'mini'; go.textContent = 'Go to'; go.disabled = !!busy || !p.p;
+        go.onclick = () => { if (!G || !p.p) return; const a = Math.random() * 6.283; G.body.p = [p.p[0] + Math.cos(a) * 2.5, p.p[1] + 1.5, p.p[2] + Math.sin(a) * 2.5]; G.body.v = [0, 0, 0]; G.game.cave = null; G.body.caveLock = null; Sound.play('tp'); showToast('Went to ' + p.name, 1200); fBox.classList.add('hidden'); };
+        row.append(dot, nm, far, go); body.appendChild(row);
+      }
+      if (busy) { const e = document.createElement('p'); e.className = 'xDim'; e.textContent = 'You can go to friends again when this game is over.'; body.appendChild(e); }
+    };
+    $('friendsBtn').onclick = () => { if (show(fBox)) renderFriends(); };
+    // settings: graphics, music and sound volume, look speed
+    const Gq = () => { try { return localStorage.getItem('funz.gfx') || 'auto'; } catch (e) { return 'auto'; } };
+    const renderSet = () => {
+      const body = sBox.querySelector('.xBody'); body.textContent = '';
+      const t = s => { const e = document.createElement('div'); e.className = 'aTitle'; e.textContent = s; body.appendChild(e); };
+      t('Graphics');
+      const row = document.createElement('div'); row.className = 'xSeg';
+      for (const [v, n] of [['auto', 'Auto'], ['low', 'Low'], ['mid', 'Medium'], ['high', 'High']]) { const b = document.createElement('button'); b.textContent = n; b.classList.toggle('on', Gq() === v); b.onclick = () => { try { v === 'auto' ? localStorage.removeItem('funz.gfx') : localStorage.setItem('funz.gfx', v); } catch (e) {} renderSet(); showToast('Graphics change the next time you join a server', 2200); }; row.appendChild(b); }
+      body.appendChild(row);
+      const slider = (label, val, min, max, step, fmt, on) => {
+        t(label); const r = document.createElement('div'); r.className = 'xSlide';
+        const i = document.createElement('input'); i.type = 'range'; i.min = min; i.max = max; i.step = step; i.value = val; const v = document.createElement('span'); v.textContent = fmt(val);
+        i.oninput = () => { v.textContent = fmt(+i.value); on(+i.value); }; r.append(i, v); body.appendChild(r);
+      };
+      const pct = x => Math.round(x * 100) + '%';
+      slider('Music volume', Sound.on ? Sound.music : 0, 0, 1, 0.05, pct, x => { Sound.start(); Sound.music = x; try { localStorage.setItem('funz.musicVol', x); } catch (e) {} Sound.setMusic(x > 0); musicIcon(); });
+      slider('Sound effects volume', Sound.sfx, 0, 1, 0.05, pct, x => { Sound.start(); Sound.sfx = x; try { localStorage.setItem('funz.sfxVol', x); } catch (e) {} if (Sound.fx) Sound.fx.gain.value = x * 0.5; });
+      slider('Look speed', Extra.look, 0.4, 2.2, 0.1, x => x.toFixed(1) + 'x', x => { Extra.look = x; try { localStorage.setItem('funz.look', x); } catch (e) {} });
+    };
+    try { const mv = localStorage.getItem('funz.musicVol'), sv = localStorage.getItem('funz.sfxVol'); if (mv != null) Sound.music = +mv; if (sv != null) Sound.sfx = +sv; } catch (e) {}
+    $('setBtn').onclick = () => { if (show(sBox)) renderSet(); };
+  }
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
   try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}
   musicIcon();
@@ -576,6 +638,7 @@
     if (G.test) { const id = G.server.mods[0] ? G.server.mods[0].id : ''; G.running = false; G.game.mods = null; location.href = 'modmaker/?app=1&open=' + encodeURIComponent(id); return; }
     if (!G.test) saveWorld(); clearInterval(modTimer); if (G.game) G.game.mods = null; modSig = ''; G.running = false; Net.leave(); if (G.game) G.game.fpv = null; G = null;
     ['hud', 'chat', 'touch', 'buildToggle', 'bag', 'adminPanel'].forEach(id => $(id).classList.add('hidden'));
+    if (window.NAUTIC_BETA) { BigMap.close(); Extra.closeAll(); Extra.setPhoto(false); }
     document.body.classList.remove('building', 'showPeople');
     $('chatLog').textContent = '';
     const o = $('ov').getContext('2d'); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, 9999, 9999);
@@ -1322,6 +1385,9 @@
     if (k === 'v') { toggleShip(); return; }
     if (k === 'n') { toggleNail(); return; }
     if (k === 'm') { $('musicBtn').click(); return; }
+    if (window.NAUTIC_BETA && k === 'g') { BigMap.toggle(); return; }
+    if (window.NAUTIC_BETA && k === 'p') { Extra.setPhoto(!Extra.photo); return; }
+    if (window.NAUTIC_BETA && e.key === 'Escape' && Extra.photo) { Extra.setPhoto(false); return; }
     if (k === ' ') e.preventDefault();
     keys.add(k);
   });
@@ -1340,11 +1406,13 @@
     if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
     const d = drags.get(e.pointerId); if (!d || !G) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y; d.x = e.clientX; d.y = e.clientY; d.moved += Math.abs(dx) + Math.abs(dy);
-    if (d.moved > 6) { G.game.cam.yaw -= dx * 0.008; G.game.cam.pitch = G.ship && G.ship.st === 'fly' ? Math.max(-1.3, Math.min(1.3, G.game.cam.pitch + dy * 0.006)) : Math.max(-0.2, Math.min(1.35, G.game.cam.pitch + dy * 0.006)); }
+    if (d.moved > 6) { const ls = Extra.look; G.game.cam.yaw -= dx * 0.008 * ls; G.game.cam.pitch = G.ship && G.ship.st === 'fly' ? Math.max(-1.3, Math.min(1.3, G.game.cam.pitch + dy * 0.006 * ls)) : Math.max(-0.2, Math.min(1.35, G.game.cam.pitch + dy * 0.006 * ls)); }
   });
   const endDrag = e => {
     const d = drags.get(e.pointerId); drags.delete(e.pointerId); if (!d || !G || !G.myId) return;
     if (d.moved > 6 || e.type === 'pointercancel') return;
+    if (Extra.photo) { Extra.setPhoto(false); return; }
+    if (window.NAUTIC_BETA && G.game.miniBox && Math.hypot(e.clientX - G.game.miniBox[0], e.clientY - G.game.miniBox[1]) < G.game.miniBox[2]) { BigMap.open(); return; }
     if (!G.building && modClick(e.clientX, e.clientY)) return;
     if (e.pointerType === 'mouse') edit(e.clientX, e.clientY, d.btn === 2 || e.shiftKey);
     else if (G.building) edit(e.clientX, e.clientY, curTool() === 0);
@@ -1381,6 +1449,7 @@
     const game = G.game, inSt = insideStation(b.p), cave = game.cave || game.realm, info = game.T.info(b.p[0], b.p[2]);
     if (!cave && !inSt && info.b >= 1 && info.b <= 8) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
     if (inSt || nearStation(b.p[0], b.p[2], 70)) prog.max('station', 1);
+    if (VOLCANO.on && !cave && Math.hypot(b.p[0] - VOLCANO.x, b.p[2] - VOLCANO.z) < VOLCANO.R * 0.6) prog.max('volcano', 1);
     // discovering places (they get their names on the compass and map)
     if (!cave) for (const q of game.places(b.p[0], b.p[2], 60)) if (Math.hypot(q.x - b.p[0], q.z - b.p[2]) < 28 && prog.mark('places', q.key)) { prog.mark('kinds', q.kind); banner('Discovered', q.name, 'It is on your map now', 3000); Sound.play('discover'); }
     game.known = new Set(Object.keys(prog.sets.places || {}));
@@ -1389,7 +1458,7 @@
     Sound.setRain(game.rain || 0);
     if (game.realm) { Sound.setMood(game.realm.mood); return; }
     if (G.modMusic) { Sound.setMood(G.modMusic); return; }
-    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station' }[info.b] || 'meadow'));
+    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station', 11: 'volcano' }[info.b] || 'meadow'));
   }
 
   // ---------- the owner ship: it flies down, you jump in, then you fly it from the cockpit ----------
