@@ -1,5 +1,5 @@
 // Lets Nautic Online install and open even with a weak connection.
-const VERSION = '7.0';
+const VERSION = '7.1';
 const CACHE = 'funz-online-' + VERSION;
 const FILES = ['./', 'index.html', 'style.css', 
   'js/icons.js', 'js/device.js', 'js/gl.js', 'js/lib/three.min.js', 'js/lib/three-post.js', 'js/textures.js', 'js/gl3.js', 'js/isles.js', 'js/terrain.js', 'js/structures.js', 'js/buildings.js', 'js/sky.js', 'js/realms.js', 'js/parts.js', 'js/custom.js', 'js/models.js', 'js/fx.js', 'js/sound.js', 'js/chase.js', 'js/games.js', 'js/games2.js', 'js/regions.js', 'js/game.js', 'js/net.js', 'js/modkit.js', 'js/servers.js', 'js/bigmap.js', 'js/app.js',
