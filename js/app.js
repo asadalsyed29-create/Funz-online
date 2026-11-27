@@ -244,12 +244,12 @@
   };
   if (window.NAUTIC_BETA) {
     const col = document.createElement('div'); col.id = 'sideBtns2';
-    col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button>';
+    col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button><button id="updBtn" title="Updates"></button>';
     if (Device.useTouch) { $('quick').append(...col.children); } else $('hud').appendChild(col); // on phones they join the round buttons at the top
-    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22);
+    $('mapBtn').innerHTML = icon('map', 22); $('friendsBtn').innerHTML = icon('friends', 22); $('photoBtn').innerHTML = icon('camera', 22); $('setBtn').innerHTML = icon('gear', 22); $('updBtn').innerHTML = icon('news', 22);
     const hint = document.createElement('div'); hint.id = 'photoHint'; hint.className = 'hidden'; hint.textContent = 'Photo mode: drag to look around, tap to bring the buttons back'; document.body.appendChild(hint);
     const panel = (id, title) => { const b = document.createElement('div'); b.id = id; b.className = 'xPanel hidden'; b.innerHTML = '<div class="aHead"><b>' + title + '</b><button class="iconBtn">' + icon('close', 18) + '</button></div><div class="xBody"></div>'; b.querySelector('.iconBtn').onclick = () => b.classList.add('hidden'); $('hud').appendChild(b); return b; };
-    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings');
+    const fBox = panel('friendsBox', 'Friends'), sBox = panel('setBox', 'Settings'), uBox = panel('updBox', 'Updates');
     // travel happens from the big map: leave this world and join the same server in the other region (and go to a waypoint there)
     const travel = (id, wp) => {
       if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can travel when this game is over', 2000); return false; }
@@ -302,6 +302,22 @@
     };
     try { const mv = localStorage.getItem('funz.musicVol'), sv = localStorage.getItem('funz.sfxVol'); if (mv != null) Sound.music = +mv; if (sv != null) Sound.sfx = +sv; } catch (e) {}
     $('setBtn').onclick = () => { if (show(sBox)) renderSet(); };
+    // updates: every update with its name, newest first. A dot on the button until you've seen the newest one
+    const seenUpd = () => { try { return localStorage.getItem('nautic.updSeen'); } catch (e) { return null; } };
+    const updDot = () => $('updBtn').classList.toggle('dot', seenUpd() !== NAUTIC_UPDATES[0].name);
+    const renderUpd = () => {
+      const body = uBox.querySelector('.xBody'); body.textContent = '';
+      NAUTIC_UPDATES.forEach((u, i) => {
+        const card = document.createElement('div'); card.className = 'updCard' + (i === 0 ? ' newest' : '');
+        const h = document.createElement('div'); h.className = 'updHead'; const nm = document.createElement('b'); nm.textContent = u.name; const v = document.createElement('span'); v.className = 'xDim'; v.textContent = (u.v ? 'v' + u.v + ' · ' : '') + new Date(u.date + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        h.append(nm, v); card.appendChild(h);
+        const ul = document.createElement('ul'); for (const w of u.what) { const li = document.createElement('li'); li.textContent = w; ul.appendChild(li); } card.appendChild(ul);
+        body.appendChild(card);
+      });
+      try { localStorage.setItem('nautic.updSeen', NAUTIC_UPDATES[0].name); } catch (e) {} updDot();
+    };
+    $('updBtn').onclick = () => { if (show(uBox)) renderUpd(); };
+    updDot();
   }
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
   try { Sound.on = localStorage.getItem('funz.music') !== 'off'; } catch (e) {}
@@ -1565,6 +1581,7 @@
     else if (kind === 'tp-alone') showToast('Use the wire tool (Circuits tab) to connect this teleporter to another one', 2500);
     else if (kind === 'cave-in') showToast('You found a cave! Look for gems and crystals. The gold ring takes you back up', 3500);
     else if (kind === 'cave-out') showToast('Back outside!', 1200);
+    else if (kind === 'ouch') { showToast(arg || 'Ouch!', 1800); Sound.play('tp'); }
     else if (kind === 'spawn') {
       const k = arg.join(','); if (G.lastSpawnPad === k) return; G.lastSpawnPad = k;
       G.spawn = [arg[0] + 0.5, arg[1] + 1.5, arg[2] + 0.5]; if (!G.region) store.set('spawn5', JSON.stringify(G.spawn)); showToast('Spawn point set!', 1500);

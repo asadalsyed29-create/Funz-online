@@ -1,0 +1,21 @@
+// Every Nautic Online update, newest first, each with its own name. Add new ones at the top.
+const NAUTIC_UPDATES = [
+  { v: '7.3', name: 'Advanced map!', date: '2026-11-27', what: ['A real 3D planets map with the sun and every planet going round it', 'The map only shows the regions of the planet you are on', '9 new regions: Whisperwood, Coral Reach, Sunspray Isles, Magma Deep, Obsidian Wastes, Frostpeak Range, Snowdrift Hollows, Gearfall and Skyport', 'New landmarks: The Hollow Oak, The Coral Arch, The Giant Crab, The Fire Bridge, The Obsidian Blade, The Ice Castle, The Giant Snowman, The Great Gear and Skyport Tower', 'This Updates button'] },
+  { v: '7.2', name: 'Five Planets', date: '2026-11-27', what: ['Lumenhollow, Kelar Coasts, Tidewild, Cinderfall, Ashveil, Glacier Sea, Aurora Shelf, Rustworks and Neon Stacks', 'The Great Mushroom, The Shell, Lighthouse Rock, The Great Turtle, The Anvil, Ember Throne, The Burnt Tree, The Frozen Whale, The Crystal Spire and The Dead Antenna', 'The Broken Bridge with falling planks, down to the Underground Power Station'] },
+  { v: '7.1', name: 'Map Travel', date: '2026-11-27', what: ['Travel from the big map: Travel here, or put a waypoint and tap Go there', 'The map is always hand-drawn', 'A planets map'] },
+  { v: '7.0', name: 'Dustmaw Reaches', date: '2026-11-27', what: ['Your first trip to another region: a desert of mesas and oases', 'The Cactus and Bonewash', 'Every island has its own look and landmark', 'A hand-drawn big map with arrows to the other regions'] },
+  { name: 'The Big Map', date: '2026-11-27', what: ['A big map of the whole world with every island named', 'The volcano', 'Map, Friends, Photo mode and Settings buttons'] },
+  { name: 'Mod Editor', date: '2026-11-23', what: ['Make your own mods in the Mod Editor', 'Start from the Servers screen', 'Bowling fixed'] },
+  { name: 'Nautic Online', date: '2026-11-22', what: ['Funz Online became Nautic Online, played in UltraNautic Hub', 'Public, link-only and private servers'] },
+  { name: 'Sky Islands', date: '2026-11-21', what: ['Sky islands above a sea of clouds', 'Realistic crystals and a crystal geode'] },
+  { name: 'Rebuilt', date: '2026-11-20', what: ['Detailed animals, plants and buildings', 'All 16 buildings rebuilt from scratch'] },
+  { name: 'Fun Park', date: '2026-11-20', what: ['Ball soccer, mini golf, bowling and treasure hunts', 'Sky race, fishing pier and the game arena (tag and hide and seek)'] },
+  { name: 'Storm Chasers', date: '2026-11-20', what: ['Giant supercell storms and real lightning', 'The storm chase minigame with tornadoes'] },
+  { name: 'Light and Shadow', date: '2026-11-20', what: ['A new engine with real sun shadows and glowing lights', 'New trees everywhere and real textures'] },
+  { name: 'Spawn Plaza', date: '2026-11-16', what: ['A new spawn plaza with a fountain and an arch', 'A shipwreck and a crash pod to find'] },
+  { name: 'Secret Worlds', date: '2026-11-16', what: ['Three special worlds behind portals', 'The gadgets shop and the owner ship'] },
+  { name: 'Prettier World', date: '2026-11-16', what: ['A much prettier world', 'Wardrobe, quests, music and names that stay yours'] },
+  { name: 'Massive World', date: '2026-11-15', what: ['A massive low-poly world', 'Build tabs, the compass and Station Road'] },
+  { name: 'The 3D Update', date: '2026-11-15', what: ['Everything went 3D'] },
+  { name: 'It Begins', date: '2026-11-15', what: ['One big peaceful world to explore, build and hang out in'] },
+];

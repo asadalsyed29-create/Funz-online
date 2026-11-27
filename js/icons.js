@@ -1,6 +1,7 @@
 // Hand-drawn two-tone icons (24×24): a soft filled shape plus crisp lines.
 const F = d => `<path d="${d}" fill="currentColor" fill-opacity=".22" stroke="none"/>`;
 const ICON_PATHS = {
+  news: F('M4 5h13v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z') + '<path d="M17 9h3v10a2 2 0 0 1-4 0V5H4v14a2 2 0 0 0 2 2h13"/><path d="M7 8.5h6M7 12h6M7 15.5h4"/>',
   shirt: F('M8 3l4 2 4-2 5 3.5-2.5 4-2.5-1.3V21H8V9.2L5.5 10.5 3 6.5z') + '<path d="M8 3l4 2 4-2 5 3.5-2.5 4-2.5-1.3V21H8V9.2L5.5 10.5 3 6.5z"/><path d="M9.5 3.7c.5 1.6 1.4 2.4 2.5 2.4s2-.8 2.5-2.4"/>',
   music: F('M6 18a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0zM15 16a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0z') + '<circle cx="8.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/><path d="M11 18V5.5l9-2V16"/><path d="M11 9l9-2"/>',
   musicOff: F('M6 18a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0z') + '<circle cx="8.5" cy="18" r="2.5"/><path d="M11 18V5.5l9-2V13"/><path d="M11 9l9-2"/><path d="M3 3l18 18"/>',
