@@ -9,6 +9,7 @@ const BigMap = (() => {
   let mode = 'region', farWay = null; // mode: 'region' or 'planets'; farWay = a waypoint put in a region you're not in yet
   const BUILT = () => Object.keys(REGIONS).filter(k => REGIONS[k].built);
   const TAGS = { berekor: 'Where every journey starts', dustmaw: 'Hot sand, old bones and one very big cactus' };
+  const tagOf = id => TAGS[id] || (regionTheme(id) || {}).tag || '';
 
   const regionNow = () => (host && host.region && host.region()) || 'berekor';
   const viewing = () => viewR || regionNow(), here = () => viewing() === regionNow();
@@ -166,7 +167,7 @@ const BigMap = (() => {
     if (mode === 'planets') { el.textContent = 'Tap a planet to see its map. From there you can travel to any region that is built.'; return; }
     if (!data) { el.textContent = ''; return; }
     if (placing) { el.textContent = 'Tap anywhere on the map to put your waypoint there.'; return; }
-    if (isle >= 0) { const it = data.isles[isle], names = it.lands.map(b => ({ 1: 'beaches', 2: 'grassland', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountains', 7: 'swamp', 8: 'glow fields', 11: 'the volcano', 12: 'red mesas', 13: 'dust flats', 14: 'oases', 16: 'autumn woods', 17: 'elder forest', 18: 'frostglow', 19: 'salt flats', 20: 'hoodoo badlands' }[b])).filter(Boolean); const IS = viewing() === 'berekor' ? (typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES : null) : viewing() === 'dustmaw' && typeof DUST_ISLES !== 'undefined' ? DUST_ISLES : null, mk = IS ? IS.marks.find(m => m.isle === isle) : null, th = IS ? THEME_TXT[IS.themes[isle]] : '';
+    if (isle >= 0) { const it = data.isles[isle], names = it.lands.map(b => ({ 1: 'beaches', 2: 'grassland', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountains', 7: 'swamp', 8: 'glow fields', 11: 'the volcano', 12: 'red mesas', 13: 'dust flats', 14: 'oases', 16: 'autumn woods', 17: 'elder forest', 18: 'frostglow', 19: 'salt flats', 20: 'hoodoo badlands' }[b] || (b >= 21 && BIOMES[b] ? BIOMES[b].name.toLowerCase() : null))).filter(Boolean); const IS = viewing() === 'berekor' ? (typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES : null) : viewing() === 'dustmaw' && typeof DUST_ISLES !== 'undefined' ? DUST_ISLES : null, mk = IS ? IS.marks.find(m => m.isle === isle) : null, th = IS ? THEME_TXT[IS.themes[isle]] : '';
       el.textContent = it.name + ': ' + (th || names.join(', ')) + (mk ? '. Landmark: ' + STRUCT_TYPES[mk.type] : '') + '.'; return; }
     el.textContent = data.isles.filter(q => !q.gone).length + ' islands in ' + regionName() + '. Tap an island to see its map.' + (here() ? '' : ' Tap Travel here to go, or put a waypoint and tap Go there.');
   }
@@ -198,11 +199,23 @@ const BigMap = (() => {
     cactus: g => { g.rect(-2, -14, 4, 16); g.rect(-7, -9, 3, 6); g.rect(-7, -4, 6, 2); g.rect(4, -11, 3, 6); g.rect(1, -6, 6, 2); },
     bonewash: g => { g.rect(-9, -2, 18, 2); for (let k = -6; k <= 6; k += 4) g.rect(k - 0.7, -9, 1.4, 7); },
     plaza: g => { g.arc(0, -3, 6, 0, 7); },
+    greatshroom: g => { g.moveTo(-12, -6); g.quadraticCurveTo(0, -20, 12, -6); g.closePath(); g.rect(-2.5, -6, 5, 8); },
+    shell: g => { g.moveTo(-10, 2); g.quadraticCurveTo(-10, -12, 2, -10); g.quadraticCurveTo(10, -8, 10, 2); g.closePath(); },
+    lightrock: g => { g.rect(-6, -3, 12, 5); g.moveTo(-3, -3); g.lineTo(-2, -15); g.lineTo(2, -15); g.lineTo(3, -3); g.closePath(); },
+    bridge: g => { g.rect(-12, -6, 24, 3); g.rect(-9, -16, 2, 13); g.rect(7, -16, 2, 13); },
+    station: g => { g.rect(-9, -8, 18, 10); g.moveTo(-6, -8); g.lineTo(0, -13); g.lineTo(6, -8); },
+    turtle: g => { g.ellipse(0, -4, 11, 6, 0, Math.PI, 0); g.closePath(); g.rect(10, -5, 4, 3); },
+    anvil: g => { g.moveTo(-12, -10); g.lineTo(10, -10); g.lineTo(6, -6); g.lineTo(3, -6); g.lineTo(5, 2); g.lineTo(-5, 2); g.lineTo(-3, -6); g.lineTo(-8, -6); g.closePath(); },
+    throne: g => { g.rect(-6, -14, 12, 9); g.rect(-8, -5, 16, 7); },
+    burnttree: g => { g.rect(-1.5, -14, 3, 16); g.moveTo(0, -8); g.lineTo(-8, -14); g.lineTo(-7, -15); g.lineTo(0, -10); g.moveTo(0, -11); g.lineTo(7, -16); g.lineTo(8, -15); g.lineTo(1, -9); },
+    whale: g => { g.ellipse(-1, -5, 11, 5, 0, 0, 7); g.moveTo(9, -5); g.lineTo(14, -10); g.lineTo(14, 0); g.closePath(); },
+    spire: g => { g.moveTo(-5, 2); g.lineTo(0, -18); g.lineTo(5, 2); g.closePath(); },
+    antenna: g => { g.moveTo(-6, 2); g.lineTo(0, -18); g.lineTo(6, 2); g.closePath(); g.rect(-0.7, -22, 1.4, 4); },
     station: g => { g.arc(0, -4, 7, 0, 7); g.moveTo(4, -4); g.arc(0, -4, 3, 0, 7, true); },
   };
   function drawPic(g, k, x, y, flag) {
     g.save(); g.translate(x, y); g.beginPath(); PICS[k](g);
-    g.fillStyle = k === 'volcano' ? '#8e7c72' : k === 'cactus' ? '#6aa252' : CREAM; g.strokeStyle = INK; g.lineWidth = 1.6; g.lineJoin = 'round'; g.fill('evenodd'); g.stroke();
+    g.fillStyle = ({ volcano: '#8e7c72', cactus: '#6aa252', greatshroom: '#c05ae0', shell: '#f4c8b0', turtle: '#5a9a5a', whale: '#9ac0e0', spire: '#9ff0ff', anvil: '#5a5a62', throne: '#6a3a2a', burnttree: '#3a3432', antenna: '#8a6a5a', bridge: '#a8603a' })[k] || CREAM; g.strokeStyle = INK; g.lineWidth = 1.6; g.lineJoin = 'round'; g.fill('evenodd'); g.stroke();
     if (k === 'volcano') { g.fillStyle = '#ff6a2a'; g.beginPath(); g.moveTo(-4, -10); g.lineTo(4, -10); g.lineTo(2, -6); g.lineTo(-2, -6); g.closePath(); g.fill(); }
     if (flag) { g.strokeStyle = INK; g.lineWidth = 1.6; g.beginPath(); g.moveTo(4, -6); g.lineTo(9, -18); g.stroke(); g.fillStyle = flag === 'found' ? '#3ee04a' : '#a8acb4'; g.beginPath(); g.moveTo(9, -18); g.lineTo(17, -15); g.lineTo(11, -11); g.closePath(); g.fill(); g.lineWidth = 1; g.stroke(); }
     g.restore();
@@ -247,7 +260,7 @@ const BigMap = (() => {
     {
       const known = (gm && gm.known) || new Set(), list = [];
       if (gm && here()) { for (const q of gm.places(0, 0, 0)) if (q.always) list.push(q); }
-      else if (vr === 'dustmaw') { list.push({ x: 0, z: 0, kind: 'landing', name: 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of DUST_SPECIALS) list.push({ x: sp.x, z: sp.z, kind: sp.id, name: sp.name, col: '#ffd890', always: true }); }
+      else if (vr !== 'berekor') { list.push({ x: 0, z: 0, kind: 'landing', name: (regionTheme(vr) || {}).landing || 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of themeSpecials((REGIONS[vr] || {}).theme)) list.push({ x: sp.x, z: sp.z, kind: sp.id, name: sp.name, col: '#ffd890', always: true }); }
       else if (vr === 'berekor' && VOLCANO.on) list.push({ x: VOLCANO.x, z: VOLCANO.z, kind: 'volcano', name: 'Volcano', col: '#ff7a2a', always: true });
       const MK = vr === 'dustmaw' ? (typeof DUST_ISLES !== 'undefined' ? DUST_ISLES.marks : []) : vr === 'berekor' && typeof BEREKOR_ISLES !== 'undefined' && VOLCANO.on ? BEREKOR_ISLES.marks : [];
       const markKeys = new Set();
@@ -282,7 +295,7 @@ const BigMap = (() => {
     labels.sort((a, b) => b.pri - a.pri); const taken = [];
     // the region's name and saying in the top left corner
     if (isle < 0) {
-      g.textAlign = 'left'; const t1 = regionName(), t2 = TAGS[viewing()] ? '"' + TAGS[viewing()] + '"' : '';
+      g.textAlign = 'left'; const t1 = regionName(), t2 = tagOf(viewing()) ? '"' + tagOf(viewing()) + '"' : '';
       text(t1, 12, 22, '700 24px Georgia, serif', '#fff4dc', 'rgba(30,26,20,.9)', 4);
       if (t2) text(t2, 14, 44, 'italic 600 12px Georgia, serif', '#fff4dc', 'rgba(30,26,20,.9)', 3);
       g.font = '700 24px Georgia, serif'; const tw = Math.max(g.measureText(t1).width, t2.length * 6.2); taken.push([0, 0, tw + 30, 56]); g.textAlign = 'center';

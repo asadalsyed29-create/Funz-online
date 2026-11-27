@@ -29,7 +29,7 @@ class Game {
     this.chunks = new Map(); this.models = new Map(); this.itemModels = {}; this.creatureModels = {};
     this.realms = {}; this.realm = null;
     if (this.region) { // a travel region: its own places, none of Berekor's
-      this.landmarks = buildDustLandmarks(this.gfx, this.St, this.T);
+      this.landmarks = this.region === 'dustmaw' ? buildDustLandmarks(this.gfx, this.St, this.T) : buildRegionLandmarks(this.gfx, this.St, this.T, this.region, this);
       this.park = this.sky = this.pier = this.arena = null; this.cannons = []; this.cannonM = null; this.portals = []; this.portalM = [];
       this.rings = []; this.raceStart = [1e6, -1e6, 1e6];
     } else {
@@ -276,6 +276,7 @@ class Game {
     }
     // parts from mods (see modkit.js)
     if (this.mods && !this.realm && !this.cave) this.mods.collide(b, (bb, q) => this.push(bb, q, null), closestOnTri);
+    if (this.extras && !this.realm && !this.cave) this.extras.collide(b, (bb, q) => this.push(bb, q, null));
   }
   machines(b, opts) {
     const g = b.ground; if (!g) return;
@@ -322,10 +323,10 @@ class Game {
       return;
     }
     if (b.caveLock) { const t = b.caveLock; if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) > t.r + 4) b.caveLock = null; }
-    for (const s of this.St.list.values()) if (s) for (const t of s.triggers) {
+    for (const s of [...this.St.list.values(), ...(this.region ? this.landmarks : [])]) if (s && s.triggers) for (const t of s.triggers) {
       if (b.caveLock && b.caveLock.cave === t.cave) continue;
       if (Math.hypot(b.p[0] - t.p[0], b.p[1] - t.p[1], b.p[2] - t.p[2]) < t.r) {
-        let c = this.caves.get(t.cave); if (!c) { c = new Cave(this.T.N, t.cave, t); c.build(this.gfx); this.caves.set(t.cave, c); }
+        let c = this.caves.get(t.cave); if (!c) { c = t.make ? t.make() : new Cave(this.T.N, t.cave, t); c.build(this.gfx); this.caves.set(t.cave, c); }
         c.ex = t; this.cave = c; b.p = [c.exit[0] + 4.5, c.floor(c.exit[0] + 4.5, c.exit[2]) + 1, c.exit[2]]; b.v = [0, 0, 0]; b.tpCool = 2; fx('cave-in'); return;
       }
     }
@@ -341,7 +342,7 @@ class Game {
       const inf = this.T.info(x, z), y = this.T.ground(x, z);
       if (y < SEA - 0.5 || inf.b === 9 || inf.b === 10) continue;
       const r = N.hash(cx, cz + k * 13, 603);
-      const type = r < 0.12 ? 'coin' : ({ 1: 'shell', 2: 'feather', 3: 'mushroom', 4: 'gem', 5: 'crystal', 6: 'crystal', 7: 'mushroom', 8: 'crystal', 12: 'gem', 13: 'gem', 14: 'shell', 16: 'mushroom', 17: 'mushroom', 18: 'crystal', 19: 'crystal', 20: 'gem' }[inf.b] || 'coin');
+      const type = r < 0.12 ? 'coin' : ({ 1: 'shell', 2: 'feather', 3: 'mushroom', 4: 'gem', 5: 'crystal', 6: 'crystal', 7: 'mushroom', 8: 'crystal', 12: 'gem', 13: 'gem', 14: 'shell', 16: 'mushroom', 17: 'mushroom', 18: 'crystal', 19: 'crystal', 20: 'gem' }[inf.b] || (BIOMES[inf.b] && BIOMES[inf.b].item) || 'coin');
       out.push({ id: 'c:' + cx + ':' + cz + ':' + k, type, p: [x, y + 0.6, z] });
     }
     return out;
@@ -550,6 +551,8 @@ class Game {
     // lightning only comes out of a real thunderstorm cloud: a bolt from its base to the ground, then thunder after the sound travels
     if (stormNear && !this.under && !inSt && Math.random() < (o.dt || 0.016) * 0.22) this.strike(stormNear, c.target);
     if (this.bolts && this.bolts.length) this.bolts = this.bolts.filter(b => { b.t -= o.dt || 0.016; if (b.t <= 0) { G.free(b.mesh); return false; } return true; });
+    const RTs = !RL && this.region && (regionTheme(this.region) || {}).sky;
+    if (RTs) { const k2 = RTs.k * (1 - night * 0.5); hor = L3(hor, RTs.hor, k2); zen = L3(zen, RTs.zen, k2); fog = hor; fogD *= RTs.fog || 1; sunC = L3(sunC, RTs.sun, k2); if (RTs.amb) amb = amb.map(v => v * (1 - (1 - RTs.amb) * k2)); }
     if (this.region === 'dustmaw' && !RL) { const k2 = 1 - night * 0.8; hor = L3(hor, [0.9, 0.74, 0.55], 0.45 * k2); zen = L3(zen, [0.62, 0.6, 0.62], 0.2 * k2); fog = hor; fogD *= 1.3; sunC = L3(sunC, [1.05, 0.88, 0.7], 0.3 * k2); }
     if (this.flash > 0) { const f = this.flash; amb = amb.map(v => v + f * 0.7); zen = L3(zen, [0.85, 0.88, 1], f * 0.5); hor = L3(hor, [0.8, 0.82, 0.95], f * 0.4); fog = hor; this.flash = Math.max(0, f - (o.dt || 0.016) * 6); }
     if (!this.under && c.eye[1] < SEA - 0.2) { fog = [0.08, 0.3, 0.42]; fogD = 1 / 38; amb = [0.25, 0.42, 0.5]; sunC = sunC.map(v => v * 0.5); } // under the water
@@ -619,7 +622,7 @@ class Game {
     G.flat(1); G.mat(1, 0.18, 0.06); G.tex(2);
     if (!this.under) for (const [kk, ch] of this.chunks) { const [x, z] = kk.split(',').map(Number), d = Math.hypot(x - ccx, z - ccz); if (chunkVis(x, z)) G.draw(d <= (this.near || 2.3) ? ch.deco : ch.decoLo); }
     G.mat(0, 0, 0.06);
-    if (this.cave) G.draw(this.cave.mesh);
+    if (this.cave) { G.draw(this.cave.mesh); if (this.cave.deco) G.draw(this.cave.deco); }
     if (RL) {
       for (const m of RL.meshes) { G.flat(m.kind !== 'world'); if (m.kind === 'deco') G.mat(1, 0.2, 0.1); else if (m.kind === 'glow') G.mat(1, 0.5, 0.8); else G.mat(0, 0.1, 0.1); G.tex(m.kind === 'world' ? 2 : 0); G.draw(m.mesh, null, 1, null, m.kind === 'glow' ? 0.6 : 0); }
       if (RL.planet) { G.mat(0, 0.3, 0.2); G.tex(0); G.fog(0); G.draw(RL.planet, null, 1, null, 0.15); G.fog(); }
@@ -685,6 +688,7 @@ class Game {
     if (this.pier) this.pier.draw(G, t, me);
     if (this.arena) this.arena.draw(G, t, players);
     if (this.mods) { G.mat(0, 0.12, 0.3); this.mods.draw(G, t, false); G.mat(1, 0.35, 0.45); }
+    if (this.extras && !this.under) { G.mat(0, 0.12, 0.3); this.extras.draw(G, t); G.mat(1, 0.35, 0.45); }
     this.stat('creatures');
     // players: the ball with its skin, an outline, and the hat on top (the hat doesn't roll)
     const clear = [];
@@ -723,6 +727,7 @@ class Game {
     // see-through things last
     G.blend(true); G.depthWrite(false);
     G.mat(0, 0, 0);
+    if (!this.under) for (const s of this.landmarks) if (s.clear && vis(s.x, s.z, s.far || far, 40)) { G.mat(0, 0.6, 0.3); G.draw(s.clear); G.mat(0, 0, 0); }
     if (!G.isThree || !G.R.shadowMap.enabled) for (const p of players) { // round blob shadows (the Three.js engine has real ones)
       const gy = this.cave ? this.cave.floor(p.p[0], p.p[2]) : Math.max(this.T.ground(p.p[0], p.p[2]), SEA - 0.1), hgt = p.p[1] - gy;
       if (hgt < 0 || hgt > 24 || insideStation(p.p)) continue;
@@ -825,7 +830,7 @@ class Game {
       if (p) out.push({ x: p.x, z: p.z, key: 's:' + p.key, kind: p.type, name: STRUCT_TYPES[p.type], col: p.type === 'cave' ? '#b8a8ff' : '#ffffff' });
     }
     for (const pt of this.portals) out.push({ x: pt.p[0], z: pt.p[2], key: 'portal:' + pt.kind, kind: 'portal', name: pt.label, col: pt.col, always: true });
-    if (this.region) { out.push({ x: 0, z: 0, key: 'landing', kind: 'landing', name: 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of DUST_SPECIALS) out.push({ x: sp.x, z: sp.z, key: sp.id, kind: sp.id, name: sp.name, col: '#ff9f5a', always: true }); return out; }
+    if (this.region) { out.push({ x: 0, z: 0, key: 'landing', kind: 'landing', name: (regionTheme(this.region) || {}).landing || 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of themeSpecials(this.T.theme)) out.push({ x: sp.x, z: sp.z, key: sp.id, kind: sp.id, name: sp.name, col: '#ff9f5a', always: true }); return out; }
     out.push({ x: 44, z: 38, key: 'parkour', kind: 'parkour', name: 'Parkour', col: '#ff9f5a', always: true });
     out.push({ x: PARK.x, z: PARK.z, key: 'funpark', kind: 'park', name: 'Fun Park', col: '#7aff9a', always: true });
     out.push({ x: PIER.end[0] + 30, z: 0, key: 'pier', kind: 'pier', name: 'Fishing pier', col: '#5ab8ff', always: true });

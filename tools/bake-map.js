@@ -6,7 +6,7 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 const ROOT = path.join(__dirname, '..'), SIZE = +process.env.SIZE || 2048, SPAN = 16000, REGION = process.env.REGION || 'berekor', FILE = REGION === 'berekor' ? 'world' : REGION;
 const ctx = { console, Math, Map, Set, Float32Array, Uint16Array, Uint32Array, Uint8Array, Int32Array, Array, Object, JSON, performance: { now: () => 0 }, window: { NAUTIC_BETA: true }, document: { createElement: () => ({ getContext: () => null }) }, navigator: { userAgent: '' }, addEventListener() {} };
 vm.createContext(ctx);
-for (const f of ['js/gl.js', 'js/isles.js', 'js/terrain.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+for (const f of ['js/gl.js', 'js/isles.js', 'js/terrain.js', 'js/worlds.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
 vm.runInContext('VOLCANO.on = true; globalThis.K = { Terrain, BIOMES, VOLCANO, STATION, REGIONS, hex, mixC, shadeC, smooth, lavaAt };', ctx);
 const { Terrain, BIOMES, REGIONS, VOLCANO, hex, mixC, smooth, lavaAt } = ctx.K, RG = REGIONS[REGION];
 if (REGION !== 'berekor') { VOLCANO.on = false; vm.runInContext('REGION_NOW = ' + JSON.stringify(REGION), ctx); }
@@ -21,6 +21,7 @@ const at = (A, i, j) => A[Math.max(0, Math.min(SIZE, j)) * S1 + Math.max(0, Math
 // land colour like the game's ground, painted a bit richer
 function landColor(b, x, z, h) {
   let c = hex(BIOMES[b].ground);
+  if (BIOMES[b].g2) c = mixC(c, hex(BIOMES[b].g2), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 72, 2)));
   if (b === 2) c = mixC(hex('#5cb04c'), hex('#80be55'), smooth(0.3, 0.7, N.fbm(x / 160, z / 160, 61, 3)));
   if (b === 3) c = mixC(hex('#2f7a3a'), hex('#46883a'), smooth(0.3, 0.7, N.fbm(x / 120, z / 120, 62, 3)));
   if (b === 8) c = mixC(hex('#6a5cae'), hex('#8270c4'), smooth(0.3, 0.7, N.fbm(x / 140, z / 140, 63, 3)));
@@ -93,7 +94,7 @@ fs.writeFileSync(path.join(ROOT, 'map/' + FILE + '.raw'), out);
       const d = dist[j * D + i]; c = mixC(hex('#8fb0cc'), hex('#6487b0'), smooth(2, 14, d));
       if (d === 7 || (d === 15 && (i + j) % 6 < 3)) c = hex('#5a9ea4');      // contour lines following the coast (the far one dashed)
     } else {
-      c = mixC(hex(FLAT[b] || '#d8cfa8'), PAPER, 0.25);
+      c = mixC(hex(FLAT[b] || (BIOMES[b] && (BIOMES[b].flat || BIOMES[b].ground)) || '#d8cfa8'), PAPER, b >= 21 ? 0.15 : 0.25);
       if (h > 45) c = mixC(c, hex('#f2efe6'), smooth(60, 130, h) * 0.35);     // high ground goes pale
       if (b === 11 && lavaAt(T, -SPAN / 2 + (i + 0.5) * 2 * step, -SPAN / 2 + (j + 0.5) * 2 * step, h) > 0.4) c = hex('#e8603a');
       if (sea(i - 1, j) || sea(i + 1, j) || sea(i, j - 1) || sea(i, j + 1)) c = INK; // inked coast
@@ -115,7 +116,7 @@ fs.writeFileSync(path.join(ROOT, 'map/' + FILE + '.raw'), out);
     const r = N.hash(ci, cj, 311); const i = Math.floor((ci + 0.2 + N.hash(ci, cj, 312) * 0.6) * CELL), j = Math.floor((cj + 0.2 + N.hash(ci, cj, 313) * 0.6) * CELL);
     if (i >= D || j >= D) continue; const h = hAt(i, j), b = bAt(i, j); if (h < 2) continue;
     let ok = true; for (let a = -4; a <= 4 && ok; a += 4) for (let b2 = -6; b2 <= 3; b2 += 3) if (sea(i + a, j + b2) || hAt(i + a, j + b2) < 1) { ok = false; break; }
-    const sy = SYM[b === 6 || (h > 70 && b !== 4) ? 6 : b]; if (!ok || !sy || r < (b === 2 ? 0.7 : b === 5 ? 0.6 : 0.15)) continue;
+    const BS = BIOMES[b] && BIOMES[b].sym, sy = b >= 21 ? (BS && [{ tree, pine, cactus, peak, shroom, rock: rockS }[BS[0]], BS[1]]) : SYM[b === 6 || (h > 70 && b !== 4) ? 6 : b]; if (!ok || !sy || r < (b === 2 ? 0.7 : b === 5 ? 0.6 : 0.15)) continue;
     sy[0](i, j, hex(sy[1]));
   }
   fs.writeFileSync(path.join(ROOT, 'map/' + FILE + '-d.raw'), dr);
@@ -124,6 +125,7 @@ fs.writeFileSync(path.join(ROOT, 'map/' + FILE + '.raw'), out);
 const L = 256, cell = SIZE / L, bg = new Uint8Array(L * L), seen = new Uint8Array(L * L), labels = [];
 for (let j = 0; j < L; j++) for (let i = 0; i < L; i++) { const b = at(Bm, Math.floor((i + 0.5) * cell), Math.floor((j + 0.5) * cell)); bg[j * L + i] = at(H, Math.floor((i + 0.5) * cell), Math.floor((j + 0.5) * cell)) < -0.4 ? 0 : b; }
 const NAMED = { 3: 'Forest', 4: RG.theme ? 'Dunes' : 'Desert', 5: 'Snowland', 6: 'Mountains', 7: 'Swamp', 8: 'Glow fields', 11: 'Volcano', 1: 'Beach', 2: 'Grassland', 12: 'Red mesas', 13: 'Dust flats', 14: 'Oasis', 16: 'Autumn woods', 17: 'Elder forest', 18: 'Frostglow', 19: 'Salt flats', 20: 'Badlands' }, MIN = { 16: 60, 17: 60, 18: 60, 4: RG.theme ? 120 : 40, 7: 60, 8: 60, 3: 90, 5: 160, 6: 60, 2: 400, 1: 9999, 11: 1, 12: 50, 13: 80, 14: 12, 19: 60, 20: 60 };
+for (const b in BIOMES) if (+b >= 21) { NAMED[b] = BIOMES[b].name; MIN[b] = 60; }
 for (let s = 0; s < L * L; s++) {
   if (seen[s] || !NAMED[bg[s]]) continue;
   const b = bg[s], cells = [s]; seen[s] = 1;
@@ -137,7 +139,17 @@ for (let s = 0; s < L * L; s++) {
 }
 labels.sort((a, b) => b.size - a.size);
 // the islands: every piece of land big enough gets a name (biggest first), with its box and what lands are on it
-const ISLE_NAMES = { berekor: ['Berekor Mainland', 'Whitecrown', 'Elderwood', 'Mistpeak', 'Hollowfrost', 'Amberleaf', 'Sandscar', 'Saltreach', 'Brannock', 'Ilvary', 'Dune Key', 'Wenn', 'Bogmoor', 'Glimmerholm', 'Wisp Isle', 'Little Tarn', 'Fenrow', 'Quill Isle', 'Lantern Isle', 'Oakum'],
+const ISLE_NAMES = {
+  lumen: ['Glowmere', 'Duskfen', 'Shimmer Key', 'Wickhollow', 'Moonmoss', 'Lanternreach', 'Faintwater', 'Starling Isle', 'Pale Hollow', 'Glimmerrun', 'Nightcap', 'Sporewood', 'Violet Key', 'Emberglow', 'Hushwater', 'Little Lumen', 'Wisplight', 'Gloomberry', 'Softshine', 'Candlewick', 'Owlrest', 'Blinkstone', 'Dimmer Isle', 'Lastlight', 'Cinderbloom', 'Faylock', 'Glowtide', 'Twinkle Key', 'Murkmoss', 'Dewlamp'],
+  kelar: ['Kelar Main', 'Coralby', 'Saltwhistle', 'Palmrest', 'Gullhaven', 'Sunreef', 'Turtle Bay', 'Coconut Key', 'Bluewater', 'Shellbeach', 'Parrot Isle', 'Lagoona', 'Driftpalm', 'Mango Key', 'Seaspray', 'Little Kelar', 'Pearlstrand', 'Breezy Isle', 'Crabclaw', 'Sandy Hook', 'Tidecrest', 'Warmwater', 'Kelp Key', 'Hibiscus Isle', 'Long Reef', 'Seastar', 'Gull Rock', 'Sunfish Key', 'Flying Fish', 'Last Palm'],
+  rustworks: ['Scrapyard Isle', 'Pylon Key', 'Gearwick', 'Boltmouth', 'Old Foundry', 'Smelter Isle', 'Cogsworth', 'Rivetrock', 'Slagheap', 'Wirewood', 'Pistonbay', 'Brassmoor', 'Sprocket Key', 'Tin Isle', 'Clank Isle', 'Furnace Point', 'Chainlink', 'Little Works', 'Valve Key', 'Girder Isle', 'Coalbank', 'Ironreach', 'Spanner Key', 'Crane Isle', 'Dynamo', 'Fuse Key', 'Grease Isle', 'Last Shift', 'Steamhole', 'Nutbolt'],
+  tidewild: ['Mangrove Tangle', 'Brinepool', 'Low Tide Key', 'Mudflat', 'Rootwater', 'Crabmarsh', 'Silt Isle', 'Heronreach', 'Tanglewood', 'Saltmarsh', 'Ebbside', 'Mosswater', 'Eel Key', 'Driftmud', 'Little Tide', 'Reedbank', 'Shellmud', 'Puddle Key', 'Snapper Isle', 'Slick Isle'],
+  cinder: ['Smoulder Isle', 'Basalt Key', 'Charmouth', 'Ashpeak', 'Blazeholm', 'Scorchrock', 'Magma Key', 'Burnside', 'Sparkfell', 'Kiln Isle', 'Brimstone', 'Firestep', 'Obsidia', 'Little Cinder', 'Hotfoot', 'Coalfire', 'Searing Key', 'Flarepoint', 'Redhollow', 'Ember Isle'],
+  ashveil: ['Greyhollow', 'Soot Isle', 'Cinderwood', 'Ashmere', 'Dustveil', 'Charwood', 'Paleburn', 'Smokereach', 'Embermoor', 'Grimwood', 'Hollow Ash', 'Silent Isle', 'Little Ash', 'Grey Key', 'Burntwater', 'Fogwood', 'Dimvale', 'Cinderfen', 'Stillwood', 'Wraith Isle'],
+  glacier: ['Floe', 'Hoarfrost', 'Bitterwind', 'Iceholm', 'Snowmere', 'Frostbite', 'Coldharbour', 'Rimeback', 'Whiteout', 'Glacier Key', 'Sleetfall', 'Polar Isle', 'Brrr Isle', 'Little Floe', 'Crackice', 'Frozen Key', 'Icefang', 'Shiverrock', 'Chillwater', 'Northmost'],
+  aurora: ['Starfrost', 'Lumen Key', 'Glowfloe', 'Prismhold', 'Shimmerice', 'Veilpoint', 'Skylight', 'Nightglass', 'Crystalmere', 'Little Aurora', 'Greenfire', 'Halo Key', 'Ribbon Isle', 'Coldglow', 'Starfall', 'Silverrime', 'Dawnice', 'Faint Key', 'Polaris', 'Wonderice'],
+  stacks: ['Tower Isle', 'Skyrail Key', 'Lamplight', 'Neonreach', 'Blocktown', 'Highrise', 'Glowgrid', 'Circuit Isle', 'Signal Key', 'Wattmoor', 'Pixel Isle', 'Little Stacks', 'Voltage', 'Rooftop Key', 'Glasswall', 'Echo Isle', 'Static Key', 'Gridlock', 'Nightshift', 'Last Lamp'],
+  berekor: ['Berekor Mainland', 'Whitecrown', 'Elderwood', 'Mistpeak', 'Hollowfrost', 'Amberleaf', 'Sandscar', 'Saltreach', 'Brannock', 'Ilvary', 'Dune Key', 'Wenn', 'Bogmoor', 'Glimmerholm', 'Wisp Isle', 'Little Tarn', 'Fenrow', 'Quill Isle', 'Lantern Isle', 'Oakum'],
   dustmaw: ['Sandhollow', 'Rustmesa', 'Scorchkey', 'Dry Gulch', 'Ochre Atoll', 'Saltpan', 'Redrock', 'Thirstwell', 'Mesa Vell', 'Dustfall', 'Gritstone', 'Hollow Sun', 'Brittle Key', 'Sunbake', 'Copperbluff', 'Bleakwater', 'Tumble Isle', 'Ashen Mesa', 'Pebbleshoal', 'Cinder Dune', 'Dryreed', 'Sandpiper Key', 'Glassmouth', 'Old Well', 'Driftbone', 'Scrubhook', 'Kiln Key', 'Tinder Isle', 'Rattleback', 'Saltcrown', 'Wither Key', 'Dune Fang', 'Ember Flat', 'Burrow Isle', 'Sunspit', 'Grain Isle', 'Hookstone', 'Parchmoor', 'Last Drop', 'Thornpoint', 'Quiet Sands', 'Ashwind', 'Little Mesa', 'Dry Tooth', 'Shimmerkey'] }[REGION];
 // land joined only by thin necks counts as separate islands: shrink the land, find the pieces, then grow them back
 const ER = +process.env.ER || 6, land = new Uint8Array(L * L); for (let c = 0; c < L * L; c++) land[c] = bg[c] !== 0 ? 1 : 0;
