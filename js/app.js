@@ -1459,7 +1459,7 @@
     prog.max('high', Math.floor(b.p[1]));
     if (now - (G.lastTrack || 0) < 1000) return; G.lastTrack = now;
     const game = G.game, inSt = insideStation(b.p), cave = game.cave || game.realm, info = game.T.info(b.p[0], b.p[2]);
-    if (!cave && !inSt && ((info.b >= 1 && info.b <= 8) || (info.b >= 12 && info.b <= 20 && info.b !== 15))) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
+    if (!cave && !inSt && ((info.b >= 1 && info.b <= 8) || (info.b >= 12 && BIOMES[info.b] && info.b !== 15))) { if (prog.mark('biomes', info.b)) { prog.max('b' + info.b, 1); banner('New land found', BIOMES[info.b].name, 'Keep exploring for more!', 3000); Sound.play('discover'); } }
     if (inSt || nearStation(b.p[0], b.p[2], 70)) prog.max('station', 1);
     if (VOLCANO.on && !cave && Math.hypot(b.p[0] - VOLCANO.x, b.p[2] - VOLCANO.z) < VOLCANO.R * 0.6) prog.max('volcano', 1);
     // discovering places (they get their names on the compass and map)
@@ -1470,7 +1470,7 @@
     Sound.setRain(game.rain || 0);
     if (game.realm) { Sound.setMood(game.realm.mood); return; }
     if (G.modMusic) { Sound.setMood(G.modMusic); return; }
-    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station', 11: 'volcano', 12: 'desert', 13: 'desert', 14: 'beach', 15: 'desert', 16: 'forest', 17: 'forest', 18: 'snow', 19: 'desert', 20: 'desert' }[info.b] || 'meadow'));
+    Sound.setMood(cave ? 'cave' : inSt ? 'station' : G.dark > 0.45 ? 'night' : ({ 0: 'ocean', 1: 'beach', 2: 'meadow', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountain', 7: 'swamp', 8: 'glow', 9: 'plaza', 10: 'station', 11: 'volcano', 12: 'desert', 13: 'desert', 14: 'beach', 15: 'desert', 16: 'forest', 17: 'forest', 18: 'snow', 19: 'desert', 20: 'desert' }[info.b] || (BIOMES[info.b] && BIOMES[info.b].mood) || 'meadow'));
   }
 
   // ---------- the owner ship: it flies down, you jump in, then you fly it from the cockpit ----------

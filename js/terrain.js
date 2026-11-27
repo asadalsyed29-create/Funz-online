@@ -50,15 +50,15 @@ const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a
 const REGIONS = {
   berekor: { name: 'Berekor', planet: 'Nautara', about: 'Mixed lands: forests, snow, glow fields, deserts and the volcano', seed: 20261115, built: true },
   dustmaw: { name: 'Dustmaw Reaches', planet: 'Nautara', about: 'Dusty desert islands, red mesas, oases, The Cactus and Bonewash', seed: 77310429, theme: 'dust', built: true },
-  lumen: { name: 'Lumenhollow', planet: 'Nautara', about: 'A glowing night region' },
-  kelar: { name: 'Kelar Coasts', planet: 'Kelar', about: 'Beaches, reefs and warm seas' },
-  tidewild: { name: 'Tidewild', planet: 'Kelar', about: 'Mangroves and tide pools' },
-  cinder: { name: 'Cinderfall', planet: 'Vyrnox', about: 'Lava islands' },
-  ashveil: { name: 'Ashveil', planet: 'Vyrnox', about: 'A grey ash forest' },
-  glacier: { name: 'Glacier Sea', planet: 'Oskarr', about: 'Ice and frozen oceans' },
-  aurora: { name: 'Aurora Shelf', planet: 'Oskarr', about: 'Lights over the ice' },
-  rustworks: { name: 'Rustworks', planet: 'Artex', about: 'Abandoned machines, the Broken Bridge and the underground power station' },
-  stacks: { name: 'Neon Stacks', planet: 'Artex', about: 'Islands of empty towers and lit-up walkways' },
+  lumen: { name: 'Lumenhollow', planet: 'Nautara', about: 'Glowing moss, lantern trees and The Great Mushroom', seed: 51920377, theme: 'lumen', built: true },
+  kelar: { name: 'Kelar Coasts', planet: 'Kelar', about: 'Jungle, white sand, cliffs, The Shell and Lighthouse Rock', seed: 33018266, theme: 'kelar', built: true },
+  tidewild: { name: 'Tidewild', planet: 'Kelar', about: 'Mangroves, tide pools and The Great Turtle', seed: 60441093, theme: 'tidewild', built: true },
+  cinder: { name: 'Cinderfall', planet: 'Vyrnox', about: 'Lava fields, basalt steps, The Anvil and Ember Throne', seed: 71200458, theme: 'cinder', built: true },
+  ashveil: { name: 'Ashveil', planet: 'Vyrnox', about: 'A burnt grey forest, ash dunes and The Burnt Tree', seed: 28839104, theme: 'ashveil', built: true },
+  glacier: { name: 'Glacier Sea', planet: 'Oskarr', about: 'Ice sheets, tundra, ice peaks and The Frozen Whale', seed: 90137752, theme: 'glacier', built: true },
+  aurora: { name: 'Aurora Shelf', planet: 'Oskarr', about: 'Glowing crystals on the ice and The Crystal Spire', seed: 12650981, theme: 'aurora', built: true },
+  rustworks: { name: 'Rustworks', planet: 'Artex', about: 'Scrapyards, old works, the Broken Bridge and the Underground Power Station', seed: 44718820, theme: 'rust', built: true },
+  stacks: { name: 'Neon Stacks', planet: 'Artex', about: 'Empty towers, neon plazas and The Dead Antenna', seed: 83306612, theme: 'stacks', built: true },
 };
 // the special islands of Dustmaw (each gets its own round island raised out of the sea)
 const DUST_SPECIALS = [
@@ -69,7 +69,7 @@ const DUST_SPECIALS = [
 class Terrain {
   constructor(seed, theme) {
     this.N = new Noise(seed); this.cache = new Map(); this.theme = theme || null;
-    if (this.theme === 'dust') { this.flat = false; SPAWN_H = 4.2; this.flat = true; return; }
+    if (this.theme) { SPAWN_H = 4.2; this.flat = true; return; }
     // The plaza and the station sit level with the land around them (never down in a pit).
     this.flat = false;
     const ring = (cx, cz, r) => { let s = 0; for (let k = 0; k < 12; k++) s += this.info(cx + Math.cos(k / 12 * 6.2832) * r, cz + Math.sin(k / 12 * 6.2832) * r).h; return s / 12; };
@@ -80,6 +80,7 @@ class Terrain {
   // height + biome numbers at a point
   info(x, z) {
     if (this.theme === 'dust') return this.infoDust(x, z);
+    if (this.theme) return this.infoTheme(x, z);
     const N = this.N, d0 = Math.hypot(x, z), dS = Math.hypot(x - STATION.x, z - STATION.z);
     const edge = Math.max(0, (Math.max(Math.abs(x), Math.abs(z)) - 6400) / 1600);
     const cont = N.fbm(x / 1700, z / 1700, 1, 4) + 0.32 * Math.exp(-(d0 * d0) / 490000) + 0.3 * Math.exp(-(dS * dS) / 360000) - edge * 0.7;
@@ -210,6 +211,8 @@ class Terrain {
 // colour of the ground at a spot (blended with the land around it, so biomes fade into each other)
 function groundColor(T, x, z, info, ny, h) {
   const B = BIOMES[info.b]; let c = hex(B.ground);
+  if (B.g2) c = mixC(c, hex(B.g2), smooth(0.3, 0.7, T.N.v(x / 40, z / 40, 93)));
+  if (B.seams) { const sx = Math.abs(((x / 6) % 1 + 1) % 1 - 0.5), sz = Math.abs(((z / 6) % 1 + 1) % 1 - 0.5); c = shadeC(c, Math.max(sx, sz) > 0.46 ? 0.8 : 0.97 + T.N.hash(Math.floor(x / 6), Math.floor(z / 6), 94) * 0.06); }
   if (info.b === 2) c = mixC(hex('#5cb04c'), hex('#84c255'), smooth(0.35, 0.65, T.N.v(x / 90, z / 90, 61)));
   if (info.b === 3) c = mixC(hex('#3f8f45'), hex('#57983e'), smooth(0.3, 0.7, T.N.v(x / 70, z / 70, 62)));
   if (info.b === 6 && h > 95) c = hex('#eef3f9');
@@ -253,6 +256,10 @@ function vertexColor(T, x, z, h, ny) {
     const rk = smooth(0.84, 0.66, ny); if (rk > 0) c = mixC(c, hex(B.rock || (h > 80 ? '#8a8a92' : '#8a857c')), rk);   // steep = rock
     if (h > 1.6 && h < 3.5 && inf.b !== 7) c = mixC(c, hex('#e8d49c'), smooth(3.5, 2, h) * 0.6);                       // sandy edge by the sea
     if (h > -0.6 && h < 0.9 && inf.b !== 7) c = shadeC(c, 0.86);                                                        // wet sand
+  }
+  if (B.hot && h > 2) { // lava fields: dark crust with glowing cracks
+    const n = T.N.v(x / 9, z / 9, 95), crack = 1 - Math.abs(n * 2 - 1), hot = smooth(0.84, 0.94, crack) * smooth(0.45, 0.6, T.N.v(x / 60, z / 60, 96));
+    if (hot > 0) { c = mixC(c, mixC(hex('#ff6a1a'), hex('#ffb84a'), smooth(0.93, 1, crack)), hot); if (hot > 0.5) c[3] = 0.8; }
   }
   if (inf.vol > 0) {
     const lv = lavaAt(T, x, z, h);
@@ -400,6 +407,8 @@ function decorate(mb, col, b, r, x, y, z, s, rot, r2, decos) {
     else if (r < 0.065) { deadTree(mb, x, y, z, s * 0.8, rot); cyl(0.3 * s, 4 * s); }
     else if (r < 0.072) crystals(mb, x, y, z, s * 0.7, '#ff7a2a');
     else if (r < 0.09) deadBush(mb, x, y, z, s);
+  } else if (BIOMES[b] && BIOMES[b].deco) { // the lands of the other regions (worlds.js)
+    BIOMES[b].deco({ mb, x, y, z, s, rot, r, r2, cyl, stone });
   } else if (b === 0 && y > -14) { // under the sea, close to the beach
     if (r < 0.05) coral(mb, x, y, z, s, r2);
     else if (r < 0.1) seaweed(mb, x, y, z, r2);

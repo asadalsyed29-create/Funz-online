@@ -39,7 +39,7 @@ class Structures {
     const N = this.N, r = N.hash(rx, rz, 900);
     const x = rx * REG + REG / 2 + (N.hash(rx, rz, 901) - 0.5) * 90, z = rz * REG + REG / 2 + (N.hash(rx, rz, 902) - 0.5) * 90;
     if (Math.abs(x) > LIMIT - 200 || Math.abs(z) > LIMIT - 200) return null;
-    if (this.T.theme) { if (Math.hypot(x, z) < 120) return null; for (const sp of DUST_SPECIALS) if (Math.hypot(x - sp.x, z - sp.z) < sp.r * 1.4) return null; }
+    if (this.T.theme) { if (Math.hypot(x, z) < 120) return null; for (const sp of themeSpecials(this.T.theme)) if (Math.hypot(x - sp.x, z - sp.z) < sp.r * 1.4) return null; }
     else if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110 || (VOLCANO.on && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.R + 60)) return null;
     // every Berekor island has its own landmark in the middle (beta)
     const MK = this.T.theme === 'dust' ? (typeof DUST_ISLES !== 'undefined' ? DUST_ISLES.marks : []) : VOLCANO.on && typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES.marks : [];
@@ -52,7 +52,7 @@ class Structures {
     const hilly = Math.abs(this.T.h(x + 12, z) - this.T.h(x - 12, z)) + Math.abs(this.T.h(x, z + 12) - this.T.h(x, z - 12)) > 9;
     if ((rx === 1 && rz === 0) || ((inf.b === 6 || hilly) && r < 0.75) || r > 0.9) type = 'cave';
     else if (r < 0.5) type = { 2: pick(['ruins', 'circle', 'village', 'tower']), 3: pick(['bigtree', 'cabin', 'ruins']), 4: pick(['pyramid', 'ruins', 'pod']),
-      5: pick(['igloo', 'frozen', 'pod']), 6: pick(['tower', 'cave']), 7: pick(['stilts', 'ruins']), 8: pick(['arch', 'shroomring']), 1: pick(['wreck', 'lighthouse']), 12: pick(['pyramid', 'ruins', 'tower']), 13: pick(['pod', 'ruins']), 14: pick(['village', 'cabin']), 16: pick(['cabin', 'village', 'ruins']), 17: pick(['bigtree', 'ruins']), 18: pick(['igloo', 'frozen']), 19: pick(['pod', 'circle']), 20: pick(['arch', 'cave', 'tower']) }[inf.b] || null;
+      5: pick(['igloo', 'frozen', 'pod']), 6: pick(['tower', 'cave']), 7: pick(['stilts', 'ruins']), 8: pick(['arch', 'shroomring']), 1: pick(['wreck', 'lighthouse']), 12: pick(['pyramid', 'ruins', 'tower']), 13: pick(['pod', 'ruins']), 14: pick(['village', 'cabin']), 16: pick(['cabin', 'village', 'ruins']), 17: pick(['bigtree', 'ruins']), 18: pick(['igloo', 'frozen']), 19: pick(['pod', 'circle']), 20: pick(['arch', 'cave', 'tower']) }[inf.b] || (BIOMES[inf.b] && BIOMES[inf.b].st ? pick(BIOMES[inf.b].st) : null);
     if (!type) return null;
     let rot = N.hash(rx, rz, 904) * 6.28;
     if (type === 'cave') { // the cave mouth looks downhill
