@@ -324,6 +324,7 @@ class Game {
     }
     if (b.caveLock) { const t = b.caveLock; if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) > t.r + 4) b.caveLock = null; }
     for (const s of [...this.St.list.values(), ...(this.region ? this.landmarks : [])]) if (s && s.triggers) for (const t of s.triggers) {
+      if (t.kill) { if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) < t.r && b.p[1] < t.p[1] + t.h && b.p[1] > t.p[1] - 4) { b.p = [...t.back]; b.v = [0, 0, 0]; b.tpCool = 1; fx('ouch', t.msg); return; } continue; }
       if (b.caveLock && b.caveLock.cave === t.cave) continue;
       if (Math.hypot(b.p[0] - t.p[0], b.p[1] - t.p[1], b.p[2] - t.p[2]) < t.r) {
         let c = this.caves.get(t.cave); if (!c) { c = t.make ? t.make() : new Cave(this.T.N, t.cave, t); c.build(this.gfx); this.caves.set(t.cave, c); }

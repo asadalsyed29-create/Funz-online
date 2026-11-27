@@ -51,14 +51,23 @@ const REGIONS = {
   berekor: { name: 'Berekor', planet: 'Nautara', about: 'Mixed lands: forests, snow, glow fields, deserts and the volcano', seed: 20261115, built: true },
   dustmaw: { name: 'Dustmaw Reaches', planet: 'Nautara', about: 'Dusty desert islands, red mesas, oases, The Cactus and Bonewash', seed: 77310429, theme: 'dust', built: true },
   lumen: { name: 'Lumenhollow', planet: 'Nautara', about: 'Glowing moss, lantern trees and The Great Mushroom', seed: 51920377, theme: 'lumen', built: true },
+  whisper: { name: 'Whisperwood', planet: 'Nautara', about: 'Giant old oak woods, quiet glades and The Hollow Oak', seed: 61722094, theme: 'whisper', built: true },
   kelar: { name: 'Kelar Coasts', planet: 'Kelar', about: 'Jungle, white sand, cliffs, The Shell and Lighthouse Rock', seed: 33018266, theme: 'kelar', built: true },
   tidewild: { name: 'Tidewild', planet: 'Kelar', about: 'Mangroves, tide pools and The Great Turtle', seed: 60441093, theme: 'tidewild', built: true },
+  coral: { name: 'Coral Reach', planet: 'Kelar', about: 'Pink sand, coral reefs and The Coral Arch', seed: 37190256, theme: 'coral', built: true },
+  sunspray: { name: 'Sunspray Isles', planet: 'Kelar', about: 'Jungle cliffs, windy beaches and The Giant Crab', seed: 52833107, theme: 'sunspray', built: true },
   cinder: { name: 'Cinderfall', planet: 'Vyrnox', about: 'Lava fields, basalt steps, The Anvil and Ember Throne', seed: 71200458, theme: 'cinder', built: true },
   ashveil: { name: 'Ashveil', planet: 'Vyrnox', about: 'A burnt grey forest, ash dunes and The Burnt Tree', seed: 28839104, theme: 'ashveil', built: true },
+  magma: { name: 'Magma Deep', planet: 'Vyrnox', about: 'Lava lakes, fire peaks and The Fire Bridge', seed: 74410382, theme: 'magma', built: true },
+  obsidian: { name: 'Obsidian Wastes', planet: 'Vyrnox', about: 'Black glass spikes, ash dunes and The Obsidian Blade', seed: 29055719, theme: 'obsidian', built: true },
   glacier: { name: 'Glacier Sea', planet: 'Oskarr', about: 'Ice sheets, tundra, ice peaks and The Frozen Whale', seed: 90137752, theme: 'glacier', built: true },
   aurora: { name: 'Aurora Shelf', planet: 'Oskarr', about: 'Glowing crystals on the ice and The Crystal Spire', seed: 12650981, theme: 'aurora', built: true },
+  frostpeak: { name: 'Frostpeak Range', planet: 'Oskarr', about: 'Ice mountains and The Ice Castle', seed: 91827364, theme: 'frostpeak', built: true },
+  snowdrift: { name: 'Snowdrift Hollows', planet: 'Oskarr', about: 'Deep snow, pine woods and The Giant Snowman', seed: 13579246, theme: 'snowdrift', built: true },
   rustworks: { name: 'Rustworks', planet: 'Artex', about: 'Scrapyards, old works, the Broken Bridge and the Underground Power Station', seed: 44718820, theme: 'rust', built: true },
   stacks: { name: 'Neon Stacks', planet: 'Artex', about: 'Empty towers, neon plazas and The Dead Antenna', seed: 83306612, theme: 'stacks', built: true },
+  gearfall: { name: 'Gearfall', planet: 'Artex', about: 'Old machines, scrap and The Great Gear', seed: 48261937, theme: 'gearfall', built: true },
+  skyport: { name: 'Skyport', planet: 'Artex', about: 'Empty docks, landing pads and Skyport Tower', seed: 85203614, theme: 'skyport', built: true },
 };
 // the special islands of Dustmaw (each gets its own round island raised out of the sea)
 const DUST_SPECIALS = [
