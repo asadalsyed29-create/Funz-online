@@ -331,7 +331,8 @@ class Game {
       return;
     }
     if (b.caveLock) { const t = b.caveLock; if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) > t.r + 4) b.caveLock = null; }
-    for (const s of [...this.St.list.values(), ...(this.region ? this.landmarks : [])]) if (s && s.triggers) for (const t of s.triggers) {
+    if (!this.trigLM) this.trigLM = this.region ? this.landmarks : this.landmarks.filter(s => s && s.key && String(s.key).startsWith('L:')); // Berekor: only the landmark islands' elevators and lava
+    for (const s of [...this.St.list.values(), ...this.trigLM]) if (s && s.triggers) for (const t of s.triggers) {
       if (t.lift) { if (!b.path && Math.hypot(b.p[0] - t.p[0], b.p[1] - t.p[1], b.p[2] - t.p[2]) < t.r) { b.path = t.path.map(q => [...q]); b.tpCool = 1; fx('lift'); return; } continue; }
       if (t.kill) { if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) < t.r && b.p[1] < t.p[1] + t.h && b.p[1] > t.p[1] - 4) { b.p = [...t.back]; b.v = [0, 0, 0]; b.tpCool = 1; fx('ouch', t.msg); return; } continue; }
       if (b.caveLock && b.caveLock.cave === t.cave) continue;
@@ -659,7 +660,7 @@ class Game {
     if (!this.under) for (const s of this.St.list.values()) if (s && vis(s.x, s.z, far, 40)) G.draw(s.mesh);
     if (!this.under) {
       G.mat(1, 0.2, 0.1); G.tex(0);
-      for (const s of this.landmarks) if (s.deco && vis(s.x, s.z, s.far || far, 40)) { G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.deco); G.fog(); }
+      for (const s of this.landmarks) if (s.deco && vis(s.x, s.z, s.far || far, s.rad || 40)) { G.fog(Math.min(fogD, 1 / 1400)); G.draw(s.deco); G.fog(); }
       G.mat(1, 0.3, 0.5); for (const cn of this.cannons) if (vis(cn.p[0], cn.p[2], far, 6)) { const d = [cn.to[0] - cn.p[0], cn.to[2] - cn.p[2]], M = M4.model(cn.p, M4.rotY(-Math.atan2(d[1], d[0])), 1); G.draw(this.cannonM, M); G.outline(this.cannonM, M, 0.03); }
       G.mat(1, 0.5, 0.8); this.portals.forEach((pt, i) => { if (vis(pt.p[0], pt.p[2], far, 6)) G.draw(this.portalM[i], M4.model([0, Math.sin(t * 1.5 + i) * 0.15, 0]), 1, null, 0.6); });
       G.mat(0, 0.12, 0.2); G.tex(2);
@@ -741,7 +742,7 @@ class Game {
     // see-through things last
     G.blend(true); G.depthWrite(false);
     G.mat(0, 0, 0);
-    if (!this.under) for (const s of this.landmarks) if (s.clear && vis(s.x, s.z, s.far || far, 40)) { G.mat(0, 0.6, 0.3); G.draw(s.clear); G.mat(0, 0, 0); }
+    if (!this.under) for (const s of this.landmarks) if (s.clear && vis(s.x, s.z, s.far || far, s.rad || 40)) { G.mat(0, 0.6, 0.3); G.draw(s.clear); G.mat(0, 0, 0); }
     if (!G.isThree || !G.R.shadowMap.enabled) for (const p of players) { // round blob shadows (the Three.js engine has real ones)
       const gy = this.cave ? this.cave.floor(p.p[0], p.p[2]) : Math.max(this.T.ground(p.p[0], p.p[2]), SEA - 0.1), hgt = p.p[1] - gy;
       if (hgt < 0 || hgt > 24 || insideStation(p.p)) continue;
