@@ -92,7 +92,11 @@ function fillClouds(out, list, eye, tint, flash, maxN) {
 
 // the clouds of one weather cell
 function cloudsInCell(N, T, i, j, force) {
-  const cx = (i + 0.5) * CLOUD_CELL, cz = (j + 0.5) * CLOUD_CELL, w = force != null ? force : weatherAt(N, cx, cz), out = [];
+  const cx = (i + 0.5) * CLOUD_CELL, cz = (j + 0.5) * CLOUD_CELL; let w = force != null ? force : weatherAt(N, cx, cz), out = [];
+  // near a giant cloud spire no cloud reaches its top, so its summit is always above the clouds
+  const spires = typeof landsOf === 'function' ? (landsOf(T.theme || (VOLCANO.on ? 'berekor' : '')) || []).filter(I => I.kind === 'cloudspire') : [];
+  const nearSpire = spires.some(I => Math.hypot(I.x - cx, I.z - cz) < 2600);
+  if (nearSpire && w > 0.9) w = 0.85; // no supercells
   const R = k => N.hash(i * 31 + k, j * 17 - k, 970), at = (k, spread = 0.8) => [cx + (R(k) - 0.5) * CLOUD_CELL * spread, cz + (R(k + 50) - 0.5) * CLOUD_CELL * spread];
   const add = (kind, k, y, s, v) => { const [x, z] = at(k); out.push({ kind, v: v ?? Math.floor(R(k + 90) * 3), x, y, z, s, rot: R(k + 70) * 6.283, ph: R(k + 80) * 100, w }); };
   if (w < 0.32) { if (R(1) < 0.7) add('cumulus', 1, 330 + R(2) * 60, 0.7 + R(3) * 0.4); if (R(4) < 0.6) add('cirrus', 4, 1100 + R(5) * 100, 1 + R(6) * 0.5); }
@@ -101,6 +105,7 @@ function cloudsInCell(N, T, i, j, force) {
   else if (w < 0.78) { add(w > 0.71 ? 'nimbo' : 'stratus', 50, w > 0.71 ? 240 : 280, 1 + R(51) * 0.4, 0); add('strato', 52, 380, 1.2); }
   else if (w > 0.9 && R(68) < 0.55) { add('supercell', 60, 200, 0.9 + R(61) * 0.25); out[out.length - 1].rot = 0; }
   else { add('cb', 60, 240, 1 + R(61) * 0.4); add('nimbo', 62, 250, 1.1, 0); if (R(63) < 0.5) add('congestus', 64, 300, 1.2); }
-  const inf = T.info(cx, cz); if ((inf.b === 6 || inf.h > 90) && R(66) < 0.8) add('lens', 66, Math.max(450, inf.h + 200), 1 + R(67) * 0.5, 0);
+  if (nearSpire) for (let k = out.length - 1; k >= 0; k--) if (out[k].kind === 'cirrus' || out[k].kind === 'alto') out.splice(k, 1);
+  const inf = T.info(cx, cz); if (!nearSpire && (inf.b === 6 || inf.h > 90) && R(66) < 0.8) add('lens', 66, Math.max(450, inf.h + 200), 1 + R(67) * 0.5, 0);
   return out;
 }
