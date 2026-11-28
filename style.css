@@ -328,6 +328,8 @@ body.photo #ov{opacity:0}
 button.mini.go{background:#3ec46a;color:#08210f;font-weight:700}
 .bxAsk{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(6,10,24,.4);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .bxAsk>div{background:var(--solid);color:#fff;border-radius:14px;padding:14px 16px;max-width:min(340px,90vw);border:1px solid rgba(255,255,255,.15)}
+.awayWarn b{display:block;font-size:18px;color:#ffcf3a}
+.awayWarn p{margin:8px 0 0;line-height:1.4}
 .bxAsk span{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 body.menuOpen #touch,body.menuOpen #jumpBtn,body.menuOpen #downBtn{visibility:hidden}
 #shipBtns{position:absolute;right:calc(124px + var(--sr));bottom:calc(22px + var(--sb));display:flex;flex-direction:column-reverse;gap:8px;pointer-events:auto;z-index:4}

@@ -588,6 +588,10 @@
     try { navigator.clipboard.writeText(l).then(done, () => showToast(l, 6000)); } catch (e) { showToast(l, 6000); }
   }
   document.querySelectorAll('#srvTabs button').forEach(b => b.onclick = () => { srvTab = b.dataset.t; renderServers(); });
+  // the warning everyone sees when Nautic Online opens
+  { const w = document.createElement('div'); w.className = 'bxAsk awayWarn';
+    w.innerHTML = '<div><b>⚠ Warning</b><p>If your phone goes to sleep or you switch to another app, your character leaves the world after 15 seconds. When you come back, you join again by yourself.</p><span><button class="mini go">OK</button></span></div>';
+    w.querySelector('button').onclick = () => w.remove(); document.body.appendChild(w); }
   // opened from a server link (the hub passes it along)
   { const q = new URLSearchParams(location.search).get('server'); if (q) { const sv = parseServer(q); if (sv) setTimeout(() => { if (myName()) joinServer(sv); else { srvTab = 'mine'; openServers(); } }, 600); } }
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') openServers(); });
@@ -749,8 +753,8 @@
       Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' });
       if (await waitWelcome(12000)) return;
       if (G !== g || G.role !== 'guest') return; // left, or got sent back to the menu
-      Net.leave();
-      if (attempt >= 1) { role = 'offline'; G.role = 'offline'; G.noAnswer = true; break; }
+      Net.markBad(); Net.leave(); // that world's phone let us in but never answered: use a backup name next time
+      if (attempt >= 2) { role = 'offline'; G.role = 'offline'; G.noAnswer = true; break; }
       say('The world did not answer, trying again…');
       await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
       if (G !== g) return;
@@ -807,6 +811,23 @@
     if (updateWaiting && !msg) applyUpdate(updateWaiting);
   }
   $('leaveBtn').onclick = () => leave();
+
+  // Like Roblox: when the phone sleeps or the app goes to the background, your character leaves the world after
+  // 15 seconds. If your phone was running the world, it hands it to another player (a sleeping phone would hold
+  // the world without answering, so nobody could join). When you come back you join again by yourself.
+  let awayTimer = 0;
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(awayTimer);
+    if (document.hidden) {
+      awayTimer = setTimeout(() => {
+        if (!document.hidden) return;
+        Servers.lobbyLeave(true);
+        if (!G || G.test || !['keeper', 'guest', 'offline'].includes(G.role)) return;
+        saveWorld(); G.role = 'away'; G.reconnecting = false; Net.leave();
+        for (const id of [...G.players.keys()]) if (G.players.get(id) !== G.me) G.players.delete(id);
+      }, 15000);
+    } else if (G && G.role === 'away') { G.offlineAt = 0; reconnect(true); }
+  });
 
   async function reconnect(quiet) {
     if (!G || G.reconnecting) return;

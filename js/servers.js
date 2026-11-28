@@ -88,7 +88,8 @@ const Servers = (() => {
     try { const L = await lobby(); const ad = { id: s.id, name: s.name, n, mods: s.mods.map(m => m.name) };
       if (L.keeper) { L.ads.set(s.id, Object.assign(ad, { t: Date.now() })); } else L.conn.send({ t: 'ad', s: ad }); } catch (e) {}
   }
-  function lobbyLeave() { if (lob && !lob.keeper) { try { lob.peer.destroy(); } catch (e) {} lob = null; } }
+  // all = true also lets go of the list if this device holds it (the app went to the background)
+  function lobbyLeave(all) { if (lob && (all || !lob.keeper)) { try { lob.peer.destroy(); } catch (e) {} lob = null; } }
 
   return { all, get, put, remove, newId, worldId, link, hash, clean, list, lastList, warm, advertise, lobbyLeave };
 })();
