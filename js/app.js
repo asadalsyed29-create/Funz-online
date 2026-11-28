@@ -164,7 +164,7 @@
   $('wardBtn').onclick = () => { if ($('wardrobe').classList.contains('hidden') || $('wardrobe').parentElement.id !== 'hud') openWardrobe(true); else openWardrobe(false); };
   function wInfo(t) { const L = myLook(); $('wInfo').textContent = t || ('Wearing: ' + SKINS[L.skin].name + ' skin · ' + HATS[L.hat].name + (L.hat === 'none' ? ' hat' : '') + ' · ' + TRAILS[L.trail].name + (L.trail === 'none' ? ' trail' : ' trail')); }
   function wear(kind, id) {
-    if (kind !== 'og') { look[kind] = id; store.set(kind, id); } renderWardrobe(); drawPreview(); if (G) $('shipBtn').classList.toggle('hidden', !window.NAUTIC_BETA && !myLook().og.includes('ship'));
+    if (kind !== 'og') { look[kind] = id; store.set(kind, id); } renderWardrobe(); drawPreview(); if (G) $('shipBtn').classList.toggle('hidden', !window.NAUTIC_GC && !myLook().og.includes('ship'));
     if (G) { const L = myLook(); Object.assign(G.me, L); Object.assign(G.profile, L); if (G.role === 'guest') Net.toKeeper({ t: 'look', ...L }); else renderPeople(); }
   }
 
@@ -232,7 +232,7 @@
   $('nailBtn').onclick = () => toggleNail();
   $('wardClose').innerHTML = icon('close', 18); $('bagClose').innerHTML = icon('close', 18);
   $('gateInstall').textContent = 'Open UltraNautic Hub'; document.querySelectorAll('#gateIos .gIc').forEach(e => { e.innerHTML = icon('share', 16); });
-  $('shipBtn').onclick = () => { if (window.NAUTIC_BETA && !(G && G.ship && G.ship.st === 'fly')) { if (typeof openHangar === 'function') openHangar(); } else toggleShip(); };
+  $('shipBtn').onclick = () => { if (window.NAUTIC_GC && !(G && G.ship && G.ship.st === 'fly')) { if (typeof openHangar === 'function') openHangar(); } else toggleShip(); };
 
   // ---------- new buttons (only on the beta account for now): map, friends, photo mode, settings ----------
   const Extra = { look: 1, photo: false, closeAll() { ['friendsBox', 'setBox'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); } };
@@ -244,7 +244,7 @@
   };
   let spaceTravel = null;
   if (window.NAUTIC_BETA) {
-    document.body.classList.add('beta');
+    if (window.NAUTIC_GC) document.body.classList.add('beta');
     const col = document.createElement('div'); col.id = 'sideBtns2';
     col.innerHTML = '<button id="mapBtn" title="Map (G)"></button><button id="friendsBtn" title="Friends"></button><button id="photoBtn" title="Photo mode (P)"></button><button id="setBtn" title="Settings"></button><button id="updBtn" title="Updates"></button>';
     const sb = document.createElement('div'); sb.id = 'shipBtns'; sb.innerHTML = '<button id="unbuckleBtn" class="hidden" title="Unbuckle (U)"></button><button id="decoBtn" class="hidden" title="Decorate"></button><button id="stBtn" class="hidden" title="Build in space"></button>'; $('hud').appendChild(sb);
@@ -413,10 +413,10 @@
     // a small yes/no box (no browser pop-ups)
     const bxConfirm = (q, yes) => { const w = document.createElement('div'); w.className = 'bxAsk'; w.innerHTML = '<div><p></p><span><button class="mini">Cancel</button><button class="mini go">Yes</button></span></div>'; w.querySelector('p').textContent = q; const [no, ok] = w.querySelectorAll('button'); no.onclick = () => w.remove(); ok.onclick = () => { w.remove(); yes(); }; document.body.appendChild(w); };
     // every open menu blurs the game behind it
-    const blur = document.createElement('div'); blur.id = 'menuBlur'; blur.className = 'hidden'; $('hud').appendChild(blur);
+    if (window.NAUTIC_GC) { const blur = document.createElement('div'); blur.id = 'menuBlur'; blur.className = 'hidden'; $('hud').appendChild(blur);
     blur.onclick = () => { Extra.closeAll(); $('bag').classList.add('hidden'); };
     const MENUS = '#bag:not(.hidden),#adminPanel:not(.hidden),.xPanel:not(.hidden),#hud .wardrobe:not(.hidden)';
-    new MutationObserver(() => { const on = !!document.querySelector(MENUS); blur.classList.toggle('hidden', !on); document.body.classList.toggle('menuOpen', on); }).observe($('hud'), { subtree: true, attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(() => { const on = !!document.querySelector(MENUS); blur.classList.toggle('hidden', !on); document.body.classList.toggle('menuOpen', on); }).observe($('hud'), { subtree: true, attributes: true, attributeFilter: ['class'] }); }
     updDot();
   }
   const musicIcon = () => { $('musicBtn').innerHTML = icon(Sound.on ? 'music' : 'musicOff', 21); $('musicBtn').classList.toggle('off', !Sound.on); };
@@ -754,7 +754,7 @@
     if (Device.useTouch) { $('touch').classList.remove('hidden'); if (BUILDING) $('buildToggle').classList.remove('hidden'); $('chat').classList.add('hidden'); $('emotes').classList.add('hidden'); }
     buildHotbar(); buildEmotes(); selectTool(0, true); toggleBuild(G.building); renderBag();
     $('adminBtn').classList.toggle('hidden', !G.me.admin);
-    $('shipBtn').classList.toggle('hidden', !window.NAUTIC_BETA && !myLook().og.includes('ship'));
+    $('shipBtn').classList.toggle('hidden', !window.NAUTIC_GC && !myLook().og.includes('ship'));
     onResize(); last = performance.now();
     showToast(Device.useTouch ? 'Joystick to roll · drag to look · jump button to jump' : 'WASD to roll · drag to look · Space to jump · the station is on your minimap!', 5000);
     requestAnimationFrame(loop);
@@ -1511,7 +1511,7 @@
     if (k === 'r') { respawn(); return; }
     if (k === 'o') { $('wardBtn').click(); return; }
     if (k === 'v') { toggleShip(); return; }
-    if (window.NAUTIC_BETA && k === 'u') { unbuckle(); return; }
+    if (window.NAUTIC_GC && k === 'u') { unbuckle(); return; }
     if (k === 'n') { toggleNail(); return; }
     if (k === 'm') { $('musicBtn').click(); return; }
     if (window.NAUTIC_BETA && k === 'g') { BigMap.toggle(); return; }
@@ -1710,7 +1710,7 @@
       const v = [d[0] * -iy * sp + rt[0] * ix * 16 * big, d[1] * -iy * sp + ((up ? 12 : 0) - (down ? 12 : 0)) * Math.sqrt(big), d[2] * -iy * sp + rt[2] * ix * 16 * big];
       S.v = (S.v || [0, 0, 0]).map((x, i) => x + (v[i] - x) * Math.min(1, dt * 3)); for (let i = 0; i < 3; i++) S.p[i] += S.v[i] * dt;
       if (!G.game.realm) { S.p[0] = Math.max(-LIMIT, Math.min(LIMIT, S.p[0])); S.p[2] = Math.max(-LIMIT, Math.min(LIMIT, S.p[2])); S.p[1] = Math.min(S.p[1], 1500); }
-      if (window.NAUTIC_BETA && S.id && spaceStep(S)) return true;
+      if (window.NAUTIC_GC && S.id && spaceStep(S)) return true;
       if (!G.game.realm && !G.game.cave) S.p[1] = Math.max(S.p[1], Math.max(G.game.T.ground(S.p[0], S.p[2]), SEA) + 1.5 * big);
       S.hd = Math.atan2(d[2], d[0]); S.pitch = -cam.pitch;
       b.p = [...S.p]; b.v = [0, 0, 0]; G.game.fpv = S.id ? null : [S.p[0] + d[0] * 0.95, S.p[1] + 1.35, S.p[2] + d[2] * 0.95];
@@ -1724,7 +1724,7 @@
   // ---------- activities ----------
   function activities(now) {
     const b = G.body, game = G.game;
-    if (window.NAUTIC_BETA) { cabinStep(); updShipBtns(); if (now - (G.payT || (G.payT = now)) > 120000) { G.payT = now; prog.give(10); prog.save(); renderBag(); showToast('+' + coinsX(10) + ' coins for playing', 1500); } }
+    if (window.NAUTIC_GC) { cabinStep(); updShipBtns(); if (now - (G.payT || (G.payT = now)) > 120000) { G.payT = now; prog.give(10); prog.save(); renderBag(); showToast('+' + coinsX(10) + ' coins for playing', 1500); } }
     for (const it of game.nearbyItems(b.p)) { // pick up items you roll into
       const pr = G.me.gadget === 'magnet' || (gadgetFx(G.me.gadget) || {}).magnet ? 5.5 : 1.4; if (Math.abs(it.p[0] - b.p[0]) > pr || Math.abs(it.p[2] - b.p[2]) > pr || Math.abs(it.p[1] - b.p[1]) > pr + 0.2) continue;
       if (it.type === 'trophy') { if (!G.inv.trophy) { gotItem('trophy'); sys('You beat the parkour climb!'); } continue; }
