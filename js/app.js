@@ -504,7 +504,8 @@
   let srvTab = 'public';
   function openServers(tab) { srvTab = tab || srvTab; $('srvScreen').classList.remove('hidden'); renderServers(); }
   $('serversBtn').onclick = () => openServers();
-  $('srvClose').onclick = () => { $('srvScreen').classList.add('hidden'); Servers.lobbyLeave(); };
+  $('srvClose').onclick = () => { $('srvScreen').classList.add('hidden'); };
+  setTimeout(() => { if (!G) Servers.warm(); }, 1500); // find the server list early so it's ready when Servers opens
   function srvMsg(t) { $('srvMsg').textContent = t || ''; }
   async function joinServer(sv, pw) {
     if (!myName()) { $('srvScreen').classList.add('hidden'); return; }
@@ -525,14 +526,19 @@
     }
     if (srvTab === 'public') {
       body.append(srvRow('Nautic Online', 'The big open world, everyone can join', [['Join', () => { if (!myName()) return; $('srvScreen').classList.add('hidden'); Servers.lobbyLeave(); play(); }]]));
-      const note = el('p', 'srvNote', 'Looking for public servers…'); body.append(note);
-      Servers.list().then(list => {
-        if (srvTab !== 'public') return; note.remove();
+      const note = el('p', 'srvNote', 'Looking for public servers…'), rows = el('div'); body.append(note, rows);
+      // show what we already know straight away, then swap in the fresh list when it comes
+      const show = (list, fresh) => {
+        rows.textContent = '';
         const known = Object.values(Servers.all()).filter(x => x.vis === 'public' && !list.some(l => l.id === x.id));
-        if (!list.length) body.append(el('p', 'srvNote', 'No public servers have players right now. Make one, or open one you played before in My servers.'));
-        for (const a of list) body.append(srvRow(a.name, a.n + (a.n === 1 ? ' player' : ' players') + (a.mods.length ? ' · Mods: ' + a.mods.join(', ') : ''), [['Join', () => joinServer({ id: a.id, name: a.name, vis: 'public' })]]));
-        for (const k of known) body.append(srvRow(k.name, 'Nobody in it right now · opens again when you join', [['Join', () => joinServer(k)]]));
-      }).catch(() => { note.textContent = 'Could not reach the server list. Check your internet.'; });
+        if (fresh && !list.length) rows.append(el('p', 'srvNote', 'No public servers have players right now. Make one, or open one you played before in My servers.'));
+        for (const a of list) rows.append(srvRow(a.name, a.n + (a.n === 1 ? ' player' : ' players') + (a.mods.length ? ' · Mods: ' + a.mods.join(', ') : ''), [['Join', () => joinServer({ id: a.id, name: a.name, vis: 'public' })]]));
+        for (const k of known) rows.append(srvRow(k.name, 'Nobody in it right now · opens again when you join', [['Join', () => joinServer(k)]]));
+      };
+      show(Servers.lastList(), false);
+      Servers.list().then(list => {
+        if (srvTab !== 'public' || !note.isConnected) return; note.remove(); show(list, true);
+      }).catch(() => { note.textContent = 'Could not reach the server list right now. Close and open Servers to try again.'; });
       return;
     }
     if (srvTab === 'mine') {
