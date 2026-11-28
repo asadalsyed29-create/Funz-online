@@ -186,6 +186,9 @@ const REGION_THEMES = {
     sky: { hor: [0.55, 0.7, 0.9], zen: [0.2, 0.36, 0.72], sun: [1.0, 0.95, 0.9], k: 0.35 },
     landing: 'Skyport Gate', tag: 'The ships stopped coming, but the lights stayed on', specials: [{ id: 'skytower', name: 'Skyport Tower', x: -850, z: 700, r: 160 }] },
 };
+// Dustmaw Reaches: its land is made the same way now (every island a landmark); its two specials are built in regions.js
+REGION_THEMES.dust = { scale: 1000, amp: 90, beach: 4, kinds: { dunes: { b: 4, shape: 'dunes' }, mesas: { b: 12, shape: 'terrace', amp: 8 }, flats: { b: 13, shape: 'flat' } },
+  landing: 'Dustmaw Landing', tag: 'Hot sand, old bones and one very big cactus', specials: DUST_SPECIALS };
 const themeSpecials = th => th === 'dust' ? DUST_SPECIALS : ((REGION_THEMES[th] || {}).specials || []);
 const regionTheme = id => REGION_THEMES[(REGIONS[id] || {}).theme] || null;
 
@@ -195,12 +198,13 @@ Terrain.prototype.infoTheme = function (x, z) {
   // every island is a landmark (js/lands.js): the land is the nearest island's round shape, pushed about so the coast is wobbly
   const LI = landsOf(this.theme), wob = N.fbm(x / 420, z / 420, 231, 3) - 0.5; let e = -2, I0 = null;
   for (const I of LI) { const dd = Math.hypot(x - I.x, z - I.z); if (dd > I.R * 1.9) continue; const ee = 1 - dd / (I.R * (1 + 0.45 * wob)); if (ee > e) { e = ee; I0 = I; } }
-  const land = e > 0 ? e * 0.22 : Math.max(-0.4, e * 0.5), lw = Math.max(0, Math.min(1, land * 6 + 0.35));
-  let h = land * C.amp + (N.fbm(x / 210, z / 210, 207, 3) - 0.5) * 12 * lw;
-  let special = null; for (const s of SP) if (Math.hypot(x - s.x, z - s.z) < s.r * 1.3) special = s;
+  // no plain land: just a beach round the foot of each landmark, and the sea between
+  let h = e > 0 ? 1.7 + 3.5 * smooth(0, 0.3, e) + (N.fbm(x / 60, z / 60, 207, 2) - 0.5) * 1.6 * smooth(0, 0.1, e) : Math.max(-36, e * 90);
+  // the special landmarks stand on a flat round top, built big (js/lands.js)
+  let special = null; if (I0 && I0.kind === 'special') { const dd = Math.hypot(x - I0.x, z - I0.z); if (dd < I0.flat) { special = I0.sps.reduce((a, q) => Math.hypot(x - q.x, z - q.z) < Math.hypot(x - a.x, z - a.z) ? q : a); h = Math.max(h, 7 - 3 * smooth(I0.flat * 0.85, I0.flat, dd)); } }
   const kn = this.kindAt(x, z), K = C.kinds[kn], m = Math.max(0, Math.min(1, (h - 2) / 6));
   let pool = 0;
-  if (h > 2 && !special) {
+  if (h > 2 && !special && !I0) {
     if (K.shape === 'hills') h += (N.fbm(x / 260, z / 260, 211, 3) - 0.5) * 2 * K.amp * m;
     else if (K.shape === 'flat') h = 2.6 + (h - 2.6) * 0.18 + (N.v(x / 30, z / 30, 212) - 0.5) * 0.6;
     else if (K.shape === 'spikes') { const r = 1 - Math.abs(2 * N.fbm(x / 170, z / 170, 213, 3) - 1); h += r * r * r * K.amp * m; }
@@ -218,10 +222,10 @@ Terrain.prototype.infoTheme = function (x, z) {
   let lmk = false; if (I0 && I0.H) { const p = landProfile(I0, Math.hypot(x - I0.x, z - I0.z), N, x, z); if (p > h && p > 0.5) { h = p; lmk = p > 6; } if (Math.hypot(x - I0.x - LAND_DIRS[I0.dir][0] * (I0.LR + 12), z - I0.z - LAND_DIRS[I0.dir][1] * (I0.LR + 12)) < 14) lmk = true; }
   if (I0 && I0.kind === 'floating' && Math.hypot(x - I0.x, z - I0.z) < 12) lmk = true;
   let b = -1; const wP = smooth(70, 30, d0); if (wP > 0) { h += (SPAWN_H - h) * wP; if (d0 < 24) b = 15; }
-  if (special) { const d = Math.hypot(x - special.x, z - special.z); if (d < special.r * 0.75) h += (Math.max(h, 4.5) - h) * smooth(special.r * 0.75, special.r * 0.55, d); }
   if (b < 0) {
     if (h < -1.5) b = 0; else if (h < 1.6) b = C.beach;
     else if (special) b = C.kinds[Object.keys(C.kinds)[0]].b;
+    else if (lmk && I0.kind === 'plaza') b = 15;
     else if (lmk && I0.kind === 'volcano' && h > 20) b = 28;
     else if (lmk) b = C.kinds[Object.keys(C.kinds)[0]].b;
     else { b = K.b; if (K.b2 && (N.v(x / 260, z / 260, 219) > 0.6 || pool > 0.2)) b = K.b2; }

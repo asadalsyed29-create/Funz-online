@@ -386,7 +386,7 @@ class GL {
 // Builds meshes. Flat pieces (tri, quad, box, cyl, ico) give the low-poly look;
 // smooth pieces (sph, lathe, caps, tor, rbox) are for characters, hats and items.
 class MeshBuilder {
-  constructor() { this.v = []; this.i = []; this.A = null; this.NA = null; this.P = null; this.stack = []; this.tris = null; }
+  constructor() { this.v = []; this.i = []; this.A = null; this.NA = null; this.P = null; this.stack = []; this.tris = null; this.big = MeshBuilder.BIG || null; }
   _set(A, p) { this.A = A; this.P = p; this.NA = A ? M4.invT3(A) : null; }
   at(p, R, s) { this.stack.length = 0; this._set(M4.scaled(R || I3, s), p); return this; }
   push(p, R, s) {
@@ -397,7 +397,7 @@ class MeshBuilder {
   pop() { const t = this.stack.pop(); if (t && t[0]) this._set(t[0], t[1]); else this._set(null, null); return this; }
   reset() { this.stack.length = 0; this._set(null, null); return this; }
   collect() { this.tris = []; return this; }
-  tf(q) { if (!this.A) return q; const r = M4.apply3(this.A, q); return [r[0] + this.P[0], r[1] + this.P[1], r[2] + this.P[2]]; }
+  tf(q) { if (this.A) { const r = M4.apply3(this.A, q); q = [r[0] + this.P[0], r[1] + this.P[1], r[2] + this.P[2]]; } return this.big ? MeshBuilder.scaleAt(this.big, q) : q; }
   tn(n) { const r = this.A ? M4.apply3(this.NA, n) : n, l = Math.hypot(r[0], r[1], r[2]) || 1; return [r[0] / l, r[1] / l, r[2] / l]; }
   // ----- flat (low-poly) pieces -----
   tri(a, b, c, col, noCollide) {
@@ -528,6 +528,9 @@ class MeshBuilder {
   }
   build(gl) { return gl.mesh(new Float32Array(this.v), new Uint32Array(this.i)); }
 }
+// Everything built while MeshBuilder.BIG = { c: [x, y, z], s } is set is blown up s times around c (used to make landmarks huge)
+MeshBuilder.BIG = null;
+MeshBuilder.scaleAt = (B, q) => [B.c[0] + (q[0] - B.c[0]) * B.s, B.c[1] + (q[1] - B.c[1]) * B.s, B.c[2] + (q[2] - B.c[2]) * B.s];
 const hex = (h, a = 1) => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255, a]; };
 const shadeC = (c, k) => [c[0] * k, c[1] * k, c[2] * k, c[3] ?? 1];
 const mixC = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] ?? 1];

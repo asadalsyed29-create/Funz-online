@@ -161,7 +161,7 @@ const ISLE_NAMES = {
   berekor: ['Berekor Mainland', 'Whitecrown', 'Elderwood', 'Mistpeak', 'Hollowfrost', 'Amberleaf', 'Sandscar', 'Saltreach', 'Brannock', 'Ilvary', 'Dune Key', 'Wenn', 'Bogmoor', 'Glimmerholm', 'Wisp Isle', 'Little Tarn', 'Fenrow', 'Quill Isle', 'Lantern Isle', 'Oakum'],
   dustmaw: ['Sandhollow', 'Rustmesa', 'Scorchkey', 'Dry Gulch', 'Ochre Atoll', 'Saltpan', 'Redrock', 'Thirstwell', 'Mesa Vell', 'Dustfall', 'Gritstone', 'Hollow Sun', 'Brittle Key', 'Sunbake', 'Copperbluff', 'Bleakwater', 'Tumble Isle', 'Ashen Mesa', 'Pebbleshoal', 'Cinder Dune', 'Dryreed', 'Sandpiper Key', 'Glassmouth', 'Old Well', 'Driftbone', 'Scrubhook', 'Kiln Key', 'Tinder Isle', 'Rattleback', 'Saltcrown', 'Wither Key', 'Dune Fang', 'Ember Flat', 'Burrow Isle', 'Sunspit', 'Grain Isle', 'Hookstone', 'Parchmoor', 'Last Drop', 'Thornpoint', 'Quiet Sands', 'Ashwind', 'Little Mesa', 'Dry Tooth', 'Shimmerkey'] }[REGION];
 // land joined only by thin necks counts as separate islands: shrink the land, find the pieces, then grow them back
-const ER = +process.env.ER || (RG.theme && RG.theme !== "dust" ? 3 : 6), land = new Uint8Array(L * L); for (let c = 0; c < L * L; c++) land[c] = bg[c] !== 0 ? 1 : 0;
+const ER = +process.env.ER || (RG.theme ? 3 : 6), land = new Uint8Array(L * L); for (let c = 0; c < L * L; c++) land[c] = bg[c] !== 0 ? 1 : 0;
 let core = land.slice(); for (let e = 0; e < ER; e++) { const nx = core.slice(); for (let j = 0; j < L; j++) for (let i = 0; i < L; i++) { const c = j * L + i; if (!core[c]) continue; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = i + a, nj = j + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L || !core[nj * L + ni]) { nx[c] = 0; break; } } } core = nx; }
 const own = new Int32Array(L * L).fill(-1), pieces = [];
 for (let s = 0; s < L * L; s++) { if (!core[s] || own[s] >= 0) continue; const k = pieces.length, cells = [s]; own[s] = k; for (let q = 0; q < cells.length; q++) { const c = cells[q], ci = c % L, cj = (c / L) | 0; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = ci + a, nj = cj + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L) continue; const n = nj * L + ni; if (core[n] && own[n] < 0) { own[n] = k; cells.push(n); } } } pieces.push(cells); }
@@ -180,7 +180,7 @@ for (let k = 0; k < pieces.length; k++) {
 }
 isles.sort((a, b) => (b.home - a.home) || (b.size - a.size));
 // keep the island numbers of the region's island table (its themes and landmarks go by these numbers)
-const TBL = vm.runInContext({ berekor: 'BEREKOR_ISLES', dustmaw: 'DUST_ISLES' }[REGION] || 'null', ctx);
+const TBL = null; // Berekor's old island table is not used now its islands are landmarks
 if (TBL) {
   for (const it of isles) { const v = {}; for (const c of it.cells) { const k = TBL.at(-SPAN / 2 + ((c % L) + 0.5) * SPAN / L, -SPAN / 2 + (((c / L) | 0) + 0.5) * SPAN / L); if (k >= 0) v[k] = (v[k] || 0) + 1; } const e = Object.entries(v).sort((a, b) => b[1] - a[1])[0]; it.tk = e ? +e[0] : 999; }
   const used = new Set(), ord = isles.slice().sort((a, b) => b.size - a.size); for (const it of ord) { if (used.has(it.tk)) it.tk = 999; used.add(it.tk); }
@@ -194,7 +194,7 @@ while (fr.length) { const nf = []; for (const c of fr) { const ci = c % L, cj = 
 for (const it of isles) { let best = -1, bc = 0; for (const c of it.cells) if (far[c] > best) { best = far[c]; bc = c; } it.lx = Math.round(-SPAN / 2 + ((bc % L) + 0.5) * SPAN / L); it.lz = Math.round(-SPAN / 2 + (((bc / L) | 0) + 0.5) * SPAN / L); }
 isles.forEach((it, k) => { it.name = ISLE_NAMES[k] || 'Isle ' + (k + 1); });
 // themed regions: every island is a landmark island, named after its landmark
-if (RG.theme && RG.theme !== 'dust') { const LL = vm.runInContext('landsOf(' + JSON.stringify(RG.theme) + ')', ctx); for (const I of LL) { const c = Math.floor((I.z + SPAN / 2) / SPAN * L) * L + Math.floor((I.x + SPAN / 2) / SPAN * L), it = isles.find(q => q.cells.has(c)); if (it && !it.lm) { it.name = I.name; it.lm = I.id; } } }
+{ const LL = vm.runInContext('landsOf(' + JSON.stringify(RG.theme || 'berekor') + ')', ctx); for (const I of LL) { const c = Math.floor((I.z + SPAN / 2) / SPAN * L) * L + Math.floor((I.x + SPAN / 2) / SPAN * L), it = isles.find(q => q.cells.has(c)); if (it && !it.lm) { it.name = I.name; it.lm = I.id; } } }
 // which island each name sits on
 for (const lb of labels) { const ci = Math.floor((lb.x + SPAN / 2) / SPAN * L), cj = Math.floor((lb.z + SPAN / 2) / SPAN * L); const it = isles.find(q => q.cells.has(cj * L + ci)); lb.isle = it ? isles.indexOf(it) : -1; }
 // a small mask of the islands so a tap on the map knows which island it hit
