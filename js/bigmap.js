@@ -356,6 +356,7 @@ void main(){
   // new drawings for the landmark islands and their places (several colours each)
   const fillP = (g, col, f) => { g.fillStyle = col; g.beginPath(); f(); g.fill(); };
   const SPR = {
+    plaza: g => { fillP(g, '#c8c0b0', () => g.rect(-16, -4, 32, 6)); fillP(g, '#d8d0c0', () => g.rect(-12, -9, 24, 5)); fillP(g, '#e8e0d0', () => g.rect(-8, -14, 16, 5)); fillP(g, '#5ad0f0', () => g.rect(-4, -16, 8, 2)); fillP(g, '#ffffff', () => { g.rect(-7, -24, 2, 10); g.rect(5, -24, 2, 10); }); fillP(g, '#e8b84a', () => g.rect(-8, -26, 16, 2)); },
     volcano: g => { fillP(g, '#7a5a4a', () => { g.moveTo(-15, 2); g.lineTo(-5, -14); g.lineTo(5, -14); g.lineTo(15, 2); }); fillP(g, '#5a4034', () => { g.moveTo(2, -14); g.lineTo(5, -14); g.lineTo(15, 2); g.lineTo(6, 2); }); fillP(g, '#ff6a1a', () => { g.moveTo(-5, -14); g.lineTo(5, -14); g.lineTo(3, -11); g.lineTo(-3, -11); }); fillP(g, '#ffb347', () => { g.moveTo(-1, -11); g.lineTo(1, -11); g.lineTo(-2, -2); g.lineTo(-4, -2); }); fillP(g, '#8a8a8a', () => { g.arc(-2, -20, 4, 0, 7); g.arc(3, -26, 3, 0, 7); }); },
     cloudspire: g => { fillP(g, '#8a8a96', () => { g.moveTo(-7, 2); g.lineTo(-3, -30); g.lineTo(3, -30); g.lineTo(7, 2); }); fillP(g, '#6a6a76', () => { g.moveTo(1, -30); g.lineTo(3, -30); g.lineTo(7, 2); g.lineTo(2, 2); }); fillP(g, '#ffffff', () => { g.moveTo(-3, -30); g.lineTo(3, -30); g.lineTo(2, -26); g.lineTo(-2, -26); g.ellipse(-6, -17, 8, 3, 0, 0, 7); g.ellipse(6, -16, 9, 3.4, 0, 0, 7); }); },
     mesa: g => { fillP(g, '#b8643a', () => { g.moveTo(-15, 2); g.lineTo(-11, -14); g.lineTo(11, -14); g.lineTo(15, 2); }); fillP(g, '#8a4a2a', () => { g.rect(-13, -6, 26, 2); g.rect(-12, -10, 24, 2); }); fillP(g, '#6aa24a', () => { g.rect(-11, -16, 22, 3); }); },
@@ -398,11 +399,11 @@ void main(){
     g.imageSmoothingEnabled = false; g.drawImage(lo, 0, 0, lw * P, lh * P);
   }
   // the landmark islands of a themed region, and the places on each one
-  const landsHere = () => { const th = (REGIONS[viewing()] || {}).theme; return th && th !== 'dust' && typeof landsOf === 'function' ? landsOf(th) : null; };
-  const landIcon = I => I.kind === 'landing' ? 'landing' : I.kind === 'special' ? I.id : I.kind;
+  const landsHere = () => { const th = viewing() === 'berekor' ? (VOLCANO.on ? 'berekor' : null) : (REGIONS[viewing()] || {}).theme; return th && typeof landsOf === 'function' ? landsOf(th) : null; };
+  const landIcon = I => I.kind === 'special' ? I.id : I.kind;
   function landSpots(I) {
     if (here()) { const gm = host.game(), s = gm && gm.landmarks && gm.landmarks.find(q => q.key === 'L:' + I.id); if (s && s.spots) return s.spots; }
-    if (!I.H && I.kind !== 'floating') return [];
+    if (I.kind === 'special' || I.kind === 'plaza') return [];
     const [dx, dz] = LAND_DIRS[I.dir], LR = I.LR || 40;
     return [{ kind: I.place, name: I.placeName, x: I.x + dx * LR * 0.45, z: I.z + dz * LR * 0.45 }, { kind: 'summit', name: I.kind === 'floating' ? 'Highest isle' : 'Top of ' + I.name, x: I.x - dx * 20, z: I.z - dz * 20 }, { kind: 'lift', name: 'Elevator', x: I.x + dx * (LR + 12), z: I.z + dz * (LR + 12) }];
   }
@@ -456,14 +457,14 @@ void main(){
       if (gm && here()) { for (const q of gm.places(0, 0, 0)) if (q.always) list.push(q); }
       else if (vr !== 'berekor' && landsHere()) { /* landmark islands, below */ }
       else if (vr !== 'berekor') { list.push({ x: 0, z: 0, kind: 'landing', name: (regionTheme(vr) || {}).landing || 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of themeSpecials((REGIONS[vr] || {}).theme)) list.push({ x: sp.x, z: sp.z, kind: sp.id, name: sp.name, col: '#ffd890', always: true }); }
-      else if (vr === 'berekor' && VOLCANO.on) list.push({ x: VOLCANO.x, z: VOLCANO.z, kind: 'volcano', name: 'Volcano', col: '#ff7a2a', always: true });
-      const MK = vr === 'dustmaw' ? (typeof DUST_ISLES !== 'undefined' ? DUST_ISLES.marks : []) : vr === 'berekor' && typeof BEREKOR_ISLES !== 'undefined' && VOLCANO.on ? BEREKOR_ISLES.marks : [];
+      const MK = [];
       const markKeys = new Set();
       for (const m of MK) { const key = 's:' + Math.floor(m.x / REG) + ',' + Math.floor(m.z / REG); markKeys.add(key); list.push({ x: m.x, z: m.z, name: STRUCT_TYPES[m.type], type: m.type, col: '#fff4dc', mark: true, flag: here() && known.has(key) ? 'found' : 'not' }); }
       if (gm && here()) for (const key of known) { if (!key.startsWith('s:') || markKeys.has(key)) continue; const [rx, rz] = key.slice(2).split(',').map(Number); const p = gm.St.plan(rx, rz); if (p) list.push({ x: p.x, z: p.z, name: STRUCT_TYPES[p.type], type: p.type, col: p.type === 'cave' ? '#b8a8ff' : '#ffffff', found: true, flag: 'found' }); }
       // the landmark islands: each one is a pixel picture of its landmark; on an island's own map, its places too
       const LL = landsHere();
       if (LL) for (const I of LL) {
+        if (I.kind === 'hub') continue; // Berekor's plaza island shows the plaza and the station instead
         if (isle < 0) { list.push({ x: I.x, z: I.z, kind: landIcon(I), name: I.name, col: '#fff4dc', big: true, act: () => goLand(I), S: 2 }); continue; }
         if (isleAt(I.x, I.z) !== isle) continue;
         list.push({ x: I.x, z: I.z, kind: landIcon(I), name: I.name, col: '#fff4dc', big: true, S: 3, pri: 11, act: () => goLand(I) });

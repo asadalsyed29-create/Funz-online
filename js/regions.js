@@ -41,6 +41,7 @@ function buildDustLandmarks(gl, st, T) {
     s.mesh = mb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   }
   // ---------- The Cactus: a cactus as tall as a tower, with a wooden path winding up to its flower ----------
+  let BIG = bigStart(T, DUST_SPECIALS[0]);
   {
     const S0 = DUST_SPECIALS[0], cx = S0.x, cz = S0.z, y0 = T.h(cx, cz) - 0.5, TOP = 72, R0 = 6.2;
     const mb = new MeshBuilder().collect(), dmb = new MeshBuilder(), col = new MeshBuilder().collect(), C = h => hex(h);
@@ -93,7 +94,9 @@ function buildDustLandmarks(gl, st, T) {
     s.signs = [{ p: [cx + RO + 2, y0 + 4, cz + 3], t: 'The Cactus: climb to the top!' }];
     s.mesh = mb.build(gl); s.deco = dmb.build(gl); st.grid.add(mb.tris, s); st.grid.add(col.tris, s); out.push(s);
   }
+  bigEnd(out[out.length - 1], BIG);
   // ---------- Bonewash: the bones of something enormous, half buried in the sand ----------
+  BIG = bigStart(T, DUST_SPECIALS[1]);
   {
     const S1 = DUST_SPECIALS[1], cx = S1.x, cz = S1.z, y0 = T.h(cx, cz) - 1.2, mb = new MeshBuilder().collect(), dmb = new MeshBuilder(), C = h => hex(h);
     const s = { key: 'bonewash', items: [], lights: [], triggers: [], label: 'Bonewash', x: cx, z: cz, far: 2600, rad: 90 };
@@ -121,6 +124,8 @@ function buildDustLandmarks(gl, st, T) {
     s.signs = [{ p: [hp[0] - ax * 16, y0 + 9, hp[2] - az * 16], t: 'Bonewash' }];
     s.mesh = mb.build(gl); s.deco = dmb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   }
+  bigEnd(out[out.length - 1], BIG);
+  out.push(...buildLandIsles(gl, st, T, 'dust')); // the landmark islands, with their elevators and cool places
   return out;
 }
 
@@ -666,7 +671,8 @@ function buildRegionLandmarks(gl, st, T, region, game) {
     s.signs = [{ p: [0, y + 4, 14], t: RT.landing }];
     s.mesh = mb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   }
-  for (const sp of RT.specials) if (SPECIAL_BUILD[sp.id]) out.push(SPECIAL_BUILD[sp.id](gl, st, T, sp, R, game));
+  // the special landmarks, built big, each on its own island; the elevator goes up to the highest treasure
+  for (const sp of RT.specials) if (SPECIAL_BUILD[sp.id]) out.push(buildSpecialBig(() => SPECIAL_BUILD[sp.id](gl, st, T, sp, R, game), T, sp));
   out.push(...buildLandIsles(gl, st, T, REGIONS[region].theme)); // the landmark islands, with their elevators and cool places
   return out;
 }

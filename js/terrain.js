@@ -2,7 +2,7 @@
 const SEA = 0, LIMIT = 8000, CHUNK = 64, CELL = 4, CN = CHUNK / CELL;
 const STATION = { x: 640, z: -420, ground: 10, R: 60 };
 // the one volcano: a tall cone with a lava lake in its crater
-const VOLCANO = { x: -350, z: 1750, R: 430, rim: 60, top: 165, lava: 128, on: typeof window !== 'undefined' && !!window.NAUTIC_BETA };
+const VOLCANO = { x: -560, z: 2600, R: 430, rim: 60, top: 165, lava: 128, on: typeof window !== 'undefined' && !!window.NAUTIC_BETA };
 let SPAWN_H = 6; let REGION_NOW = null; // the travel region being played (null = Berekor) // set from the land around the plaza when the world is made
 
 const BIOMES = {
@@ -78,7 +78,7 @@ const DUST_SPECIALS = [
 class Terrain {
   constructor(seed, theme) {
     this.N = new Noise(seed); this.cache = new Map(); this.theme = theme || null;
-    if (this.theme) { SPAWN_H = 4.2; this.flat = true; return; }
+    if (this.theme) { SPAWN_H = LAND_SIZE.plaza.H + 2.5; this.flat = true; return; } // themed regions start on top of the giant plaza
     // The plaza and the station sit level with the land around them (never down in a pit).
     this.flat = false;
     const ring = (cx, cz, r) => { let s = 0; for (let k = 0; k < 12; k++) s += this.info(cx + Math.cos(k / 12 * 6.2832) * r, cz + Math.sin(k / 12 * 6.2832) * r).h; return s / 12; };
@@ -88,8 +88,8 @@ class Terrain {
   }
   // height + biome numbers at a point
   info(x, z) {
-    if (this.theme === 'dust') return this.infoDust(x, z);
     if (this.theme) return this.infoTheme(x, z);
+    if (VOLCANO.on && !this.raw) return this.infoBerekorLands(x, z); // owner only: every island a giant landmark (js/lands.js)
     const N = this.N, d0 = Math.hypot(x, z), dS = Math.hypot(x - STATION.x, z - STATION.z);
     const edge = Math.max(0, (Math.max(Math.abs(x), Math.abs(z)) - 6400) / 1600);
     const cont = N.fbm(x / 1700, z / 1700, 1, 4) + 0.32 * Math.exp(-(d0 * d0) / 490000) + 0.3 * Math.exp(-(dS * dS) / 360000) - edge * 0.7;
@@ -109,7 +109,7 @@ class Terrain {
     if (desertW > 0 && h > 2) h += (Math.sin(x / 23 + N.v(x / 60, z / 60, 43) * 6) * 0.5 + 0.5) * 5 * desertW;
     // the volcano: the land rises into a steep cone with ridges running down it, and a bowl at the top
     const dV = Math.hypot(x - VOLCANO.x, z - VOLCANO.z); let vol = 0;
-    if (VOLCANO.on && dV < VOLCANO.R) {
+    if (VOLCANO.on && !this.raw && dV < VOLCANO.R) {
       const a = Math.atan2(z - VOLCANO.z, x - VOLCANO.x), V = VOLCANO;
       const f = Math.max(0, Math.min(1, (V.R - dV) / (V.R - V.rim)));
       const ridge = (Math.sin(a * 9 + N.v(Math.cos(a) * 2 + 9, Math.sin(a) * 2 + 9, 73) * 7) * 0.5 + 0.5) * Math.sin(Math.min(1, f * 1.4) * 3.1416);
@@ -127,7 +127,7 @@ class Terrain {
     if (b < 0 && vol > 0.5) b = 11;
     // each island of Berekor has its own kind of land (beta)
     let isle = -1;
-    if (b < 0 && VOLCANO.on && h >= 1.6 && typeof BEREKOR_ISLES !== 'undefined') {
+    if (b < 0 && VOLCANO.on && !this.raw && h >= 1.6 && typeof BEREKOR_ISLES !== 'undefined') {
       isle = BEREKOR_ISLES.at(x, z); const th = isle > 0 ? BEREKOR_ISLES.themes[isle] : '';
       if (th === 'snow') b = h > 60 && mnt > 0.3 ? 6 : 5;
       else if (th === 'frost') b = h > 70 && mnt > 0.3 ? 5 : 18;

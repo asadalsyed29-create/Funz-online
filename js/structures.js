@@ -40,9 +40,9 @@ class Structures {
     const x = rx * REG + REG / 2 + (N.hash(rx, rz, 901) - 0.5) * 90, z = rz * REG + REG / 2 + (N.hash(rx, rz, 902) - 0.5) * 90;
     if (Math.abs(x) > LIMIT - 200 || Math.abs(z) > LIMIT - 200) return null;
     if (this.T.theme) { if (Math.hypot(x, z) < 120) return null; for (const sp of themeSpecials(this.T.theme)) if (Math.hypot(x - sp.x, z - sp.z) < sp.r * 1.4) return null; }
-    else if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110 || (VOLCANO.on && Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.R + 60)) return null;
+    else if (Math.hypot(x, z) < 170 || Math.hypot(x - STATION.x, z - STATION.z) < 260 || Math.hypot(x - 100, z + 160) < 110 || Math.hypot(x + 520, z) < 110 || (VOLCANO.on && landsOf('berekor').some(I => I.LR && Math.hypot(x - I.x, z - I.z) < I.LR + 40))) return null;
     // every Berekor island has its own landmark in the middle (beta)
-    const MK = this.T.theme === 'dust' ? (typeof DUST_ISLES !== 'undefined' ? DUST_ISLES.marks : []) : VOLCANO.on && typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES.marks : [];
+    const MK = [];
     for (const m of MK) if (Math.floor(m.x / REG) === rx && Math.floor(m.z / REG) === rz) {
       const mi = this.T.info(m.x, m.z); return { key: rx + ',' + rz, type: m.type, x: m.x, z: m.z, y: mi.h, b: mi.b, rot: N.hash(rx, rz, 904) * 6.28, seed: Math.floor(N.hash(rx, rz, 905) * 1e6) };
     }

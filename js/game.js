@@ -40,7 +40,7 @@ class Game {
       this.arena = new GameArena(this); this.landmarks.push(this.arena.build(this.gfx, this.St));
       // sky islands, cannons, and the portals to the special worlds
       for (const isle of buildSkyIslands(this.gfx, this.St)) this.landmarks.push(isle);
-      if (VOLCANO.on) this.landmarks.push(buildVolcano(this.gfx, this.T));
+      if (VOLCANO.on) this.landmarks.push(...buildLandIsles(this.gfx, this.St, this.T, 'berekor')); // owner only: every other island is a giant landmark
       this.cannons = cannonList(this.T); this.cannonM = cannonModel(this.gfx); // a cannon near the plaza shoots you up to the sky islands, and cannons hop you between them
       const T0 = this.T;
       this.portals = [
@@ -182,7 +182,7 @@ class Game {
     const v = b.v;
     // riding a shooting elevator: follow its path, fast, through everything
     if (b.path) {
-      let mv = 70 * dt; while (mv > 0 && b.path.length) { const t = b.path[0], d = Math.hypot(t[0] - b.p[0], t[1] - b.p[1], t[2] - b.p[2]); if (d <= mv) { b.p = [...t]; b.path.shift(); mv -= d; } else { for (let i = 0; i < 3; i++) b.p[i] += (t[i] - b.p[i]) / d * mv; mv = 0; } }
+      let mv = 120 * dt; while (mv > 0 && b.path.length) { const t = b.path[0], d = Math.hypot(t[0] - b.p[0], t[1] - b.p[1], t[2] - b.p[2]); if (d <= mv) { b.p = [...t]; b.path.shift(); mv -= d; } else { for (let i = 0; i < 3; i++) b.p[i] += (t[i] - b.p[i]) / d * mv; mv = 0; } }
       v[0] = v[1] = v[2] = 0; b.grounded = false; this.roll(b, dt); if (!b.path.length) { b.path = null; b.tpCool = 0.8; } return;
     }
     if (opts.fly) {
@@ -850,7 +850,6 @@ class Game {
     out.push({ x: PARK.x, z: PARK.z, key: 'funpark', kind: 'park', name: 'Fun Park', col: '#7aff9a', always: true });
     out.push({ x: PIER.end[0] + 30, z: 0, key: 'pier', kind: 'pier', name: 'Fishing pier', col: '#5ab8ff', always: true });
     out.push({ x: ARENA.x, z: ARENA.z, key: 'arena', kind: 'arena', name: 'Game arena', col: '#ff5ad8', always: true });
-    if (VOLCANO.on) out.push({ x: VOLCANO.x, z: VOLCANO.z, key: 'volcano', kind: 'volcano', name: 'Volcano', col: '#ff7a2a', always: true });
     return out;
   }
   // the owner ship; open (0..1) swings the glass canopy up on its hinge
