@@ -36,3 +36,5 @@ const Device = (() => {
 
 // New things being tried out first: only the Outernautica account sees them until they are released.
 window.NAUTIC_BETA = (() => { try { const a = JSON.parse(localStorage.getItem('ultranautic.account') || 'null'); return !!a && String(a.name || '').toLowerCase() === 'outernautica'; } catch (e) { return false; } })();
+// 'Good content here!' (ships, space, the Rip, stations): saved but not released yet, not even on the beta. Turn on with localStorage nautic.gc = 1.
+window.NAUTIC_GC = (() => { try { return !!window.NAUTIC_BETA && localStorage.getItem('nautic.gc') === '1'; } catch (e) { return false; } })();
