@@ -6,7 +6,7 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 const ROOT = path.join(__dirname, '..'), SIZE = +process.env.SIZE || 2048, SPAN = 16000, REGION = process.env.REGION || 'berekor', FILE = REGION === 'berekor' ? 'world' : REGION;
 const ctx = { console, Math, Map, Set, Float32Array, Uint16Array, Uint32Array, Uint8Array, Int32Array, Array, Object, JSON, performance: { now: () => 0 }, window: { NAUTIC_BETA: true }, document: { createElement: () => ({ getContext: () => null }) }, navigator: { userAgent: '' }, addEventListener() {} };
 vm.createContext(ctx);
-for (const f of ['js/gl.js', 'js/isles.js', 'js/terrain.js', 'js/worlds.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+for (const f of ['js/gl.js', 'js/isles.js', 'js/terrain.js', 'js/worlds.js', 'js/lands.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
 vm.runInContext('VOLCANO.on = true; globalThis.K = { Terrain, BIOMES, VOLCANO, STATION, REGIONS, hex, mixC, shadeC, smooth, lavaAt };', ctx);
 const { Terrain, BIOMES, REGIONS, VOLCANO, hex, mixC, smooth, lavaAt } = ctx.K, RG = REGIONS[REGION];
 if (REGION !== 'berekor') { VOLCANO.on = false; vm.runInContext('REGION_NOW = ' + JSON.stringify(REGION), ctx); }
@@ -161,7 +161,7 @@ const ISLE_NAMES = {
   berekor: ['Berekor Mainland', 'Whitecrown', 'Elderwood', 'Mistpeak', 'Hollowfrost', 'Amberleaf', 'Sandscar', 'Saltreach', 'Brannock', 'Ilvary', 'Dune Key', 'Wenn', 'Bogmoor', 'Glimmerholm', 'Wisp Isle', 'Little Tarn', 'Fenrow', 'Quill Isle', 'Lantern Isle', 'Oakum'],
   dustmaw: ['Sandhollow', 'Rustmesa', 'Scorchkey', 'Dry Gulch', 'Ochre Atoll', 'Saltpan', 'Redrock', 'Thirstwell', 'Mesa Vell', 'Dustfall', 'Gritstone', 'Hollow Sun', 'Brittle Key', 'Sunbake', 'Copperbluff', 'Bleakwater', 'Tumble Isle', 'Ashen Mesa', 'Pebbleshoal', 'Cinder Dune', 'Dryreed', 'Sandpiper Key', 'Glassmouth', 'Old Well', 'Driftbone', 'Scrubhook', 'Kiln Key', 'Tinder Isle', 'Rattleback', 'Saltcrown', 'Wither Key', 'Dune Fang', 'Ember Flat', 'Burrow Isle', 'Sunspit', 'Grain Isle', 'Hookstone', 'Parchmoor', 'Last Drop', 'Thornpoint', 'Quiet Sands', 'Ashwind', 'Little Mesa', 'Dry Tooth', 'Shimmerkey'] }[REGION];
 // land joined only by thin necks counts as separate islands: shrink the land, find the pieces, then grow them back
-const ER = +process.env.ER || 6, land = new Uint8Array(L * L); for (let c = 0; c < L * L; c++) land[c] = bg[c] !== 0 ? 1 : 0;
+const ER = +process.env.ER || (RG.theme && RG.theme !== "dust" ? 3 : 6), land = new Uint8Array(L * L); for (let c = 0; c < L * L; c++) land[c] = bg[c] !== 0 ? 1 : 0;
 let core = land.slice(); for (let e = 0; e < ER; e++) { const nx = core.slice(); for (let j = 0; j < L; j++) for (let i = 0; i < L; i++) { const c = j * L + i; if (!core[c]) continue; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = i + a, nj = j + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L || !core[nj * L + ni]) { nx[c] = 0; break; } } } core = nx; }
 const own = new Int32Array(L * L).fill(-1), pieces = [];
 for (let s = 0; s < L * L; s++) { if (!core[s] || own[s] >= 0) continue; const k = pieces.length, cells = [s]; own[s] = k; for (let q = 0; q < cells.length; q++) { const c = cells[q], ci = c % L, cj = (c / L) | 0; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = ci + a, nj = cj + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L) continue; const n = nj * L + ni; if (core[n] && own[n] < 0) { own[n] = k; cells.push(n); } } } pieces.push(cells); }
@@ -171,7 +171,7 @@ while (front.length) { const nf = []; for (const c of front) { const ci = c % L,
 const isles = [];
 for (let k = 0; k < pieces.length; k++) {
   const cells = []; for (let c = 0; c < L * L; c++) if (own[c] === k) cells.push(c);
-  if (cells.length < (RG.theme ? 70 : 40)) continue;
+  if (cells.length < (RG.theme ? 40 : 40)) continue;
   let x0 = L, x1 = 0, z0 = L, z1 = 0; const kinds = {};
   for (const c of cells) { const ci = c % L, cj = (c / L) | 0; x0 = Math.min(x0, ci); x1 = Math.max(x1, ci); z0 = Math.min(z0, cj); z1 = Math.max(z1, cj); kinds[bg[c]] = (kinds[bg[c]] || 0) + 1; }
   const W = v => Math.round(-SPAN / 2 + v * SPAN / L), set = new Set(cells);
@@ -193,6 +193,8 @@ const far = new Int32Array(L * L).fill(-1); let fr = []; for (let c = 0; c < L *
 while (fr.length) { const nf = []; for (const c of fr) { const ci = c % L, cj = (c / L) | 0; for (const [a, d] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = ci + a, nj = cj + d; if (ni < 0 || nj < 0 || ni >= L || nj >= L) continue; const n = nj * L + ni; if (far[n] < 0) { far[n] = far[c] + 1; nf.push(n); } } } fr = nf; }
 for (const it of isles) { let best = -1, bc = 0; for (const c of it.cells) if (far[c] > best) { best = far[c]; bc = c; } it.lx = Math.round(-SPAN / 2 + ((bc % L) + 0.5) * SPAN / L); it.lz = Math.round(-SPAN / 2 + (((bc / L) | 0) + 0.5) * SPAN / L); }
 isles.forEach((it, k) => { it.name = ISLE_NAMES[k] || 'Isle ' + (k + 1); });
+// themed regions: every island is a landmark island, named after its landmark
+if (RG.theme && RG.theme !== 'dust') { const LL = vm.runInContext('landsOf(' + JSON.stringify(RG.theme) + ')', ctx); for (const I of LL) { const c = Math.floor((I.z + SPAN / 2) / SPAN * L) * L + Math.floor((I.x + SPAN / 2) / SPAN * L), it = isles.find(q => q.cells.has(c)); if (it && !it.lm) { it.name = I.name; it.lm = I.id; } } }
 // which island each name sits on
 for (const lb of labels) { const ci = Math.floor((lb.x + SPAN / 2) / SPAN * L), cj = Math.floor((lb.z + SPAN / 2) / SPAN * L); const it = isles.find(q => q.cells.has(cj * L + ci)); lb.isle = it ? isles.indexOf(it) : -1; }
 // a small mask of the islands so a tap on the map knows which island it hit

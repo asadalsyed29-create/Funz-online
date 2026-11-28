@@ -667,5 +667,6 @@ function buildRegionLandmarks(gl, st, T, region, game) {
     s.mesh = mb.build(gl); st.grid.add(mb.tris, s); out.push(s);
   }
   for (const sp of RT.specials) if (SPECIAL_BUILD[sp.id]) out.push(SPECIAL_BUILD[sp.id](gl, st, T, sp, R, game));
+  out.push(...buildLandIsles(gl, st, T, REGIONS[region].theme)); // the landmark islands, with their elevators and cool places
   return out;
 }
