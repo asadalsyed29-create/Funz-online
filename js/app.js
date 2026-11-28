@@ -720,12 +720,36 @@
     await connectWorld(true);
   }
 
+  // the world's keeper has to answer our hello; if it doesn't (its phone went to sleep, or the connection broke)
+  // we try again, and after that play offline and keep trying quietly instead of loading forever
+  function waitWelcome(ms) {
+    return new Promise(res => {
+      const g = G, done = ok => { clearTimeout(t); if (g.welcomeWait === done) g.welcomeWait = null; res(ok); };
+      const t = setTimeout(() => done(false), ms);
+      g.welcomeWait = done;
+    });
+  }
   async function connectWorld(first) {
-    let role;
-    try { role = G.test ? 'offline' : await Net.connect((G.server ? Servers.worldId(G.server.id) : Net.MAIN_ID) + (G.region ? '.' + G.region : '')); } catch (e) { role = 'offline'; }
-    if (!G) { Net.leave(); return; }
-    G.role = role; G.lastHeard = performance.now();
-    if (role === 'guest') { const k = await myIdentity(); Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' }); return; }
+    let role, tries = 0; const g = G;
+    const wid = (G.server ? Servers.worldId(G.server.id) : Net.MAIN_ID) + (G.region ? '.' + G.region : '');
+    const say = t => { if (G === g && !g.entered) menuMsg(t); };
+    for (let attempt = 0; ; attempt++) {
+      try { role = G.test ? 'offline' : await Net.connect(wid, i => say(++tries > 1 ? 'Connecting to the world… (try ' + tries + ')' : 'Entering the world…')); } catch (e) { role = 'offline'; }
+      if (G !== g) { if (!G) Net.leave(); return; }
+      G.role = role; G.lastHeard = performance.now();
+      if (role !== 'guest') break;
+      say('Joining the world…');
+      const k = await myIdentity(); if (G !== g) return;
+      Net.toKeeper({ t: 'hello', ...G.profile, pub: k.pub, p: G.body.p.map(v => +v.toFixed(2)), pwh: G.server ? G.server.pwh || '' : '' });
+      if (await waitWelcome(12000)) return;
+      if (G !== g || G.role !== 'guest') return; // left, or got sent back to the menu
+      Net.leave();
+      if (attempt >= 1) { role = 'offline'; G.role = 'offline'; G.noAnswer = true; break; }
+      say('The world did not answer, trying again…');
+      await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
+      if (G !== g) return;
+    }
+    if (role === 'offline') G.offlineAt = performance.now();
     if (G.server && !G.test) { G.server = Servers.put(Object.assign({}, G.server, { seen: Date.now() })); modsHello(); }
     G.myId = 'keeper'; G.me.id = 'keeper';
     G.players.clear(); G.players.set('keeper', G.me);
@@ -734,11 +758,11 @@
     { const k = await myIdentity(), key = nameKey(G.me.name), owner = G.names.get(key);
       if (!G.me.admin && owner && owner !== k.fp) { const was = G.me.name; G.me.name = G.profile.name = randomName(); setTimeout(() => sys('The name "' + was + '" already belongs to another player, so you are ' + G.me.name + ' for now. Pick a new name in the menu!'), 1500); }
       else if (!owner && !isRandomName(G.me.name) && k.fp && !reservedName(G.me.name)) { G.names.set(key, k.fp); G.dirty = true; } }
-    if (first) enterGame();
+    if (!G.entered) enterGame();
     G.reconnecting = false; renderPeople();
     if (first && G.region) setTimeout(() => { if (G) banner('Welcome to', REGIONS[G.region].name, 'Planet ' + REGIONS[G.region].planet, 3500); }, 600);
     if (G.test) { $('roomLabel').textContent = G.server.name; $('leaveBtn').textContent = 'Back to editor'; sys('Testing your mod. Only you are here, and nothing is saved. Press Back to editor when you are done.'); }
-    else if (role === 'offline') { $('roomLabel').innerHTML = '<i class="live off"></i>Offline'; sys('Could not reach the world, so you are exploring offline. Your builds are saved on this device.'); }
+    else if (role === 'offline') { $('roomLabel').innerHTML = '<i class="live off"></i>Offline'; if (!G.quiet) sys((G.noAnswer ? 'The world did not answer' : 'Could not reach the world') + ', so you are exploring offline for now. It keeps trying to connect in the background. Your builds are saved on this device.'); }
     else if (G.server) { $('roomLabel').innerHTML = '<i class="live"></i>'; $('roomLabel').appendChild(document.createTextNode(G.server.name)); sys(first ? 'Welcome to ' + G.server.name + '! The server stays open: when everyone leaves, it is saved and picks up again when someone comes back.' : 'Back online.'); }
     else { $('roomLabel').innerHTML = '<i class="live"></i>Online'; sys(first ? 'Welcome to Nautic Online! You are the first one here, more people can join any time.' : 'Back online.'); }
   }
@@ -750,6 +774,7 @@
   }
 
   function enterGame() {
+    G.entered = true;
     $('menu').classList.add('hidden'); $('serversBtn').disabled = false; menuMsg('');
     $('hud').appendChild($('wardrobe')); $('wardrobe').classList.add('hidden');
     $('hud').classList.remove('hidden'); $('chat').classList.remove('hidden'); $('toast').classList.add('hidden');
@@ -777,15 +802,17 @@
   }
   $('leaveBtn').onclick = () => leave();
 
-  async function reconnect() {
+  async function reconnect(quiet) {
     if (!G || G.reconnecting) return;
-    G.reconnecting = true; Net.leave();
+    G.reconnecting = true; G.quiet = !!quiet; G.noAnswer = false; Net.leave();
     for (const id of [...G.players.keys()]) if (G.players.get(id) !== G.me) G.players.delete(id);
-    renderPeople(); showToast('Reconnecting to the world…');
+    renderPeople(); if (!quiet) showToast('Reconnecting to the world…');
     await new Promise(r => setTimeout(r, 300 + Math.random() * 1500));
     if (!G) return;
     await connectWorld(false);
-    if (G && G.role !== 'guest') showToast(G.role === 'offline' ? 'Offline for now' : 'Back online!', 1500);
+    if (!G) return;
+    G.reconnecting = false; G.quiet = false;
+    if (G.role === 'keeper' || (G.role === 'offline' && !quiet)) showToast(G.role === 'offline' ? 'Offline for now' : 'Back online!', 1500);
   }
 
   // ---------- networking ----------
@@ -797,7 +824,7 @@
       G.players.delete(id); renderPeople(); if (G.game.arena) G.game.arena.hostRemove(id);
       Net.toAll({ t: 'bye', id }); sys(p.name + ' left');
     },
-    closed() { if (G && G.role === 'guest') reconnect(); },
+    closed() { if (!G || G.role !== 'guest') return; if (G.welcomeWait) G.welcomeWait(false); else reconnect(); },
     message(from, m) {
       if (!G || !m || typeof m !== 'object') return;
       if (G.role === 'keeper') keeperGot(from, m); else if (G.role === 'guest') { G.lastHeard = performance.now(); guestGot(m); }
@@ -990,7 +1017,8 @@
       G.me.admin = false;
       Promise.all([adminSign(store.get('pass', ''), m.nonce), adminSign(store.get('pass', ''), 'admin:' + m.id)]).then(([sig, proof]) => { if (sig && G) Net.toKeeper({ t: 'admin', sig, proof }); });
       $('roomLabel').innerHTML = '<i class="live"></i>Online';
-      if (first) { enterGame(); sys('Welcome to Nautic Online! ' + (m.roster.length - 1) + ' other ' + (m.roster.length === 2 ? 'player is' : 'players are') + ' here.'); }
+      if (G.welcomeWait) G.welcomeWait(true);
+      if (!G.entered) { enterGame(); sys('Welcome to Nautic Online! ' + (m.roster.length - 1) + ' other ' + (m.roster.length === 2 ? 'player is' : 'players are') + ' here.'); }
       else showToast('Back online!', 1500);
       G.reconnecting = false; renderPeople(); renderBag();
       return;
@@ -1872,8 +1900,10 @@
 
     if (G.role === 'guest' && G.myId && now - G.lastSend > 66) {
       G.lastSend = now; Net.toKeeper({ t: 'pos', p: b.p.map(v => +v.toFixed(2)), fl: !!m.fly, big: m.big, gl: m.glow, sh: typeof m.ship === 'string' ? m.ship : !!m.ship });
-      if (now - G.lastHeard > 6000) reconnect();
+      if (now - G.lastHeard > 6000 && !G.welcomeWait) reconnect();
     }
+    // offline because the world couldn't be reached: quietly try again every minute
+    if (G.role === 'offline' && !G.test && !G.reconnecting && G.offlineAt && now - G.offlineAt > 60000) reconnect(true);
     if (G.role === 'keeper' && now - G.lastState > 66) {
       G.lastState = now;
       Net.toAll({ t: 'state', phase: dayPhase(), wt: worldT(), p: [...G.players.values()].map(p => [p.id, +p.p[0].toFixed(2), +p.p[1].toFixed(2), +p.p[2].toFixed(2), !!p.fly, !!p.big, !!p.glow, typeof p.ship === 'string' ? p.ship : !!p.ship]) });
