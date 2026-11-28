@@ -54,10 +54,13 @@ const Net = (() => {
   }
 
   // Join the world, or start it if nobody's there. Returns 'guest' or 'keeper'.
-  async function connect(worldId) {
+  // step(i) is told each new try, so the menu can show it. Gives up after about 30 seconds.
+  async function connect(worldId, step) {
     WORLD_ID = worldId || MAIN_ID;
     if (!ready()) throw new Error('offline');
-    for (let i = 0; i < 6; i++) {
+    const end = Date.now() + 30000;
+    for (let i = 0; i < 6 && Date.now() < end; i++) {
+      if (step) try { step(i); } catch (e) {}
       try { await tryJoin(); return 'guest'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); }
       try { await tryKeep(); return 'keeper'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); }
       await sleep(400 + Math.random() * 900); // someone else just became keeper, try again
