@@ -111,6 +111,8 @@ const BigMap = (() => {
       setWay({ x, z }); host.toast(here() ? 'Waypoint set. Follow the yellow marker on your compass!' : 'Waypoint set in ' + regionName() + '. Tap Go there to travel straight to it.');
       placing = false; updateWayBtn(); info(); return;
     }
+    // a landmark or place picture: go there
+    for (let i = hits.length - 1; i >= 0; i--) { const q = hits[i].b; if (px >= q[0] - 4 && px <= q[2] + 4 && py >= q[1] - 4 && py <= q[3] + 4) { hits[i].act(); return; } }
     if (isle < 0) { const k = isleAt(x, z); if (k >= 0) showIsle(k); }
   }
   // ---------- the planets map: a real 3D solar system, drawn by a shader ----------
@@ -248,7 +250,7 @@ void main(){
     mine.forEach((q, i) => { const yy = 42 + i * 17, me = q.id === regionNow(); g.fillStyle = me ? '#a0700a' : q.built ? INK : 'rgba(42,46,56,.45)'; g.font = (me ? '700 ' : q.built ? '500 ' : 'italic 500 ') + '12px Georgia, serif'; g.fillText((me ? '● ' : '○ ') + q.name, 20, yy); });
   }
   const regionName = () => (REGIONS[viewing()] || {}).name || 'Berekor';
-  function showWorld() { isle = -1; $('mapBack').classList.add('hidden'); $('mapTitle').textContent = (viewing() === 'berekor' ? 'Berekor region' : regionName()) + ', planet ' + ((REGIONS[viewing()] || {}).planet || 'Nautara'); view.cx = 0; view.cz = 0; view.k = minK(); clampView(); info(); }
+  function showWorld() { isle = -1; $('mapBack').classList.add('hidden'); $('mapTitle').textContent = (viewing() === 'berekor' ? 'Berekor region' : regionName()) + ', planet ' + ((REGIONS[viewing()] || {}).planet || 'Nautara'); view.cx = 0; view.cz = 0; view.k = minK(); const LL = landsHere(); if (LL) { const [w, h] = size(); let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const I of LL) { x0 = Math.min(x0, I.x - I.R); x1 = Math.max(x1, I.x + I.R); z0 = Math.min(z0, I.z - I.R); z1 = Math.max(z1, I.z + I.R); } view.cx = (x0 + x1) / 2; view.cz = (z0 + z1) / 2; view.k = Math.min(w / ((x1 - x0) * 1.08), h / ((z1 - z0) * 1.15 + 40 / minK())); view.cz -= 18 / view.k; } clampView(); info(); }
   function showIsle(k) {
     const it = data.isles[k]; isle = k; const [w, h] = size(), pad = 1.12;
     view.cx = (it.x0 + it.x1) / 2; view.cz = (it.z0 + it.z1) / 2; view.k = clampK(Math.min(w / ((it.x1 - it.x0) * pad), h / ((it.z1 - it.z0) * pad)));
@@ -268,6 +270,9 @@ void main(){
     if (mode === 'planets') { el.textContent = pSel ? 'Planet ' + pSel + (planetTarget(pSel) ? (window.NAUTIC_GC ? '. To go there, call a ship, fly straight up into space and land on ' + pSel + '.' : '. Tap Travel to ' + pSel + ' to go there.') : ' is not built yet.') : 'You are on planet ' + planetNow() + (window.NAUTIC_GC ? '. Tap it to see its map. To reach another planet, fly a ship up into space. Drag to turn the view.' : '. Tap it to see its map, or tap another planet to travel there. Drag to turn the view.'); return; }
     if (!data) { el.textContent = ''; return; }
     if (placing) { el.textContent = 'Tap anywhere on the map to put your waypoint there.'; return; }
+    const LL = landsHere();
+    if (LL && isle >= 0) { const I = LL.find(q => isleAt(q.x, q.z) === isle); if (I) { el.textContent = I.name + ': ' + LAND_TXT[I.kind] + (I.place ? ', with ' + PLACE_TXT[I.place] + (I.kind === 'floating' ? ' on the middle isle' : ' half way up') + '. Shooting elevators take you up' : '') + '. Tap a picture to teleport there.'; return; } }
+    if (LL && isle < 0) { el.textContent = LL.length + ' landmark islands in ' + regionName() + '. Tap one to teleport there and see its map.'; return; }
     if (isle >= 0) { const it = data.isles[isle], names = it.lands.map(b => ({ 1: 'beaches', 2: 'grassland', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountains', 7: 'swamp', 8: 'glow fields', 11: 'the volcano', 12: 'red mesas', 13: 'dust flats', 14: 'oases', 16: 'autumn woods', 17: 'elder forest', 18: 'frostglow', 19: 'salt flats', 20: 'hoodoo badlands' }[b] || (b >= 21 && BIOMES[b] ? BIOMES[b].name.toLowerCase() : null))).filter(Boolean); const IS = viewing() === 'berekor' ? (typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES : null) : viewing() === 'dustmaw' && typeof DUST_ISLES !== 'undefined' ? DUST_ISLES : null, mk = IS ? IS.marks.find(m => m.isle === isle) : null, th = IS ? THEME_TXT[IS.themes[isle]] : '';
       el.textContent = it.name + ': ' + (th || names.join(', ')) + (mk ? '. Landmark: ' + STRUCT_TYPES[mk.type] : '') + '.'; return; }
     el.textContent = data.isles.filter(q => !q.gone).length + ' islands in ' + regionName() + '. Tap an island to see its map.' + (here() ? '' : ' Tap Travel here to go, or put a waypoint and tap Go there.');
@@ -330,6 +335,89 @@ void main(){
     if (flag) { g.strokeStyle = INK; g.lineWidth = 1.6; g.beginPath(); g.moveTo(4, -6); g.lineTo(9, -18); g.stroke(); g.fillStyle = flag === 'found' ? '#3ee04a' : '#a8acb4'; g.beginPath(); g.moveTo(9, -18); g.lineTo(17, -15); g.lineTo(11, -11); g.closePath(); g.fill(); g.lineWidth = 1; g.stroke(); }
     g.restore();
   }
+  // ---------- the pixel look: a tiny pixel font, and pixel-art icons made from the drawings ----------
+  const FONT = { A: [14, 17, 17, 31, 17, 17, 17], B: [30, 17, 17, 30, 17, 17, 30], C: [14, 17, 16, 16, 16, 17, 14], D: [30, 17, 17, 17, 17, 17, 30], E: [31, 16, 16, 30, 16, 16, 31], F: [31, 16, 16, 30, 16, 16, 16],
+    G: [14, 17, 16, 23, 17, 17, 15], H: [17, 17, 17, 31, 17, 17, 17], I: [14, 4, 4, 4, 4, 4, 14], J: [7, 2, 2, 2, 2, 18, 12], K: [17, 18, 20, 24, 20, 18, 17], L: [16, 16, 16, 16, 16, 16, 31], M: [17, 27, 21, 21, 17, 17, 17],
+    N: [17, 17, 25, 21, 19, 17, 17], O: [14, 17, 17, 17, 17, 17, 14], P: [30, 17, 17, 30, 16, 16, 16], Q: [14, 17, 17, 17, 21, 18, 13], R: [30, 17, 17, 30, 20, 18, 17], S: [15, 16, 16, 14, 1, 1, 30], T: [31, 4, 4, 4, 4, 4, 4],
+    U: [17, 17, 17, 17, 17, 17, 14], V: [17, 17, 17, 17, 17, 10, 4], W: [17, 17, 17, 21, 21, 21, 10], X: [17, 17, 10, 4, 10, 17, 17], Y: [17, 17, 10, 4, 4, 4, 4], Z: [31, 1, 2, 4, 8, 16, 31],
+    0: [14, 17, 19, 21, 25, 17, 14], 1: [4, 12, 4, 4, 4, 4, 14], 2: [14, 17, 1, 2, 4, 8, 31], 3: [31, 2, 4, 2, 1, 17, 14], 4: [2, 6, 10, 18, 31, 2, 2], 5: [31, 16, 30, 1, 1, 17, 14], 6: [6, 8, 16, 30, 17, 17, 14], 7: [31, 1, 2, 4, 8, 8, 8], 8: [14, 17, 17, 14, 17, 17, 14], 9: [14, 17, 17, 15, 1, 2, 12],
+    ' ': [0, 0, 0, 0, 0, 0, 0], '.': [0, 0, 0, 0, 0, 12, 12], ',': [0, 0, 0, 0, 12, 4, 8], '!': [4, 4, 4, 4, 4, 0, 4], '?': [14, 17, 1, 2, 4, 0, 4], "'": [4, 4, 8, 0, 0, 0, 0], '-': [0, 0, 0, 14, 0, 0, 0], ':': [0, 12, 12, 0, 12, 12, 0], '&': [12, 18, 20, 8, 21, 18, 13], '"': [10, 10, 0, 0, 0, 0, 0], '(': [2, 4, 8, 8, 8, 4, 2], ')': [8, 4, 2, 2, 2, 4, 8] };
+  const textCache = new Map();
+  const pixText = (t, fill) => {
+    t = t.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); const key = t + '|' + fill; if (textCache.has(key)) return textCache.get(key);
+    const c = document.createElement('canvas'); c.width = t.length * 6 + 2; c.height = 9; const g = c.getContext('2d');
+    const glyphs = col => { g.fillStyle = col; return (ox, oy) => { [...t].forEach((ch, i) => { const F = FONT[ch] || FONT['?']; for (let r = 0; r < 7; r++) for (let b = 0; b < 5; b++) if (F[r] >> (4 - b) & 1) g.fillRect(1 + i * 6 + b + ox, 1 + r + oy, 1, 1); }); }; };
+    const dark = glyphs('#14100c'); for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [1, -1], [-1, 1]]) dark(ox, oy);
+    glyphs(fill)(0, 0); if (textCache.size > 400) textCache.clear(); textCache.set(key, c); return c;
+  };
+  // draw pixel text: S = how big each pixel is, align 'center' or 'left'
+  const ptext = (g, t, x, y, S, fill, align = 'center') => { const c = pixText(t, fill), w = c.width * S, h = c.height * S; g.imageSmoothingEnabled = false; g.drawImage(c, Math.round(align === 'center' ? x - w / 2 : x), Math.round(y - h / 2), w, h); };
+  const ptextW = (t, S) => (t.length * 6 + 2) * S;
+  // new drawings for the landmark islands and their places (several colours each)
+  const fillP = (g, col, f) => { g.fillStyle = col; g.beginPath(); f(); g.fill(); };
+  const SPR = {
+    volcano: g => { fillP(g, '#7a5a4a', () => { g.moveTo(-15, 2); g.lineTo(-5, -14); g.lineTo(5, -14); g.lineTo(15, 2); }); fillP(g, '#5a4034', () => { g.moveTo(2, -14); g.lineTo(5, -14); g.lineTo(15, 2); g.lineTo(6, 2); }); fillP(g, '#ff6a1a', () => { g.moveTo(-5, -14); g.lineTo(5, -14); g.lineTo(3, -11); g.lineTo(-3, -11); }); fillP(g, '#ffb347', () => { g.moveTo(-1, -11); g.lineTo(1, -11); g.lineTo(-2, -2); g.lineTo(-4, -2); }); fillP(g, '#8a8a8a', () => { g.arc(-2, -20, 4, 0, 7); g.arc(3, -26, 3, 0, 7); }); },
+    cloudspire: g => { fillP(g, '#8a8a96', () => { g.moveTo(-7, 2); g.lineTo(-3, -30); g.lineTo(3, -30); g.lineTo(7, 2); }); fillP(g, '#6a6a76', () => { g.moveTo(1, -30); g.lineTo(3, -30); g.lineTo(7, 2); g.lineTo(2, 2); }); fillP(g, '#ffffff', () => { g.moveTo(-3, -30); g.lineTo(3, -30); g.lineTo(2, -26); g.lineTo(-2, -26); g.ellipse(-6, -17, 8, 3, 0, 0, 7); g.ellipse(6, -16, 9, 3.4, 0, 0, 7); }); },
+    mesa: g => { fillP(g, '#b8643a', () => { g.moveTo(-15, 2); g.lineTo(-11, -14); g.lineTo(11, -14); g.lineTo(15, 2); }); fillP(g, '#8a4a2a', () => { g.rect(-13, -6, 26, 2); g.rect(-12, -10, 24, 2); }); fillP(g, '#6aa24a', () => { g.rect(-11, -16, 22, 3); }); },
+    floating: g => { const isle = (x, y, r) => { fillP(g, '#7a6a5a', () => { g.moveTo(x - r, y); g.lineTo(x + r, y); g.lineTo(x, y + r * 1.4); }); fillP(g, '#6ac24a', () => { g.rect(x - r, y - 2, r * 2, 3); }); }; isle(-8, -4, 6); isle(6, -14, 7); isle(-4, -24, 4); },
+    hangout: g => { fillP(g, '#4a6ab0', () => { g.rect(-12, -6, 10, 6); g.rect(-12, -10, 3, 4); }); fillP(g, '#ff7a2a', () => { g.moveTo(3, 0); g.lineTo(7, -10); g.lineTo(11, 0); }); fillP(g, '#ffd23a', () => { g.moveTo(5, 0); g.lineTo(7, -5); g.lineTo(9, 0); }); fillP(g, '#6a4a2e', () => g.rect(2, 0, 10, 2)); },
+    observatory: g => { fillP(g, '#e8ecf4', () => { g.arc(0, -4, 10, Math.PI, 0); }); fillP(g, '#c8ccd8', () => g.rect(-10, -4, 20, 6)); fillP(g, '#1a1e2a', () => g.rect(-1.5, -14, 3, 10)); fillP(g, '#3a4a6a', () => { g.moveTo(1, -10); g.lineTo(12, -20); g.lineTo(14, -18); g.lineTo(3, -8); }); },
+    hotspring: g => { fillP(g, '#8a8478', () => g.ellipse(0, -2, 13, 5, 0, 0, 7)); fillP(g, '#5ad0f0', () => g.ellipse(0, -2, 10, 3.4, 0, 0, 7)); fillP(g, '#ffffff', () => { g.arc(-4, -10, 2.5, 0, 7); g.arc(2, -14, 3, 0, 7); g.arc(5, -9, 2, 0, 7); }); },
+    cafe: g => { fillP(g, '#ffffff', () => { g.rect(-8, -12, 12, 13); }); fillP(g, '#ffffff', () => { g.arc(6, -7, 4, 0, 7); }); fillP(g, '#6a3a1a', () => g.rect(-7, -11, 10, 3)); fillP(g, '#cfcfcf', () => { g.arc(-6, -18, 2, 0, 7); g.arc(-1, -21, 2, 0, 7); }); },
+    library: g => { fillP(g, '#a83a3a', () => g.rect(-12, -14, 5, 16)); fillP(g, '#3a6aa8', () => g.rect(-6, -18, 5, 20)); fillP(g, '#3a8a4a', () => g.rect(0, -12, 5, 14)); fillP(g, '#d8a83a', () => { g.moveTo(6, 2); g.lineTo(9, -14); g.lineTo(13, -13); g.lineTo(10, 2); }); },
+    garden: g => { fillP(g, '#3a8a3a', () => { g.rect(-1, -10, 2, 12); g.ellipse(-5, -4, 4, 2, 0.4, 0, 7); }); fillP(g, '#ff5a8a', () => { for (let k = 0; k < 5; k++) { const a = k / 5 * 6.28; g.moveTo(Math.cos(a) * 5, -14 + Math.sin(a) * 5); g.arc(Math.cos(a) * 5, -14 + Math.sin(a) * 5, 3.4, 0, 7); } }); fillP(g, '#ffd23a', () => g.arc(0, -14, 3, 0, 7)); },
+    arcade: g => { fillP(g, '#2a2a8a', () => { g.rect(-8, -20, 16, 22); }); fillP(g, '#5aff8a', () => g.rect(-5, -17, 10, 7)); fillP(g, '#ff5a5a', () => { g.arc(-3, -5, 2, 0, 7); }); fillP(g, '#ffd23a', () => { g.arc(3, -5, 2, 0, 7); }); },
+    campsite: g => { fillP(g, '#e8a03a', () => { g.moveTo(-14, 2); g.lineTo(-5, -14); g.lineTo(4, 2); }); fillP(g, '#2a2a2a', () => { g.moveTo(-7, 2); g.lineTo(-5, -6); g.lineTo(-3, 2); }); fillP(g, '#ff7a2a', () => { g.moveTo(6, 2); g.lineTo(10, -8); g.lineTo(14, 2); }); },
+    museum: g => { fillP(g, '#e8e4dc', () => { g.moveTo(-14, -12); g.lineTo(0, -20); g.lineTo(14, -12); g.rect(-13, 0, 26, 2); for (let k = -11; k <= 9; k += 5) g.rect(k, -11, 3, 11); }); },
+    summit: g => { fillP(g, '#8a8a96', () => { g.moveTo(-13, 2); g.lineTo(0, -12); g.lineTo(13, 2); }); fillP(g, '#ffffff', () => { g.moveTo(-4, -8); g.lineTo(0, -12); g.lineTo(4, -8); }); fillP(g, '#d8d8d0', () => g.rect(-0.8, -24, 1.6, 12)); fillP(g, '#ff4a4a', () => { g.moveTo(0.8, -24); g.lineTo(10, -21); g.lineTo(0.8, -18); }); },
+    lift: g => { fillP(g, '#4a4e58', () => g.rect(-7, -2, 14, 4)); fillP(g, '#9fe8ff', () => g.rect(-4, -26, 8, 24)); fillP(g, '#ffffff', () => { g.moveTo(-5, -14); g.lineTo(0, -22); g.lineTo(5, -14); g.rect(-1.5, -14, 3, 9); }); },
+  };
+  const sprCache = new Map();
+  // a drawing turned into pixel art: drawn small with hard edges, then a dark outline round it
+  function sprite(k, flag) {
+    const key = k + '|' + (flag || ''); if (sprCache.has(key)) return sprCache.get(key);
+    const N = 40, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); g.translate(N / 2, N - 7); g.scale(0.62, 0.62);
+    if (SPR[k]) SPR[k](g); else if (PICS[k]) drawPic(g, k, 0, 0, flag);
+    else { fillP(g, '#ffd27a', () => g.arc(0, -6, 6, 0, 7)); }
+    if (SPR[k] && flag) { g.strokeStyle = INK; g.lineWidth = 1.6; g.beginPath(); g.moveTo(4, -6); g.lineTo(9, -18); g.stroke(); fillP(g, flag === 'found' ? '#3ee04a' : '#a8acb4', () => { g.moveTo(9, -18); g.lineTo(17, -15); g.lineTo(11, -11); }); }
+    const im = g.getImageData(0, 0, N, N), d = im.data, on = new Uint8Array(N * N);
+    for (let i = 0; i < N * N; i++) { on[i] = d[i * 4 + 3] > 110 ? 1 : 0; d[i * 4 + 3] = on[i] ? 255 : 0; }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const i = y * N + x; if (on[i]) continue; if ((x > 0 && on[i - 1]) || (x < N - 1 && on[i + 1]) || (y > 0 && on[i - N]) || (y < N - 1 && on[i + N])) { d[i * 4] = 20; d[i * 4 + 1] = 16; d[i * 4 + 2] = 12; d[i * 4 + 3] = 255; } }
+    g.setTransform(1, 0, 0, 1, 0, 0); g.putImageData(im, 0, 0); sprCache.set(key, c); return c;
+  }
+  // draw a sprite with its bottom middle at x, y; returns the box it covers (for taps)
+  const drawSprite = (g, k, x, y, S, flag) => { const c = sprite(k, flag), w = c.width * S, h = c.height * S, x0 = Math.round(x - w / 2), y0 = Math.round(y - h + 7 * S); g.imageSmoothingEnabled = false; g.drawImage(c, x0, y0, w, h); return [x0 + 8 * S, y0 + 8 * S, x0 + w - 8 * S, y0 + h - 4 * S]; };
+  // the land itself, drawn at a low resolution and blown up, so it looks like pixel art
+  let lo = null; const seaCols = new WeakMap();
+  // the colour of the sea in the map picture (its corner), so the sea around the picture matches
+  const seaOf = src => { if (seaCols.has(src)) return seaCols.get(src); let c = '#6487b0'; try { const t = document.createElement('canvas'); t.width = t.height = 1; const tg = t.getContext('2d'); tg.drawImage(src, 0, 0, 4, 4, 0, 0, 1, 1); const d = tg.getImageData(0, 0, 1, 1).data; c = 'rgb(' + d[0] + ',' + d[1] + ',' + d[2] + ')'; } catch (e) {} seaCols.set(src, c); return c; };
+  function pixBase(g, w, h, src, ax, az, s, P) {
+    const lw = Math.ceil(w / P), lh = Math.ceil(h / P); if (!lo) lo = document.createElement('canvas'); if (lo.width !== lw || lo.height !== lh) { lo.width = lw; lo.height = lh; }
+    const q = lo.getContext('2d'); q.imageSmoothingEnabled = true; q.imageSmoothingQuality = 'high'; q.fillStyle = seaOf(src); q.fillRect(0, 0, lw, lh); q.drawImage(src, ax / P, az / P, s / P, s / P);
+    if (isle >= 0) q.drawImage(shadeFor(isle), ax / P, az / P, s / P, s / P);
+    g.imageSmoothingEnabled = false; g.drawImage(lo, 0, 0, lw * P, lh * P);
+  }
+  // the landmark islands of a themed region, and the places on each one
+  const landsHere = () => { const th = (REGIONS[viewing()] || {}).theme; return th && th !== 'dust' && typeof landsOf === 'function' ? landsOf(th) : null; };
+  const landIcon = I => I.kind === 'landing' ? 'landing' : I.kind === 'special' ? I.id : I.kind;
+  function landSpots(I) {
+    if (here()) { const gm = host.game(), s = gm && gm.landmarks && gm.landmarks.find(q => q.key === 'L:' + I.id); if (s && s.spots) return s.spots; }
+    if (!I.H && I.kind !== 'floating') return [];
+    const [dx, dz] = LAND_DIRS[I.dir], LR = I.LR || 40;
+    return [{ kind: I.place, name: I.placeName, x: I.x + dx * LR * 0.45, z: I.z + dz * LR * 0.45 }, { kind: 'summit', name: I.kind === 'floating' ? 'Highest isle' : 'Top of ' + I.name, x: I.x - dx * 20, z: I.z - dz * 20 }, { kind: 'lift', name: 'Elevator', x: I.x + dx * (LR + 12), z: I.z + dz * (LR + 12) }];
+  }
+  // tap an island: go there and open its map. Tap a place: go straight to it.
+  function goLand(I) {
+    const k = isleAt(I.x, I.z);
+    if (!here()) { if (host.travel(viewing(), { x: I.x, z: I.z })) close(); return; }
+    const sp = landSpots(I).find(q => q.kind === 'lift'), p = sp && sp.p;
+    if (p ? host.teleportTo(p[0], p[2], p[1], I.name) : host.teleportTo(I.x + 14, I.z + 6, undefined, I.name)) { if (k >= 0) showIsle(k); }
+  }
+  function goSpot(sp) {
+    if (!here()) { if (host.travel(viewing(), { x: sp.x ?? sp.p[0], z: sp.z ?? sp.p[2] })) close(); return; }
+    if (sp.p ? host.teleportTo(sp.p[0], sp.p[2], sp.p[1], sp.name) : host.teleportTo(sp.x, sp.z, undefined, sp.name)) close();
+  }
+  let hits = [];
   function frame() {
     raf = isOpen ? requestAnimationFrame(frame) : 0; if (!isOpen) return;
     const cv = $('mapCv'), [w, h] = size(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -341,15 +429,11 @@ void main(){
     if (!data) { $('mapMsg').textContent = 'Drawing the map…'; return; }
     $('mapMsg').textContent = '';
     const half = data.span / 2, [ax, az] = toScreen(-half, -half), s = data.span * view.k;
-    if (drawn) { g.imageSmoothingEnabled = s / dimg.width < 1.5; g.drawImage(dimg, ax, az, s, s); }
-    else { g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(img, ax, az, s, s); }
-    // a dashed grid every 2 km, like a drawn map
-    if (drawn) { g.save(); g.strokeStyle = 'rgba(44,52,66,.32)'; g.lineWidth = 1.5; g.setLineDash([7, 5]); g.beginPath(); for (let q = -half + 2000; q < half; q += 2000) { const [qx] = toScreen(q, 0), [, qy] = toScreen(0, q); g.moveTo(qx, az); g.lineTo(qx, az + s); g.moveTo(ax, qy); g.lineTo(ax + s, qy); } g.stroke(); g.restore(); }
-    if (isle >= 0) { g.imageSmoothingEnabled = true; g.drawImage(shadeFor(isle), ax, az, s, s); }
+    pixBase(g, w, h, drawn ? dimg : img, ax, az, s, 4); hits = [];
     // a thin frame around the edge of the world
     g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 1; g.strokeRect(ax, az, s, s);
     const inView = (x, z, m = 40) => { const [px, py] = toScreen(x, z); return px > -m && py > -m && px < w + m && py < h + m; };
-    const text = (t, x, y, font, fill, stroke = 'rgba(10,16,34,.85)', lw = 3) => { g.font = font; g.lineJoin = 'round'; g.lineWidth = lw; g.strokeStyle = stroke; g.strokeText(t, x, y); g.fillStyle = fill; g.fillText(t, x, y); };
+    const pxS = font => parseInt(font.match(/(\d+)px/)[1]) >= 19 ? 3 : 2, text = (t, x, y, font, fill) => ptext(g, t, x, y, pxS(font), fill, g.textAlign === 'left' ? 'left' : 'center');
     g.textAlign = 'center'; g.textBaseline = 'middle';
     // markers first, then names: the most important names are placed first and others skip spots that are taken
     const labels = [], lab = (t, x, y, font, fill, pri, stroke, lw) => labels.push({ t, x, y, font, fill, pri, stroke, lw });
@@ -370,18 +454,30 @@ void main(){
     {
       const known = (gm && gm.known) || new Set(), list = [];
       if (gm && here()) { for (const q of gm.places(0, 0, 0)) if (q.always) list.push(q); }
+      else if (vr !== 'berekor' && landsHere()) { /* landmark islands, below */ }
       else if (vr !== 'berekor') { list.push({ x: 0, z: 0, kind: 'landing', name: (regionTheme(vr) || {}).landing || 'Dustmaw Landing', col: '#ffc45a', always: true }); for (const sp of themeSpecials((REGIONS[vr] || {}).theme)) list.push({ x: sp.x, z: sp.z, kind: sp.id, name: sp.name, col: '#ffd890', always: true }); }
       else if (vr === 'berekor' && VOLCANO.on) list.push({ x: VOLCANO.x, z: VOLCANO.z, kind: 'volcano', name: 'Volcano', col: '#ff7a2a', always: true });
       const MK = vr === 'dustmaw' ? (typeof DUST_ISLES !== 'undefined' ? DUST_ISLES.marks : []) : vr === 'berekor' && typeof BEREKOR_ISLES !== 'undefined' && VOLCANO.on ? BEREKOR_ISLES.marks : [];
       const markKeys = new Set();
       for (const m of MK) { const key = 's:' + Math.floor(m.x / REG) + ',' + Math.floor(m.z / REG); markKeys.add(key); list.push({ x: m.x, z: m.z, name: STRUCT_TYPES[m.type], type: m.type, col: '#fff4dc', mark: true, flag: here() && known.has(key) ? 'found' : 'not' }); }
       if (gm && here()) for (const key of known) { if (!key.startsWith('s:') || markKeys.has(key)) continue; const [rx, rz] = key.slice(2).split(',').map(Number); const p = gm.St.plan(rx, rz); if (p) list.push({ x: p.x, z: p.z, name: STRUCT_TYPES[p.type], type: p.type, col: p.type === 'cave' ? '#b8a8ff' : '#ffffff', found: true, flag: 'found' }); }
+      // the landmark islands: each one is a pixel picture of its landmark; on an island's own map, its places too
+      const LL = landsHere();
+      if (LL) for (const I of LL) {
+        if (isle < 0) { list.push({ x: I.x, z: I.z, kind: landIcon(I), name: I.name, col: '#fff4dc', big: true, act: () => goLand(I), S: 2 }); continue; }
+        if (isleAt(I.x, I.z) !== isle) continue;
+        list.push({ x: I.x, z: I.z, kind: landIcon(I), name: I.name, col: '#fff4dc', big: true, S: 3, pri: 11, act: () => goLand(I) });
+        // its places sit round the landmark's picture, with a dotted line to where each one really is
+        const [lx, lz] = toScreen(I.x, I.z), OFF = { summit: [0, -100], lift: [150, 70] };
+        for (const sp of landSpots(I)) { const x = sp.x ?? sp.p[0], z = sp.z ?? sp.p[2], o = OFF[sp.kind] || [-150, 70]; list.push({ x, z, scr: [lx + o[0], lz + o[1]], kind: sp.kind, name: sp.name, col: sp.kind === 'lift' ? '#9fe8ff' : '#ffd27a', S: 2, pri: 10, act: () => goSpot(sp) }); }
+      }
       if (vr === 'berekor') list.push({ x: 0, z: 0, name: 'Plaza', kind: 'plaza', col: '#ffc45a', big: true }, { x: STATION.x, z: STATION.z, name: 'Station', kind: 'station', col: '#5ff0e0', big: true });
       for (const q of list) if (q.always && vr !== 'berekor') q.big = true;
       for (const q of list) {
         if (isle >= 0 && isleAt(q.x, q.z) !== isle) continue; if (!inView(q.x, q.z)) continue;
-        const [px, py] = toScreen(q.x, q.z), pic = q.type || q.kind;
-        if (PICS[pic]) { drawPic(g, pic, px, py, q.flag); lab(q.name, px, py + 13, '700 11px Georgia, serif', q.col === '#ffffff' ? '#fff4dc' : q.col, q.kind === 'volcano' ? 9 : q.big ? 8 : 3, 'rgba(30,26,20,.85)', 3); continue; }
+        const [rx, ry] = toScreen(q.x, q.z), [px, py] = q.scr || [rx, ry], pic = q.type || q.kind;
+        if (q.scr) { g.save(); g.strokeStyle = 'rgba(255,244,220,.85)'; g.lineWidth = 2; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(px, py - 6); g.lineTo(rx, ry); g.stroke(); g.restore(); g.fillStyle = '#fff4dc'; g.fillRect(Math.round(rx) - 3, Math.round(ry) - 3, 6, 6); g.fillStyle = INK; g.fillRect(Math.round(rx) - 1, Math.round(ry) - 1, 2, 2); }
+        if (PICS[pic] || SPR[pic]) { const S = q.S || 2, bx = drawSprite(g, pic, px, py, S, q.flag); hits.push({ b: bx, act: q.act || (() => goSpot({ x: q.x, z: q.z, name: q.name })) }); lab(q.name, px, bx[3] + 9,  '700 11px Georgia, serif', q.col === '#ffffff' ? '#fff4dc' : q.col, q.pri || (q.kind === 'volcano' ? 9 : q.big ? 8 : 3), 'rgba(30,26,20,.85)', 3); continue; }
         const r = q.big ? 5.5 : 4;
         g.fillStyle = q.col; g.strokeStyle = '#0a1124'; g.lineWidth = 1.5; g.beginPath(); g.arc(px, py, r, 0, 7); g.fill(); g.stroke();
         lab(q.name, px, py + r + 9, '700 11px system-ui', q.col, q.big ? 8 : 3);
@@ -408,10 +504,10 @@ void main(){
       g.textAlign = 'left'; const t1 = regionName(), t2 = tagOf(viewing()) ? '"' + tagOf(viewing()) + '"' : '';
       text(t1, 12, 22, '700 24px Georgia, serif', '#fff4dc', 'rgba(30,26,20,.9)', 4);
       if (t2) text(t2, 14, 44, 'italic 600 12px Georgia, serif', '#fff4dc', 'rgba(30,26,20,.9)', 3);
-      g.font = '700 24px Georgia, serif'; const tw = Math.max(g.measureText(t1).width, t2.length * 6.2); taken.push([0, 0, tw + 30, 56]); g.textAlign = 'center';
+      const tw = Math.max(ptextW(t1, 3), ptextW(t2, 2)); taken.push([0, 0, tw + 30, 56]); g.textAlign = 'center';
     }
     for (const L of labels) {
-      g.font = L.font; const tw = g.measureText(L.t).width + 4, th = parseInt(L.font.match(/(\d+)px/)[1]) + 2, r = [L.x - tw / 2, L.y - th / 2, L.x + tw / 2, L.y + th / 2];
+      const S = pxS(L.font), tw = ptextW(L.t, S) + 4, th = 9 * S + 2, r = [L.x - tw / 2, L.y - th / 2, L.x + tw / 2, L.y + th / 2];
       if (taken.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue;
       taken.push(r); text(L.t, L.x, L.y, L.font, L.fill, L.stroke || 'rgba(10,16,34,.85)', L.lw || 3);
     }

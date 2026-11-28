@@ -180,6 +180,11 @@ class Game {
     const targetR = opts.big ? 0.8 : 0.45;
     if (b.r !== targetR) { const d = (targetR - b.r) * Math.min(1, dt * 6); b.r += d; if (d > 0) b.p[1] += d; if (Math.abs(b.r - targetR) < 0.005) b.r = targetR; }
     const v = b.v;
+    // riding a shooting elevator: follow its path, fast, through everything
+    if (b.path) {
+      let mv = 70 * dt; while (mv > 0 && b.path.length) { const t = b.path[0], d = Math.hypot(t[0] - b.p[0], t[1] - b.p[1], t[2] - b.p[2]); if (d <= mv) { b.p = [...t]; b.path.shift(); mv -= d; } else { for (let i = 0; i < 3; i++) b.p[i] += (t[i] - b.p[i]) / d * mv; mv = 0; } }
+      v[0] = v[1] = v[2] = 0; b.grounded = false; this.roll(b, dt); if (!b.path.length) { b.path = null; b.tpCool = 0.8; } return;
+    }
     if (opts.fly) {
       const sp = 18; v[0] = input.x * sp; v[2] = input.z * sp; v[1] = ((input.up ? 1 : 0) - (input.down ? 1 : 0)) * sp * 0.7;
       for (let i = 0; i < 3; i++) b.p[i] += v[i] * dt;
@@ -327,6 +332,7 @@ class Game {
     }
     if (b.caveLock) { const t = b.caveLock; if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) > t.r + 4) b.caveLock = null; }
     for (const s of [...this.St.list.values(), ...(this.region ? this.landmarks : [])]) if (s && s.triggers) for (const t of s.triggers) {
+      if (t.lift) { if (!b.path && Math.hypot(b.p[0] - t.p[0], b.p[1] - t.p[1], b.p[2] - t.p[2]) < t.r) { b.path = t.path.map(q => [...q]); b.tpCool = 1; fx('lift'); return; } continue; }
       if (t.kill) { if (Math.hypot(b.p[0] - t.p[0], b.p[2] - t.p[2]) < t.r && b.p[1] < t.p[1] + t.h && b.p[1] > t.p[1] - 4) { b.p = [...t.back]; b.v = [0, 0, 0]; b.tpCool = 1; fx('ouch', t.msg); return; } continue; }
       if (b.caveLock && b.caveLock.cave === t.cave) continue;
       if (Math.hypot(b.p[0] - t.p[0], b.p[1] - t.p[1], b.p[2] - t.p[2]) < t.r) {
