@@ -12,33 +12,46 @@ const Net = (() => {
   function on(handlers) { Object.assign(h, handlers); }
   const ready = () => typeof Peer !== 'undefined';
 
-  // Try to join the world that's already running.
-  function tryJoin() {
+  // Try to join the world that's already running, under any of its names at once (see connect).
+  // Joins the first name that answers; tells which names are free if none do.
+  function tryJoin(ids) {
     return new Promise((resolve, reject) => {
       const p = new Peer();
+      const st = ids.map(() => 'wait'), cs = [];
       let done = false;
-      const fail = kind => { if (done) return; done = true; clearTimeout(timer); p.destroy(); reject({ kind }); };
-      const timer = setTimeout(() => fail('missing'), 9000);
-      p.on('open', () => {
-        const c = p.connect(WORLD_ID, { reliable: true });
-        c.on('open', () => { if (done) return; done = true; clearTimeout(timer); peer = p; keeperConn = c; resolve(); });
+      const finish = () => { clearTimeout(timer); for (const c of cs) if (c && c !== keeperConn) try { c.close(); } catch (e) {} };
+      const fail = kind => { if (done) return; done = true; finish(); p.destroy(); reject({ kind, free: ids.filter((id, i) => st[i] === 'missing') }); };
+      const check = () => {
+        if (done) return;
+        for (let i = 0; i < ids.length; i++) {
+          if (st[i] === 'wait') return; // a better name might still answer
+          if (st[i] === 'open') { done = true; const c = cs[i]; WORLD_ID = ids[i]; peer = p; keeperConn = c; finish(); resolve(); return; }
+        }
+        fail('missing');
+      };
+      // a name someone holds but that doesn't answer counts as 'slow'
+      const timer = setTimeout(() => { st.forEach((v, i) => { if (v === 'wait') st[i] = 'slow'; }); check(); }, 8000);
+      p.on('open', () => ids.forEach((id, i) => {
+        const c = p.connect(id, { reliable: true }); cs[i] = c;
+        c.on('open', () => { if (done) { if (c !== keeperConn) try { c.close(); } catch (e) {} } else if (st[i] === 'wait') { st[i] = 'open'; check(); } });
         c.on('data', d => { if (keeperConn === c) h.message('keeper', d); });
         c.on('close', () => { if (keeperConn === c) { keeperConn = null; h.closed(); } });
-      });
+      }));
       p.on('error', err => {
-        if (!done) fail(err.type === 'peer-unavailable' ? 'missing' : 'net');
-        else if (keeperConn && err.type !== 'peer-unavailable') { /* ignore small errors */ }
+        if (done) return;
+        if (err.type === 'peer-unavailable') { const i = ids.findIndex(id => String(err.message || '').endsWith(' ' + id)); if (i >= 0 && st[i] === 'wait') { st[i] = 'missing'; check(); } }
+        else fail('net');
       });
     });
   }
 
   // Nobody is running the world, so become the keeper.
-  function tryKeep() {
+  function tryKeep(id) {
     return new Promise((resolve, reject) => {
-      const p = new Peer(WORLD_ID);
+      const p = new Peer(id);
       let done = false;
       const timer = setTimeout(() => { if (!done) { done = true; p.destroy(); reject({ kind: 'net' }); } }, 9000);
-      p.on('open', () => { done = true; clearTimeout(timer); peer = p; resolve(); });
+      p.on('open', () => { done = true; clearTimeout(timer); WORLD_ID = id; peer = p; resolve(); });
       p.on('error', err => {
         if (!done) { done = true; clearTimeout(timer); p.destroy(); reject({ kind: err.type === 'unavailable-id' ? 'taken' : 'net' }); }
       });
@@ -54,16 +67,26 @@ const Net = (() => {
   }
 
   // Join the world, or start it if nobody's there. Returns 'guest' or 'keeper'.
-  // step(i) is told each new try, so the menu can show it. Gives up after about 30 seconds.
+  // A world lives under a name on the free PeerJS server. If the phone holding that name fell asleep it
+  // keeps the name but never answers, so every world has backup names: everyone joins the first name that
+  // answers, and if none do, starts the world under the first free one. step(i) is told each new try.
+  const BACKUPS = ['', '-b', '-c', '-d', '-e'];
+  const bad = new Map(); // names that let us in but never said hello back -> when
+  const isBad = id => bad.has(id) && Date.now() - bad.get(id) < 120000;
+  function markBad() { if (WORLD_ID) bad.set(WORLD_ID, Date.now()); }
   async function connect(worldId, step) {
-    WORLD_ID = worldId || MAIN_ID;
+    const base = worldId || MAIN_ID;
     if (!ready()) throw new Error('offline');
-    const end = Date.now() + 30000;
-    for (let i = 0; i < 6 && Date.now() < end; i++) {
+    const end = Date.now() + 40000;
+    for (let i = 0; i < 4 && Date.now() < end; i++) {
       if (step) try { step(i); } catch (e) {}
-      try { await tryJoin(); return 'guest'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); }
-      try { await tryKeep(); return 'keeper'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); }
-      await sleep(400 + Math.random() * 900); // someone else just became keeper, try again
+      const ids = BACKUPS.map(s => base + s).filter(id => !isBad(id));
+      let free = [];
+      try { await tryJoin(ids); return 'guest'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); free = e.free || []; }
+      for (const id of free) {
+        try { await tryKeep(id); return 'keeper'; } catch (e) { if (e.kind === 'net') throw new Error('offline'); }
+      }
+      await sleep(400 + Math.random() * 900); // someone else just took it, try again
     }
     throw new Error('busy');
   }
@@ -80,5 +103,5 @@ const Net = (() => {
     if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
   }
 
-  return { MAIN_ID, on, connect, leave, toKeeper, toOne, toAll, drop, count: () => conns.size };
+  return { MAIN_ID, on, connect, markBad, leave, toKeeper, toOne, toAll, drop, count: () => conns.size };
 })();
