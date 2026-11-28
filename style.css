@@ -313,3 +313,60 @@ body.photo #ov{opacity:0}
 .updCard ul{margin:6px 0 0;padding-left:18px;color:#dfe6f2;font-size:13px;line-height:1.4}
 #updBtn{position:relative}
 #updBtn.dot::after{content:'';position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#ff4a4a}
+
+#menuBlur{position:absolute;inset:0;z-index:5;pointer-events:auto;background:rgba(8,12,28,.28);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px)}
+#menuBlur.hidden{display:none}
+.xPanel.wide{width:min(620px,calc(100vw - 20px))}
+.hTabs{flex-wrap:wrap}
+.hTop{display:flex;justify-content:space-between;align-items:center;color:#dfe6f2;font-size:13px;margin:6px 2px}
+.hCoins{color:#ffd24a;display:inline-flex;align-items:center;gap:4px;font-size:15px}
+.hGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+.hCard{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 6px;border-radius:10px;background:radial-gradient(circle at 50% 35%,rgba(90,140,255,.18),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.12);color:#fff;text-align:center}
+.hCard.own{border-color:#7ae06a;background:radial-gradient(circle at 50% 35%,rgba(122,224,106,.22),rgba(255,255,255,.04))}
+.hCard canvas{width:76px;height:76px}
+.hCard b{font:700 14px Georgia,serif}
+button.mini.go{background:#3ec46a;color:#08210f;font-weight:700}
+.bxAsk{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(6,10,24,.4);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.bxAsk>div{background:var(--solid);color:#fff;border-radius:14px;padding:14px 16px;max-width:min(340px,90vw);border:1px solid rgba(255,255,255,.15)}
+.bxAsk span{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+body.menuOpen #touch,body.menuOpen #jumpBtn,body.menuOpen #downBtn{visibility:hidden}
+#shipBtns{position:absolute;right:calc(124px + var(--sr));bottom:calc(22px + var(--sb));display:flex;flex-direction:column-reverse;gap:8px;pointer-events:auto;z-index:4}
+body:not(.touch) #shipBtns{right:calc(12px + var(--sr))}
+#shipBtns button{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:12px;font-weight:700;color:#08210f;background:linear-gradient(#7af0a0,#3ec46a);border:2px solid #1d6a3a;box-shadow:0 3px 0 #1d6a3a}
+#shipBtns button.hidden{display:none}
+#decoBtn{background:linear-gradient(#ffd27a,#f0a030)!important;border-color:#8a5a10!important;box-shadow:0 3px 0 #8a5a10!important;color:#2a1800!important}
+.decoCard{cursor:pointer;min-height:52px;justify-content:center}
+
+/* ---- Good content here!: every button gets its own colour, a shiny rim and a chunky edge (beta) ---- */
+body.beta{--btnEdge:rgba(0,0,0,.35)}
+body.beta #sideBtns button,body.beta #sideBtns2 button,body.beta #quick button{position:relative;color:#fff;border:2px solid rgba(255,255,255,.55);box-shadow:0 4px 0 var(--btnEdge),inset 0 2px 0 rgba(255,255,255,.35),0 0 14px var(--glow,transparent);background:linear-gradient(170deg,var(--c1),var(--c2));transition:transform .08s}
+body.beta #sideBtns button:active,body.beta #sideBtns2 button:active,body.beta #quick button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btnEdge),inset 0 2px 0 rgba(255,255,255,.35)}
+body.beta #hud svg{filter:drop-shadow(0 1.5px 0 rgba(0,0,0,.45))}
+body.beta #hud svg path[fill="currentColor"]{fill-opacity:.5}
+body.beta #wardBtn{--c1:#ff8ad8;--c2:#c03a9a;--glow:rgba(255,120,210,.35)}
+body.beta #bagBtn{--c1:#ffd36a;--c2:#d4861a;--glow:rgba(255,200,90,.35)}
+body.beta #respawnBtn{--c1:#7be36b;--c2:#2f9a40;--glow:rgba(120,230,110,.3)}
+body.beta #musicBtn{--c1:#b49aff;--c2:#6a3ad0;--glow:rgba(170,140,255,.35)}
+body.beta #shipBtn{--c1:#5ff0e0;--c2:#1a8ab0;--glow:rgba(95,240,224,.5);animation:shipPulse 2.4s ease-in-out infinite}
+body.beta #nailBtn{--c1:#9aa8c8;--c2:#4a5878}
+body.beta #mapBtn{--c1:#48d6ac;--c2:#13806a;--glow:rgba(72,214,172,.35)}
+body.beta #friendsBtn{--c1:#6ab8ff;--c2:#2a5ad0;--glow:rgba(106,184,255,.35)}
+body.beta #photoBtn{--c1:#ffa86a;--c2:#d0582a;--glow:rgba(255,160,100,.35)}
+body.beta #setBtn{--c1:#a8b4c8;--c2:#5a6478}
+body.beta #updBtn{--c1:#ff6a6a;--c2:#c0283a;--glow:rgba(255,100,100,.4)}
+body.beta #chatToggle{--c1:#6ab8ff;--c2:#3a6ad0}
+body.beta #emoteToggle{--c1:#ffd36a;--c2:#e0901a}
+body.beta #peopleToggle{--c1:#7be36b;--c2:#2f9a40}
+body.beta #quick button.on{outline:3px solid #fff;outline-offset:1px}
+@keyframes shipPulse{0%,100%{box-shadow:0 4px 0 var(--btnEdge),inset 0 2px 0 rgba(255,255,255,.35),0 0 6px rgba(95,240,224,.35)}50%{box-shadow:0 4px 0 var(--btnEdge),inset 0 2px 0 rgba(255,255,255,.35),0 0 20px rgba(95,240,224,.85)}}
+body.beta #jumpBtn{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),rgba(72,214,172,.55) 40%,rgba(10,90,80,.7));border:3px solid rgba(255,255,255,.7);box-shadow:0 5px 0 rgba(0,0,0,.3),0 0 18px rgba(72,214,172,.45);color:#fff}
+body.beta #downBtn{background:linear-gradient(170deg,#9aa8ff,#4a4ad0);border:2px solid rgba(255,255,255,.6);box-shadow:0 4px 0 rgba(0,0,0,.3)}
+body.beta #shipBtns button span{text-shadow:0 1px 0 rgba(255,255,255,.4)}
+body.beta #stBtn{background:linear-gradient(#b49aff,#6a3ad0)!important;border-color:#3a1a80!important;box-shadow:0 3px 0 #3a1a80!important;color:#fff!important}
+body.beta button.mini{box-shadow:0 3px 0 rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.35);border:1px solid rgba(255,255,255,.25)}
+body.beta button.mini:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.28)}
+body.beta .mBtn{background:linear-gradient(170deg,rgba(120,140,220,.55),rgba(60,70,140,.55));border:1px solid rgba(255,255,255,.3);box-shadow:0 3px 0 rgba(0,0,0,.3)}
+body.beta .mBtn.on{background:linear-gradient(#ffe86a,#f0b020);color:#3a2600}
+body.beta .xPanel .aHead .iconBtn,body.beta #bag .aHead .iconBtn{background:linear-gradient(#ff7a7a,#c0283a);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.6);box-shadow:0 3px 0 rgba(0,0,0,.3)}
+body.beta .xSeg button.on,body.beta .hTabs button.on{background:linear-gradient(#ffe86a,#f0b020);color:#3a2600;box-shadow:0 3px 0 #8a5a10}
+body.beta button.big{background:linear-gradient(170deg,#5ff0c8,#1a9a7a);border:2px solid rgba(255,255,255,.5);box-shadow:0 5px 0 #0a5a48,0 0 18px rgba(72,214,172,.4);color:#04241a}

@@ -61,7 +61,7 @@ const BigMap = (() => {
     $('mapBack').innerHTML = '<span class="flip">' + icon('bring', 16) + '</span> Whole map';
     $('mapGo').innerHTML = icon('bring', 16) + ' Go there';
     $('mapGo').onclick = () => { const w = getWay(); if (!w) return; if (here()) { if (host.teleport(w.x, w.z)) close(); } else if (host.travel(viewing(), w)) { farWay = null; close(); } };
-    $('mapTravel').innerHTML = icon('planet', 16) + ' Travel here'; $('mapTravel').onclick = () => { if (mode === 'planets') { travelPlanet(); return; } if (host.travel(viewing(), null)) close(); };
+    $('mapTravel').innerHTML = icon('planet', 16) + ' Travel here'; $('mapTravel').onclick = () => { if (mode === 'planets') return; if (host.travel(viewing(), null)) close(); };
     $('mapPlanets').innerHTML = icon('planet', 16) + ' Planets'; $('mapPlanets').onclick = () => { mode === 'planets' ? showRegion(viewing()) : showPlanets(); };
     const flip = d => { const L = SAME(), i = L.indexOf(viewing()); if (L.length < 2) return; showRegion(L[(i + d + L.length) % L.length]); };
     for (const [id, d] of [['mapPrev', -1], ['mapNext', 1]]) $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); flip(d); });
@@ -115,7 +115,7 @@ const BigMap = (() => {
   }
   // ---------- the planets map: a real 3D solar system, drawn by a shader ----------
   // The sun sits in the middle and every planet goes round it on its own orbit. Drag to turn the view.
-  // Only the planet you are on shows its regions; tap another planet to travel to it.
+  // Only the planet you are on shows its regions. Other planets are only reached by flying a ship through space.
   const PLANET_TYPE = { Nautara: 0, Kelar: 1, Vyrnox: 2, Oskarr: 3, Artex: 4 };
   const PLANET_ORBIT = [8.5, 13, 17.5, 22, 26.5], PLANET_SIZE = [2.5, 2.2, 2.35, 2.6, 2.25];
   let planetHits = [], pcam = { yaw: 0.5, pitch: 0.42, dist: 40 }, pSel = null, pgl = null, pT0 = performance.now();
@@ -134,7 +134,6 @@ const BigMap = (() => {
     pSel = hit.p.name; updateWayBtn(); info();
   }
   const planetTarget = name => { const p = planetList().find(q => q.name === name); const b = p && p.regions.filter(r => r.built); return b && b.length ? b[0].id : null; };
-  function travelPlanet() { const id = planetTarget(pSel); if (!id) { host.toast('Planet ' + pSel + ' is not built yet.'); return; } if (host.travel(id, null)) close(); }
   const PVS = 'attribute vec2 aP;void main(){gl_Position=vec4(aP,0.0,1.0);}';
   const PFS = `precision highp float;
 uniform vec2 uRes;uniform vec3 uEye,uR,uU,uF;uniform float uT,uTan;uniform vec4 uP[5];uniform float uSpin[5];uniform float uCur;
@@ -256,7 +255,7 @@ void main(){
   }
   function updateWayBtn() {
     const w = host && getWay(), pl = mode === 'planets';
-    $('mapGo').classList.toggle('hidden', !w || placing || pl); $('mapTravel').classList.toggle('hidden', pl ? !pSel : here() || !!w);
+    $('mapGo').classList.toggle('hidden', !w || placing || pl); $('mapTravel').classList.toggle('hidden', pl ? true : here() || !!w);
     $('mapTravel').innerHTML = icon('planet', 16) + (pl && pSel ? ' Travel to ' + pSel : ' Travel here'); $('mapGl').classList.toggle('hidden', !pl);
     $('mapWay').classList.toggle('hidden', pl); $('mapMe').classList.toggle('hidden', pl); $('mapIn').classList.toggle('hidden', pl); $('mapOut').classList.toggle('hidden', pl);
     const one = SAME().length < 2; $('mapPrev').classList.toggle('hidden', pl || one); $('mapNext').classList.toggle('hidden', pl || one);
@@ -265,7 +264,7 @@ void main(){
   }
   function info() {
     const el = $('mapInfo');
-    if (mode === 'planets') { el.textContent = pSel ? 'Planet ' + pSel + (planetTarget(pSel) ? '. Tap Travel to ' + pSel + ' to go there.' : ' is not built yet.') : 'You are on planet ' + planetNow() + '. Tap it to see its map, or tap another planet to travel there. Drag to turn the view.'; return; }
+    if (mode === 'planets') { el.textContent = pSel ? 'Planet ' + pSel + (planetTarget(pSel) ? '. To go there, call a ship, fly straight up into space and land on ' + pSel + '.' : ' is not built yet.') : 'You are on planet ' + planetNow() + '. Tap it to see its map. To reach another planet, fly a ship up into space. Drag to turn the view.'; return; }
     if (!data) { el.textContent = ''; return; }
     if (placing) { el.textContent = 'Tap anywhere on the map to put your waypoint there.'; return; }
     if (isle >= 0) { const it = data.isles[isle], names = it.lands.map(b => ({ 1: 'beaches', 2: 'grassland', 3: 'forest', 4: 'desert', 5: 'snow', 6: 'mountains', 7: 'swamp', 8: 'glow fields', 11: 'the volcano', 12: 'red mesas', 13: 'dust flats', 14: 'oases', 16: 'autumn woods', 17: 'elder forest', 18: 'frostglow', 19: 'salt flats', 20: 'hoodoo badlands' }[b] || (b >= 21 && BIOMES[b] ? BIOMES[b].name.toLowerCase() : null))).filter(Boolean); const IS = viewing() === 'berekor' ? (typeof BEREKOR_ISLES !== 'undefined' ? BEREKOR_ISLES : null) : viewing() === 'dustmaw' && typeof DUST_ISLES !== 'undefined' ? DUST_ISLES : null, mk = IS ? IS.marks.find(m => m.isle === isle) : null, th = IS ? THEME_TXT[IS.themes[isle]] : '';
