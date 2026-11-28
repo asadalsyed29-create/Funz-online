@@ -12,6 +12,10 @@ const LAND_ORDER = {
 };
 // H = how tall the landmark is, LR = how wide its foot is, R = the whole island (only a beach round the landmark)
 const LAND_SIZE = { volcano: { H: 380, LR: 760, R: 860 }, cloudspire: { H: 620, LR: 520, R: 620 }, mesa: { H: 270, LR: 660, R: 760 }, floating: { H: 0, LR: 0, R: 620 }, plaza: { H: 60, LR: 470, R: 560 } };
+// each kind comes in three shapes (v = 0, 1, 2), each its own height. Cloud spires go right up above every cloud.
+const LAND_VH = { volcano: [380, 300, 470], cloudspire: [1180, 1320, 1250], mesa: [270, 200, 340] };
+// how wide a volcano's crater is
+const landRc = I => I.LR * (I.v === 1 ? 0.24 : 0.14);
 const SPECIAL_BIG = 3; // the special landmarks (The Great Mushroom, The Shell...) are built this many times bigger
 const LAND_NAMES = {
   volcano: ['Mount Scorch', 'Emberhorn', 'Smokecrown', 'Blazepeak', 'Cinder Crown', 'Ashfang', 'Firethroat', 'Magmaw', 'Heatwave Peak'],
@@ -19,15 +23,15 @@ const LAND_NAMES = {
   mesa: ['Giant\'s Table', 'Sunshelf', 'Flattop', 'Broadcrown', 'Redwall', 'Highstep', 'Stonestack', 'Thunder Mesa', 'Tall Table'],
   floating: ['Floating Isles', 'Driftrocks', 'Skyscatter', 'Hovering Holm', 'Cloudstep Isles', 'Upfall', 'Airborne Keys', 'Levitas', 'Gravity Gap'],
 };
-const PLACE_KINDS = ['hangout', 'observatory', 'hotspring', 'cafe', 'library', 'garden', 'arcade', 'campsite', 'museum'];
+const PLACE_KINDS = ['hangout', 'observatory', 'hotspring', 'cafe', 'library', 'garden', 'arcade', 'campsite', 'museum', 'shrine'];
 const PLACE_NAMES = {
   hangout: ['The Comfy Ledge', 'Chill Shelf', 'The Cozy Nook'], observatory: ['Star Observatory', 'Skywatch Dome', 'Comet Lookout'],
   hotspring: ['Steamy Springs', 'Warm Pools', 'Cloud Baths'], cafe: ['Cliffside Café', 'Cloud Café', 'Sky High Café'],
   library: ['Hidden Library', 'Quiet Pages', 'Book Nook'], garden: ['Hanging Garden', 'Secret Garden', 'Bloom Ledge'],
   arcade: ['Glow Arcade', 'High Score Hall', 'Pixel Palace'], campsite: ['Ledge Camp', 'Starlight Camp', 'Cliff Camp'],
-  museum: ['Relic Museum', 'Wonder Hall', 'Old Things Hall'],
+  museum: ['Relic Museum', 'Wonder Hall', 'Old Things Hall'], shrine: ['Bell Shrine', 'Lantern Shrine', 'Cliff Shrine'],
 };
-const PLACE_TXT = { hangout: 'a comfy hangout', observatory: 'an observatory', hotspring: 'hot springs', cafe: 'a café', library: 'a library', garden: 'a garden', arcade: 'an arcade', campsite: 'a campsite', museum: 'a museum' };
+const PLACE_TXT = { shrine: 'a shrine with a giant bell', hangout: 'a comfy hangout', observatory: 'an observatory', hotspring: 'hot springs', cafe: 'a café', library: 'a library', garden: 'a garden', arcade: 'an arcade', campsite: 'a campsite', museum: 'a museum' };
 const LAND_TXT = { volcano: 'a giant volcano with lava inside', cloudspire: 'a giant spire that pokes above the clouds', mesa: 'a giant flat-topped mesa', floating: 'giant rocks floating in the sky', plaza: 'the giant plaza where you start', hub: 'the plaza where you start, with the fun park, the arena and the station', special: 'a giant landmark' };
 const LAND_DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
@@ -52,7 +56,7 @@ const BEREKOR_HUB = { ax: 0, az: 0, bx: 640, bz: -420, r: 620 };
 function BEREKOR_HUB_LANDS() {
   const H = BEREKOR_HUB, V = LAND_SIZE.volcano;
   return [{ id: 'landing', kind: 'hub', name: 'Berekor Plaza', x: (H.ax + H.bx) / 2, z: (H.az + H.bz) / 2, R: H.r + 400, H: 0, LR: 0, dir: 0 },
-    { id: 'volcano', kind: 'volcano', name: 'Mount Scorch', x: VOLCANO.x, z: VOLCANO.z, R: V.R, H: V.H, LR: V.LR, dir: 3, place: 'hotspring', placeName: 'Steamy Springs' }];
+    { id: 'volcano', kind: 'volcano', v: 0, name: 'Mount Scorch', x: VOLCANO.x, z: VOLCANO.z, R: V.R, H: V.H, LR: V.LR, dir: 3, place: 'hotspring', placeName: 'Steamy Springs' }];
 }
 // how far a spot is inside the plaza island (above 0 = on it)
 function berekorHubE(x, z, wob) {
@@ -74,8 +78,9 @@ function landsOf(theme) {
     tries++;
     const kind = order[n], S = LAND_SIZE[kind], a = rnd() * 6.2832, r = 2000 + rnd() * (6900 - S.R - 2000), x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
     if (out.some(q => Math.hypot(q.x - x, q.z - z) < (q.R + S.R) * 1.25 + 120)) continue;
-    const kc = used[kind] = (used[kind] || 0) + 1, place = PLACE_KINDS[(pOff + n * 4) % PLACE_KINDS.length];
-    out.push({ id: 'land' + n, kind, name: LAND_NAMES[kind][(nOff + kc * 2) % LAND_NAMES[kind].length], x, z, R: S.R, H: S.H, LR: S.LR, dir: Math.floor(rnd() * 4), place, placeName: PLACE_NAMES[place][(nOff + n) % 3] });
+    const kc = used[kind] = (used[kind] || 0) + 1; let pk = 0; while (pk < PLACE_KINDS.length && out.some(q => q.place === PLACE_KINDS[(pOff + n * 3 + pk) % PLACE_KINDS.length])) pk++; const place = PLACE_KINDS[(pOff + n * 3 + pk) % PLACE_KINDS.length]; // no two places alike
+    const v = (kc + nOff) % 3; // landmarks of the same kind each get a different shape and height
+    out.push({ id: 'land' + n, kind, v, name: LAND_NAMES[kind][(nOff + kc * 2) % LAND_NAMES[kind].length], x, z, R: S.R, H: (LAND_VH[kind] || [S.H])[v] || S.H, LR: S.LR, dir: Math.floor(rnd() * 4), place, placeName: PLACE_NAMES[place][(nOff + n) % 3] });
     n++;
   }
   _lands[theme] = out; return out;
@@ -83,13 +88,30 @@ function landsOf(theme) {
 // how high a landmark's own rock is at distance d from its middle
 function landProfile(I, d, N, x, z) {
   if (d >= I.LR) return -1e9;
+  const ang = Math.atan2(z - I.z, x - I.x);
   if (I.kind === 'volcano') {
-    const rc = I.LR * 0.14, cone = q => I.H * Math.pow(Math.max(0, 1 - q / I.LR), 1.15);
-    if (d < rc) return cone(rc) - 60 * (1 - (d / rc) ** 2);
-    const ang = Math.atan2(z - I.z, x - I.x); return cone(d) * (1 + 0.06 * Math.sin(ang * 11 + d / 50) * smooth(rc, rc + 60, d)) + (N.fbm(x / 60, z / 60, 235, 2) - 0.5) * 10 * smooth(rc, rc + 40, d);
+    // v0: a steep cone. v1: a broad shield with a wide crater. v2: tall and jagged, its rim broken into teeth.
+    const rc = landRc(I), ex = [1.15, 0.75, 1.5][I.v || 0], dep = [60, 45, 80][I.v || 0], cone = q => I.H * Math.pow(Math.max(0, 1 - q / I.LR), ex);
+    if (d < rc) return cone(rc) - dep * (1 - (d / rc) ** 2);
+    const teeth = I.v === 2 ? 0.16 * Math.sin(ang * 5 + 1) * smooth(rc, rc + 50, d) * smooth(I.LR * 0.55, rc + 60, d) : 0;
+    return cone(d) * (1 + teeth + 0.06 * Math.sin(ang * 11 + d / 50) * smooth(rc, rc + 60, d)) + (N.fbm(x / 60, z / 60, 235, 2) - 0.5) * 10 * smooth(rc, rc + 40, d);
   }
-  if (I.kind === 'cloudspire') { const n = (N.fbm(x / 90, z / 90, 233, 2) - 0.5) * 0.3; return I.H * smooth(I.LR * (1 + n), I.LR * 0.4, d) + (N.fbm(x / 40, z / 40, 236, 2) - 0.5) * 14 * smooth(I.LR * 0.4, I.LR * 0.6, d); }
-  if (I.kind === 'mesa') { const n = (N.fbm(x / 120, z / 120, 234, 2) - 0.5) * 0.2, t = smooth(I.LR * (1 + n), I.LR * 0.72, d), h = I.H * t; return t > 0.98 ? I.H : Math.floor(h / 30) * 30 + smooth(0.6, 1, h / 30 % 1) * 30; }
+  if (I.kind === 'cloudspire') {
+    const n = (N.fbm(x / 90, z / 90, 233, 2) - 0.5) * 0.3, rough = (N.fbm(x / 40, z / 40, 236, 2) - 0.5) * 14 * smooth(I.LR * 0.4, I.LR * 0.6, d);
+    if (I.v === 1) { // a stack of five giant rock drums, each with a ledge
+      const t = smooth(I.LR * (1 + n), I.LR * 0.35, d), k = Math.floor(t * 5), f = t * 5 - k; return I.H * (k + smooth(0.7, 1, f)) / 5 + rough;
+    }
+    if (I.v === 2) { // a fluted column with deep grooves and a sharp pinnacle in the middle of its top
+      const dd = d * (1 + 0.2 * Math.sin(ang * 7 + n * 4)); return I.H * smooth(I.LR * (1 + n), I.LR * 0.42, dd) + I.H * 0.06 * smooth(I.LR * 0.16, 0, d) + rough;
+    }
+    return I.H * smooth(I.LR * (1 + n), I.LR * 0.4, d) + rough;
+  }
+  if (I.kind === 'mesa') {
+    const n = (N.fbm(x / 120, z / 120, 234, 2) - 0.5) * 0.2;
+    if (I.v === 1) { const t = smooth(I.LR * (1 + n), I.LR * 0.9, d); return I.H * t + (N.fbm(x / 30, z / 30, 237, 2) - 0.5) * 6 * (1 - t); } // one sheer wall all round
+    if (I.v === 2) { const lo = smooth(I.LR * (1 + n), I.LR * 0.92, d), hi = smooth(I.LR * (0.6 + n), I.LR * 0.52, d); return I.H * (0.45 * lo + 0.55 * hi); } // a big lower shelf, then the tall top
+    const t = smooth(I.LR * (1 + n), I.LR * 0.72, d), h = I.H * t; return t > 0.98 ? I.H : Math.floor(h / 30) * 30 + smooth(0.6, 1, h / 30 % 1) * 30;
+  }
   if (I.kind === 'plaza') {
     // four round tiers, each with ramps up on four sides
     const T = [[I.LR, 0], [I.LR * 0.78, 15], [I.LR * 0.56, 30], [I.LR * 0.34, 45], [I.LR * 0.18, 60]], dx = Math.abs(x - I.x), dz = Math.abs(z - I.z);
@@ -224,19 +246,13 @@ function buildLand(gl, st, T, I, idx) {
   } else {
     // where the cool place sits: half way up, sticking out of the side the landmark faces
     const deckY = Math.round(I.H * 0.5), L = 26, W = 20, LW = L * DS, WW = W * DS;
-    let rEdge = I.kind === 'volcano' ? I.LR * 0.16 : 0; while (rEdge < I.LR && T.h(cx + dx * rEdge, cz + dz * rEdge) > deckY + 3) rEdge += 2;
+    let rEdge = I.kind === 'volcano' ? landRc(I) + 20 : 0; while (rEdge < I.LR && T.h(cx + dx * rEdge, cz + dz * rEdge) > deckY + 3) rEdge += 2;
     const rIn = rEdge - 8, d0 = along(rIn, deckY), mid = along(rIn + LW * 0.5, deckY);
     mb.push(d0, rot, DS); dmb.push(d0, rot, DS);
     // the deck, its rails, posts down to the rock and a rock roof over the back so it sits in the mountain
-    const plank = C('#a8784c'), rockC = C(theme0(T).rock);
-    mb.box(0, -1.2, -W / 2, L, 0, W / 2, plank);
-    for (let k = 0; k < 13; k++) dmb.box(k * 2 + 0.05, 0.01, -W / 2, k * 2 + 0.12, 0.03, W / 2, shadeC(plank, 0.7), false, true);
-    mb.box(L - 0.4, 0, -W / 2, L, 1.1, W / 2, C('#6a4a2e')); mb.box(8, 0, -W / 2, L, 1.1, -W / 2 + 0.4, C('#6a4a2e')); mb.box(8, 0, W / 2 - 0.4, L, 1.1, W / 2, C('#6a4a2e'));
-    for (let k = 0; k < 6; k++) dmb.cyl(L - 0.2, 0, -W / 2 + 0.2 + k * (W - 0.4) / 5, 0.18, 0.18, 1.3, 6, C('#4a3220'));
-    mb.box(-8, 10, -W / 2 - 4, 9, 14, W / 2 + 4, rockC);
-    for (let k = 0; k < 9; k++) dmb.ico(-2 + R(k, 60) * 12, 10 + R(k, 61) * 2, -W / 2 - 3 + k * (W + 6) / 8, 2.2 + R(k, 62) * 1.8, 0, () => shadeC(rockC, 0.8 + R(k, 63) * 0.3));
-    for (const zz of [-W / 2 + 1, W / 2 - 1]) for (const xx of [L * 0.45, L - 1]) { const w = mb.tf([xx, 0, zz]), gy = (gAt(w[0], w[2]) - deckY) / DS; if (gy < -1) dmb.cyl(xx, gy, zz, 0.5, 0.4, -gy - 1.2, 6, C('#5a3e26')); }
-    buildPlace(mb, dmb, I.place, L, W, s, R, true);
+    const rockC = C(theme0(T).rock);
+    placeBase(mb, dmb, I.place, L, W, R, rockC, (xx, zz) => { const w = mb.tf([xx, 0, zz]); return (gAt(w[0], w[2]) - deckY) / DS; });
+    buildPlace(mb, dmb, I.place, L, W, s, R, I.place === 'hangout');
     mb.pop(); dmb.reset();
     // the elevator at the foot, outside the rock, that shoots you up beside the deck and onto it
     const rP = I.LR + 14, pb = along(rP, 0); pb[1] = gAt(pb[0], pb[2]) + 0.3;
@@ -244,7 +260,7 @@ function buildLand(gl, st, T, I, idx) {
     pad(pb, deckY + 6 - pb[1], 'Shooting elevator: up to ' + I.placeName);
     lift(pb, [[pb[0], pb[1] + 2, pb[2]], [pb[0], deckY + 6, pb[2]], [mid[0], deckY + 6, mid[2]], [mid[0], deckY + 1.5, mid[2]]]);
     // from the deck: on to the top, or back down
-    const rc = I.LR * 0.14, topR = I.kind === 'volcano' ? rc + 14 : 0, top = along(topR, 0); top[1] = gAt(top[0], top[2]) + 1.5;
+    const rc = landRc(I), topR = I.kind === 'volcano' ? rc + 14 : 0, top = along(topR, 0); top[1] = gAt(top[0], top[2]) + 1.5;
     const hi = I.H + 24, up = sideOff(along(rIn + LW - 7, deckY), WW / 2 - 5), dn = sideOff(along(rIn + LW - 7, deckY), -WW / 2 + 5);
     pad(up, 0, 'Up to the top'); pad(dn, 0, 'Back down');
     lift(up, [[up[0], deckY + 2, up[2]], [up[0], hi, up[2]], [top[0], hi, top[2]], top]);
@@ -281,6 +297,82 @@ function buildLand(gl, st, T, I, idx) {
 // the theme's colours for grass and rock
 function theme0(T) { const C = REGION_THEMES[T.theme], B = C ? BIOMES[C.kinds[Object.keys(C.kinds)[0]].b] || {} : { ground: '#6cbf55', rock: '#8c8a90' }; return { g: B.ground || '#6a9a4a', rock: B.rock || '#7a7670' }; }
 
+// what each cool place is built on, so no two look alike: its floor, its edge and its roof.
+// Floor at y = 0, x from 0 (the rock) to L (the open edge), z from -W/2 to W/2. gy(x, z) = how far below the floor the rock is.
+function placeBase(mb, dmb, kind, L, W, R, rockC) {
+  const C = h => hex(h), gy = arguments[7];
+  const posts = (col, r) => { for (const zz of [-W / 2 + 1, W / 2 - 1]) for (const xx of [L * 0.45, L - 1]) { const g = gy(xx, zz); if (g < -1) dmb.cyl(xx, g, zz, r, r * 0.8, -g - 1.2, 6, C(col)); } };
+  const rockRoof = () => { mb.box(-8, 10, -W / 2 - 4, 9, 14, W / 2 + 4, rockC); for (let k = 0; k < 9; k++) dmb.ico(-2 + R(k, 60) * 12, 10 + R(k, 61) * 2, -W / 2 - 3 + k * (W + 6) / 8, 2.2 + R(k, 62) * 1.8, 0, () => shadeC(rockC, 0.8 + R(k, 63) * 0.3)); };
+  const rockLump = (x, y, z, r, sd) => dmb.ico(x, y, z, r, 0, () => shadeC(rockC, 0.75 + R(sd, 64) * 0.35));
+  if (kind === 'hangout') { // a wooden deck with a rail, under a rock roof
+    const plank = C('#a8784c'); mb.box(0, -1.2, -W / 2, L, 0, W / 2, plank);
+    for (let k = 0; k < 13; k++) dmb.box(k * 2 + 0.05, 0.01, -W / 2, k * 2 + 0.12, 0.03, W / 2, shadeC(plank, 0.7), false, true);
+    mb.box(L - 0.4, 0, -W / 2, L, 1.1, W / 2, C('#6a4a2e')); mb.box(8, 0, -W / 2, L, 1.1, -W / 2 + 0.4, C('#6a4a2e')); mb.box(8, 0, W / 2 - 0.4, L, 1.1, W / 2, C('#6a4a2e'));
+    for (let k = 0; k < 6; k++) dmb.cyl(L - 0.2, 0, -W / 2 + 0.2 + k * (W - 0.4) / 5, 0.18, 0.18, 1.3, 6, C('#4a3220'));
+    rockRoof(); posts('#5a3e26', 0.5);
+  } else if (kind === 'observatory') { // a round white stone platform sticking out on a stone arm, open to the sky
+    mb.box(0, -1.5, -W / 2, L * 0.5, 0, W / 2, C('#cfd2da')); mb.cyl(L * 0.55, -1.5, 0, 12, 12, 1.5, 32, C('#dcdfe6'));
+    dmb.cyl(L * 0.55, 0.01, 0, 11.2, 11.2, 0.03, 32, C('#3a4a7a')); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.2832; dmb.box(L * 0.55 + Math.cos(a) * 9 - 0.15, 0.04, Math.sin(a) * 9 - 0.15, L * 0.55 + Math.cos(a) * 9 + 0.15, 0.06, Math.sin(a) * 9 + 0.15, glowC(C('#bfe0ff')), false, true); }
+    for (let k = 0; k < 28; k++) { const a = k / 28 * 6.2832; if (Math.cos(a) < -0.6) continue; mb.cyl(L * 0.55 + Math.cos(a) * 11.6, 0, Math.sin(a) * 11.6, 0.12, 0.12, 1.2, 5, C('#9aa2b4')); }
+    for (let k = 0; k < 3; k++) dmb.cyl(L * 0.55, -1.5 - k * 2.5, 0, 6 - k * 1.6, 7 - k * 1.6, 2.5, 16, C('#b8bcc8'));
+  } else if (kind === 'hotspring') { // no deck: a natural rock shelf with pools, steam and a lip of boulders
+    mb.box(0, -3, -W / 2 - 1, L, 0, W / 2 + 1, shadeC(rockC, 0.9));
+    for (let k = 0; k < 26; k++) rockLump(L - 0.5 + (R(k, 66) - 0.5) * 2, 0.2, -W / 2 + k * W / 25, 1 + R(k, 67) * 1.2, k);
+    for (let k = 0; k < 10; k++) rockLump(R(k, 68) * L, -2.4, (R(k, 69) - 0.5) * W, 2.5 + R(k, 70) * 2, k + 40);
+    for (const [x, z, r] of [[4, -6, 2.4], [6, 6, 2.8]]) { dmb.cyl(x, 0.02, z, r, r, 0.12, 16, [0.45, 0.85, 0.95, 0.85]); for (let k = 0; k < 10; k++) { const a = k / 10 * 6.28; rockLump(x + Math.cos(a) * (r + 0.5), 0.2, z + Math.sin(a) * (r + 0.5), 0.55, k + 80); } }
+    rockRoof();
+  } else if (kind === 'cafe') { // a tiled terrace with glass walls round the edge and a striped awning
+    mb.box(0, -1, -W / 2, L, 0, W / 2, C('#e8e0d0'));
+    for (let i = 0; i < 13; i++) for (let j = 0; j < 10; j++) if ((i + j) % 2) dmb.box(i * 2, 0.01, -W / 2 + j * 2, i * 2 + 2, 0.02, -W / 2 + j * 2 + 2, C('#3a3a3a'), false, true);
+    dmb.box(L - 0.15, 0, -W / 2, L, 1.4, W / 2, [0.7, 0.9, 1, 0.3], false, true); dmb.box(4, 0, -W / 2, L, 1.4, -W / 2 + 0.15, [0.7, 0.9, 1, 0.3], false, true); dmb.box(4, 0, W / 2 - 0.15, L, 1.4, W / 2, [0.7, 0.9, 1, 0.3], false, true);
+    mb.box(L - 0.25, 0, -W / 2, L, 0.25, W / 2, C('#c0c4c8')); dmb.box(L - 0.25, 1.4, -W / 2, L, 1.5, W / 2, C('#c0c4c8'), false, true);
+    for (let k = 0; k < 10; k++) dmb.box(0, 5.5, -W / 2 + k * W / 10, 9, 5.7, -W / 2 + (k + 1) * W / 10, C(k % 2 ? '#ffffff' : '#e84a4a'), false, true);
+    for (const z of [-W / 2 + 0.5, W / 2 - 0.5]) dmb.cyl(9, 0, z, 0.12, 0.12, 5.6, 6, C('#2a2a2a'));
+    posts('#8a8e96', 0.4);
+  } else if (kind === 'library') { // a room cut into the rock: rock walls, a rock ceiling and one big window over the drop
+    mb.box(0, -1, -W / 2, L, 0, W / 2, C('#8a6a4a')); dmb.box(3, 0.01, -5, L - 4, 0.03, 5, C('#7a2a2a'), false, true);
+    mb.box(0, 0, -W / 2 - 1.5, L, 7, -W / 2, rockC); mb.box(0, 0, W / 2, L, 7, W / 2 + 1.5, rockC); mb.box(-1, 7, -W / 2 - 1.5, L, 9, W / 2 + 1.5, rockC);
+    mb.box(L - 0.6, 0, -W / 2, L, 1, W / 2, rockC); mb.box(L - 0.6, 6, -W / 2, L, 7, W / 2, rockC);
+    for (const z of [-3.4, 3.4]) mb.box(L - 0.6, 1, z - 0.4, L, 6, z + 0.4, C('#5a3a22'));
+    dmb.box(L - 0.3, 1, -W / 2, L - 0.25, 6, W / 2, [0.75, 0.9, 1, 0.22], false, true);
+    for (let k = 0; k < 12; k++) rockLump(R(k, 71) * L, 9, (R(k, 72) - 0.5) * (W + 2), 1.6 + R(k, 73), k + 90);
+  } else if (kind === 'garden') { // a grassy ledge with a hedge round it and a flower arch at the way in
+    mb.box(0, -2.5, -W / 2, L, 0, W / 2, C('#6a4a32')); dmb.box(0, 0.01, -W / 2, L, 0.06, W / 2, C('#5aae4a'), false, true);
+    for (let k = 0; k < 40; k++) { const t = k / 39, x = t < 0.3 ? 4 + t / 0.3 * (L - 5) : L - 0.8, z = t < 0.3 ? -W / 2 + 0.8 : -W / 2 + 0.8 + (t - 0.3) / 0.7 * (W - 1.6); dmb.sph([x, 0.7, z], 0.9, 6, C('#3a8a3a'), 0.3); }
+    for (let k = 0; k < 14; k++) dmb.sph([4 + k * (L - 5) / 13, 0.7, W / 2 - 0.8], 0.9, 6, C('#3a8a3a'), 0.3);
+    for (let k = 0; k <= 10; k++) { const a = k / 10 * Math.PI; dmb.sph([2, 4 * Math.sin(a), -2.5 * Math.cos(a)], 0.55, 6, C(['#ff5a8a', '#ffd23a', '#ffffff'][k % 3]), 0.2); }
+    for (let k = 0; k < 8; k++) rockLump(R(k, 74) * L, -2.6, (R(k, 75) - 0.5) * W, 2 + R(k, 76) * 1.5, k + 120);
+    dmb.ico(-2, 6, 0, 7, 1, () => C('#4a9a4a'));
+  } else if (kind === 'arcade') { // a dark metal platform with a glowing grid floor, neon rails and a metal canopy
+    mb.box(0, -0.8, -W / 2, L, 0, W / 2, C('#24242e'));
+    for (let k = 0; k <= 13; k++) dmb.box(k * 2 - 0.05, 0.01, -W / 2, k * 2 + 0.05, 0.03, W / 2, glowC(C('#5ad8ff')), false, true);
+    for (let k = 0; k <= 10; k++) dmb.box(0, 0.01, -W / 2 + k * 2 - 0.05, L, 0.03, -W / 2 + k * 2 + 0.05, glowC(C('#ff5ad8')), false, true);
+    for (const [x0, z0, x1, z1] of [[L - 0.3, -W / 2, L, W / 2], [2, -W / 2, L, -W / 2 + 0.3], [2, W / 2 - 0.3, L, W / 2]]) { mb.box(x0, 0, z0, x1, 1.1, z1, C('#3a3a48')); dmb.box(x0 - 0.02, 1.1, z0 - 0.02, x1 + 0.02, 1.2, z1 + 0.02, glowC(C('#ffd25a')), false, true); }
+    mb.box(-1, 6, -W / 2 - 0.5, L * 0.6, 6.4, W / 2 + 0.5, C('#3a3a48')); dmb.box(0, 5.9, -W / 2, L * 0.6, 5.95, W / 2, glowC(C('#9a5aff')), false, true);
+    for (const z of [-W / 2 + 0.3, W / 2 - 0.3]) mb.cyl(L * 0.6 - 0.5, 0, z, 0.25, 0.25, 6, 8, C('#3a3a48'));
+    posts('#3a3a48', 0.45);
+  } else if (kind === 'campsite') { // a rough dirt ledge with a log edge and boulders, nothing built
+    mb.box(0, -2, -W / 2 - 1, L, 0, W / 2 + 1, C('#7a5a3a'));
+    for (let k = 0; k < 30; k++) dmb.sph([R(k, 77) * L, 0.02, (R(k, 78) - 0.5) * W], [0.8, 0.05, 0.8], 5, C('#5aa04a'), 0);
+    for (let k = 0; k < 4; k++) { dmb.push([L - 0.8, 0.4, -W / 2 + 2.5 + k * (W - 5) / 3], M4.rotX(Math.PI / 2)); dmb.cyl(0, -2.4, 0, 0.45, 0.45, 4.8, 8, C('#6a4a2e')); dmb.pop(); }
+    for (let k = 0; k < 7; k++) rockLump(1 + R(k, 79) * 6, 0.5, (R(k, 80) - 0.5) * W, 1 + R(k, 81) * 1.4, k + 150);
+    for (let k = 0; k < 8; k++) rockLump(R(k, 82) * L, -2.2, (R(k, 83) - 0.5) * W, 2.4 + R(k, 84) * 1.6, k + 170);
+  } else if (kind === 'shrine') { // grey stone slabs with a big red gate at the edge, and stone steps down into the rock
+    mb.box(0, -2, -W / 2, L, 0, W / 2, C('#9a968c'));
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 5; j++) dmb.box(i * L / 6 + 0.1, 0.01, -W / 2 + j * W / 5 + 0.1, (i + 1) * L / 6 - 0.1, 0.04, -W / 2 + (j + 1) * W / 5 - 0.1, C(R(i, j) > 0.5 ? '#aaa69c' : '#8e8a80'), false, true);
+    for (const z of [-5, 5]) mb.cyl(L - 3, 0, z, 0.6, 0.55, 8, 10, C('#c8322a'));
+    mb.box(L - 3.8, 7.2, -7.5, L - 2.2, 8, 7.5, C('#c8322a')); mb.box(L - 4, 8.6, -8.5, L - 2, 9.3, 8.5, C('#2a2a2a')); mb.box(L - 3.6, 5.6, -5.5, L - 2.4, 6.1, 5.5, C('#c8322a'));
+    for (let k = 0; k < 9; k++) rockLump(R(k, 85) * L, -2.4, (R(k, 86) - 0.5) * W, 2.4 + R(k, 87) * 1.6, k + 200);
+    rockRoof();
+  } else if (kind === 'museum') { // a white marble hall: a stepped floor, a row of columns and a roof with a pointed front
+    mb.box(0, -1.5, -W / 2, L, -0.5, W / 2, C('#e8e4dc')); mb.box(0, -0.5, -W / 2 + 0.6, L - 0.6, 0, W / 2 - 0.6, C('#f2efe8'));
+    for (let k = 0; k < 6; k++) { const z = -W / 2 + 1.6 + k * (W - 3.2) / 5; mb.cyl(L - 1.6, 0, z, 0.55, 0.5, 7, 12, C('#f4f2ec')); mb.box(L - 2.4, 7, z - 0.8, L - 0.8, 7.5, z + 0.8, C('#e8e4dc')); }
+    mb.box(-1, 7.5, -W / 2, L, 8.5, W / 2, C('#e8e4dc'));
+    dmb.tri([L, 8.5, -W / 2], [L, 8.5, W / 2], [L, 11.5, 0], C('#f4f2ec')); dmb.tri([L, 8.5, W / 2], [L, 8.5, -W / 2], [L, 11.5, 0], C('#f4f2ec'));
+    dmb.quad([-1, 8.5, -W / 2], [L, 8.5, -W / 2], [L, 11.5, 0], [-1, 11.5, 0], C('#b8a890')); dmb.quad([L, 8.5, W / 2], [-1, 8.5, W / 2], [-1, 11.5, 0], [L, 11.5, 0], C('#b8a890'));
+    for (let k = 0; k < 3; k++) dmb.cyl(L * 0.5, -1.5 - k * 2.5, 0, 6 - k * 1.5, 7 - k * 1.5, 2.5, 6, C('#d8d4cc'));
+  }
+}
 // the one cool place on a landmark. Built on a floor at y = 0, x from 0 (the rock) to L (the open edge), z from -W/2 to W/2.
 function buildPlace(mb, dmb, kind, L, W, s, R, onCliff) {
   const C = h => hex(h), light = (x, y, z, r, c) => s.lights.push({ p: mb.tf([x, y, z]), r, c });
@@ -340,6 +432,13 @@ function buildPlace(mb, dmb, kind, L, W, s, R, onCliff) {
     tent(5, -5, '#e8a03a'); tent(5, 5, '#3a8ae8'); fire(14, 0);
     for (const [z, a] of [[-3, 0], [3, 0]]) { dmb.push([14, 0.4, z], M4.rotZ(Math.PI / 2)); dmb.cyl(0, -2, 0, 0.4, 0.4, 4, 8, C('#6a4a2e')); dmb.pop(); mb.box(12, 0, z - 0.4, 16, 0.6, z + 0.4, C('#6a4a2e'), true, false); }
     lamp(9, 0, 2, '#ffd27a');
+  } else if (kind === 'shrine') {
+    const bx = 7; for (const z of [-3, 3]) mb.box(bx - 0.3, 0, z - 0.3, bx + 0.3, 6, z + 0.3, C('#5a3a22')); mb.box(bx - 0.6, 6, -3.6, bx + 0.6, 6.6, 3.6, C('#5a3a22'));
+    const bell = []; for (let k = 0; k <= 6; k++) { const t = k / 6; bell.push([0.4 + 1.7 * Math.pow(t, 0.7), 5.6 - t * 3.4]); } ringSurf(dmb, bx, 0, bell, 20, () => C('#b8863a'));
+    dmb.cyl(bx, 1.6, 0, 0.25, 0.25, 0.6, 8, C('#8a5a2a'));
+    for (const [x, z] of [[3, -7], [3, 7], [13, -7], [13, 7], [19, -7], [19, 7]]) { mb.box(x - 0.6, 0, z - 0.6, x + 0.6, 1.4, z + 0.6, C('#8e8a80')); dmb.box(x - 0.5, 1.4, z - 0.5, x + 0.5, 2.3, z + 0.5, glowC(C('#ffc46a')), false, true); mb.box(x - 0.8, 2.3, z - 0.8, x + 0.8, 2.6, z + 0.8, C('#6e6a60')); light(x, 2, z, 10, [1, 0.75, 0.4]); }
+    mb.cyl(14, 0, 0, 1.4, 1.1, 0.9, 12, C('#6e6a60')); dmb.cyl(14, 0.9, 0, 1.1, 1.1, 0.05, 12, [0.5, 0.8, 1, 0.8]);
+    for (let k = 0; k < 10; k++) dmb.sph([2 + R(k, 88) * 18, 3 + R(k, 89) * 3, (R(k, 90) - 0.5) * 14], 0.12, 4, glowC(C('#ffe0a0')), 0);
   } else if (kind === 'museum') {
     for (let k = 0; k < 5; k++) { const x = 4 + (k % 3) * 7, z = k < 3 ? -4.5 : 4.5; mb.box(x - 1, 0, z - 1, x + 1, 1.2, z + 1, C('#e8e4dc')); dmb.ico(x, 2, z, 0.7, 1, () => glowC(C(['#ff5a5a', '#5aff8a', '#5ab0ff', '#ffd25a', '#d85aff'][k]))); light(x, 2.4, z, 6, [1, 1, 1]); }
     for (const z of [-2.4, 2.4]) { for (let k = 0; k < 6; k++) dmb.cyl(3 + k * 3.4, 0, z, 0.1, 0.1, 1, 5, C('#c8a040')); dmb.box(3, 0.85, z - 0.05, 20, 0.95, z + 0.05, C('#a82a2a'), false, true); }
@@ -367,7 +466,7 @@ Terrain.prototype.infoBerekorLands = function (x, z) {
   let b;
   if (h < -1.5) b = 0; else if (h < 1.6) b = 1;
   else if (lmk && I0.kind === 'volcano') b = h > 20 ? 11 : 2;
-  else if (lmk && I0.kind === 'cloudspire') b = h > 430 ? 5 : h > 40 ? 6 : 3;
+  else if (lmk && I0.kind === 'cloudspire') b = h > I0.H * 0.55 ? 5 : h > 40 ? 6 : 3;
   else if (lmk && I0.kind === 'mesa') b = h > 25 ? 12 : 2;
   else b = N.v(x / 260, z / 260, 219) > 0.55 ? 3 : 2;
   return { h, b, temp: 0.5, moist: 0.5, vol: lmk && I0.kind === 'volcano' ? 1 : 0, special: lmk ? I0.id : null };
