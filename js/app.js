@@ -262,6 +262,8 @@
     };
     spaceTravel = travel;
     BigMap.init({ travel, region: () => (G && G.region) || 'berekor', game: () => G && G.game, me: () => { if (!G || !G.body || !G.game) return null; const f = G.game.forward(); return { x: G.body.p[0], z: G.body.p[2], fx: f[0], fz: f[1] }; }, toast: t => showToast(t, 2500),
+      // teleport to a place on the map: an exact spot (p = [x, y, z]) or the ground at x, z
+      teleportTo: (x, z, y, name) => { if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can teleport again when this game is over', 2000); return false; } const T = G.game.T; G.body.p = [x, y !== undefined ? y : Math.max(T.ground(x, z), SEA) + 2.5, z]; G.body.v = [0, 0, 0]; G.body.path = null; G.body.tpCool = 1; G.game.cave = null; G.body.caveLock = null; Sound.play('tp'); showToast('Teleported to ' + (name || 'there'), 1500); return true; },
       teleport: (x, z) => { if (!G) return false; if (G.chase || G.mg || G.race) { showToast('You can teleport again when this game is over', 2000); return false; } const T = G.game.T; G.body.p = [x, Math.max(T.ground(x, z), SEA) + 2.5, z]; G.body.v = [0, 0, 0]; G.game.cave = null; G.body.caveLock = null; G.game.waypoint = null; Sound.play('tp'); showToast('Teleported to your waypoint', 1500); return true; } });
     setTimeout(() => BigMap.preload(), 4000);
     const show = b => { const was = !b.classList.contains('hidden'); Extra.closeAll(); $('bag').classList.add('hidden'); if (!was) b.classList.remove('hidden'); return !was; };
@@ -1771,6 +1773,7 @@
     const bp = G.body.p, P = G.game.fx;
     if (kind === 'cannon') { Sound.play('boom'); P.burst(bp, 30, { cols: ['#cfcfcf', '#ffb347', '#ffffff'], shape: 0, size: 0.4, speed: 5, life: 0.8 }); prog.add('cannons'); questCheck(); showToast('Boom!', 800); return; }
     if (kind === 'realm-in') { const R = REALMS[arg]; Sound.play('tp'); banner('Welcome to', R.name, arg === 'space' ? 'Low gravity: jump across the floating rocks!' : arg === 'sea' ? 'You can breathe down here. Find the pearls!' : 'Look for glowing crystals and gems', 4000); prog.max('realm_' + arg, 1); questCheck(); return; }
+    if (kind === 'lift') { Sound.play('boost'); P.burst(bp, 26, { cols: ['#8af0ff', '#ffffff', '#ffd27a'], shape: 29, size: 0.35, speed: 6, life: 0.7 }); showToast('Whoosh! Shooting elevator', 900); return; }
     if (kind === 'realm-out') { Sound.play('tp'); showToast('Back on the main land!', 1400); return; }
     if (kind === 'flap') { Sound.play('jump'); P.burst([bp[0], bp[1], bp[2]], 10, { cols: ['#cdb4ff', '#a8d8ff', '#ffffff'], shape: 22, size: 0.16, speed: 2.5, life: 0.6 }); return; }
     if (kind === 'hot' && G) { respawn(); showToast('Too hot! Back to spawn', 1500); return; }

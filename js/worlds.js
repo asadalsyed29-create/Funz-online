@@ -192,10 +192,10 @@ const regionTheme = id => REGION_THEMES[(REGIONS[id] || {}).theme] || null;
 // the land of a themed region (called from Terrain.info)
 Terrain.prototype.infoTheme = function (x, z) {
   const C = REGION_THEMES[this.theme], N = this.N, d0 = Math.hypot(x, z), st = v => (v - 0.5) * 1.7 + 0.5, SP = C.specials;
-  const edge = Math.max(0, (Math.max(Math.abs(x), Math.abs(z)) - 6000) / 1500);
-  let cont = N.fbm(x / C.scale, z / C.scale, 201, 4) + 0.5 * Math.exp(-(d0 * d0) / 300000) - edge * 0.8;
-  for (const s of SP) { const d = Math.hypot(x - s.x, z - s.z); cont = Math.max(cont - (d < s.r * 2.2 ? 0.25 * smooth(s.r * 2.2, s.r * 1.4, d) : 0), 0.46 + 0.12 * smooth(s.r, s.r * 0.4, d) - (d > s.r ? 1 : 0)); }
-  const land = cont - 0.5, lw = Math.max(0, Math.min(1, land * 6 + 0.35));
+  // every island is a landmark (js/lands.js): the land is the nearest island's round shape, pushed about so the coast is wobbly
+  const LI = landsOf(this.theme), wob = N.fbm(x / 420, z / 420, 231, 3) - 0.5; let e = -2, I0 = null;
+  for (const I of LI) { const dd = Math.hypot(x - I.x, z - I.z); if (dd > I.R * 1.9) continue; const ee = 1 - dd / (I.R * (1 + 0.45 * wob)); if (ee > e) { e = ee; I0 = I; } }
+  const land = e > 0 ? e * 0.22 : Math.max(-0.4, e * 0.5), lw = Math.max(0, Math.min(1, land * 6 + 0.35));
   let h = land * C.amp + (N.fbm(x / 210, z / 210, 207, 3) - 0.5) * 12 * lw;
   let special = null; for (const s of SP) if (Math.hypot(x - s.x, z - s.z) < s.r * 1.3) special = s;
   const kn = this.kindAt(x, z), K = C.kinds[kn], m = Math.max(0, Math.min(1, (h - 2) / 6));
@@ -210,18 +210,23 @@ Terrain.prototype.infoTheme = function (x, z) {
     else if (K.shape === 'terrace') { h += (N.fbm(x / 240, z / 240, 217, 2) - 0.5) * 30 * m; const t = h / K.amp; h = Math.max(2.6, (Math.floor(t) + smooth(0.85, 1, t - Math.floor(t))) * K.amp); }
     if (K.shape === 'pools' || K.shape === 'flat' && kn === 'reed') {
       h = 2.4 + (h - 2.4) * 0.35;
-      const p = st(N.fbm(x / 140, z / 140, 218, 3)); pool = smooth(0.6, 0.7, p);
+      const p = st(N.fbm(x / 140, z / 140, 218, 3)); pool = smooth(0.6, 0.7, p) * smooth(0.5, 0.2, e); // no pools in the middle of an island
       if (pool > 0) h += (-1.4 - h) * pool;
     }
   }
+  // the landmark itself: a volcano, a spire, a mesa (floating isles are built from meshes)
+  let lmk = false; if (I0 && I0.H) { const p = landProfile(I0, Math.hypot(x - I0.x, z - I0.z), N, x, z); if (p > h && p > 0.5) { h = p; lmk = p > 6; } if (Math.hypot(x - I0.x - LAND_DIRS[I0.dir][0] * (I0.LR + 12), z - I0.z - LAND_DIRS[I0.dir][1] * (I0.LR + 12)) < 14) lmk = true; }
+  if (I0 && I0.kind === 'floating' && Math.hypot(x - I0.x, z - I0.z) < 12) lmk = true;
   let b = -1; const wP = smooth(70, 30, d0); if (wP > 0) { h += (SPAWN_H - h) * wP; if (d0 < 24) b = 15; }
   if (special) { const d = Math.hypot(x - special.x, z - special.z); if (d < special.r * 0.75) h += (Math.max(h, 4.5) - h) * smooth(special.r * 0.75, special.r * 0.55, d); }
   if (b < 0) {
     if (h < -1.5) b = 0; else if (h < 1.6) b = C.beach;
     else if (special) b = C.kinds[Object.keys(C.kinds)[0]].b;
+    else if (lmk && I0.kind === 'volcano' && h > 20) b = 28;
+    else if (lmk) b = C.kinds[Object.keys(C.kinds)[0]].b;
     else { b = K.b; if (K.b2 && (N.v(x / 260, z / 260, 219) > 0.6 || pool > 0.2)) b = K.b2; }
   }
-  return { h, b, temp: 0.5, moist: 0.5, vol: 0, special: special ? special.id : null, kind: kn };
+  return { h, b, temp: 0.5, moist: 0.5, vol: 0, special: special ? special.id : lmk ? I0.id : null, kind: kn };
 };
 // which kind of land an area is: the nearest of a scattered set of points decides (so islands near each other differ)
 Terrain.prototype.kindAt = function (x, z) {
